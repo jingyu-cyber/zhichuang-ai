@@ -393,6 +393,7 @@ function TeacherDashboard({ dashboard }: { dashboard: AssignmentDashboard }) {
           </article>
         ))}
       </section>
+      <AiGeneratedNotice text="本页班级诊断和讲评建议为 AI 生成，仅供参考；需结合课程要求和作业提交物核验。" />
 
       <section className="panel-grid">
         <article className="panel wide">
@@ -467,6 +468,7 @@ function StudentReport({
         </div>
         <strong className="big-score">{averageScore}</strong>
       </section>
+      <AiGeneratedNotice text="本页作业报告和评分为 AI 生成，仅供参考；分数是基于证据的相对画像，需结合提交物核验。" />
 
       <section className="panel-grid">
         <article className="panel wide">
@@ -544,6 +546,15 @@ function ScoreBar({
   );
 }
 
+function AiGeneratedNotice({ text }: { text: string }) {
+  return (
+    <div className="ai-notice" role="note">
+      <strong>AI 生成</strong>
+      <span>{text}</span>
+    </div>
+  );
+}
+
 function KnowledgeAssistant({
   question,
   response,
@@ -616,6 +627,7 @@ function KnowledgeAssistant({
           </div>
         </article>
       </section>
+      <AiGeneratedNotice text="回答为 AI 生成，仅供参考；事实性内容需结合引用来源和官方信息核验。" />
     </>
   );
 }
@@ -647,6 +659,7 @@ function GrowthPath({
           ))}
         </div>
       </section>
+      <AiGeneratedNotice text="成长路径、竞赛推荐和组队推荐为 AI 生成，仅供参考；需结合目标、时间和官方通知核验。" />
 
       <section className="panel-grid">
         <article className="panel wide">
@@ -855,6 +868,7 @@ function TaskCenter({
           <button onClick={onGenerateReview} disabled={loading}>生成本周复盘</button>
         </div>
       </section>
+      <AiGeneratedNotice text="复盘与任务建议为 AI 生成，仅供参考；需结合个人计划和课程安排调整。" />
 
       <section className="panel-grid">
         <article className="panel wide">

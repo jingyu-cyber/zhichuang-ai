@@ -319,6 +319,26 @@ h1 {
   min-width: 160px;
 }
 
+.ai-notice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 12px;
+  padding: 10px 12px;
+  color: #475569;
+  background: #f4f7fb;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--blue);
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.ai-notice strong {
+  flex: 0 0 auto;
+  color: var(--blue);
+}
+
 .score-detail p,
 .finding-item p,
 .evidence-list p,
@@ -894,6 +914,10 @@ h1 {
 
   .ask-box {
     grid-template-columns: 1fr;
+  }
+
+  .ai-notice {
+    display: grid;
   }
 }
 
