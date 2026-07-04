@@ -18,6 +18,17 @@ export type CapabilityEvidence = {
   source: string;
 };
 
+export type CodeStructureSummary = {
+  file_count: number;
+  entry_files: string[];
+  test_files: string[];
+  documentation_files: string[];
+  config_files: string[];
+  detected_frameworks: string[];
+  detected_capabilities: string[];
+  risk_signals: string[];
+};
+
 export type Citation = {
   title: string;
   source_type: string;
@@ -36,6 +47,7 @@ export type AssignmentReport = {
   student_name: string;
   generated_at: string;
   summary: string;
+  code_structure: CodeStructureSummary;
   scores: AssignmentScore[];
   findings: AssignmentFinding[];
   capability_evidence: CapabilityEvidence[];

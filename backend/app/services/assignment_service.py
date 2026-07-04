@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from app.schemas.assignments import (
     AssignmentDashboardMetric,
     AssignmentDashboardResponse,
@@ -10,6 +12,8 @@ from app.schemas.assignments import (
     AssignmentScore,
     CapabilityEvidence,
     Citation,
+    CodeFile,
+    CodeStructureSummary,
 )
 
 
@@ -45,7 +49,7 @@ class AssignmentService:
             class_id=payload.class_id or self.class_group["id"],
             repository_url=payload.repository_url,
             description=payload.description,
-            file_count=len(payload.files),
+            files=payload.files,
         )
 
     def get_report(self, assignment_id: str, student_id: str) -> AssignmentAnalysisResponse:
@@ -57,7 +61,7 @@ class AssignmentService:
             class_id=self.class_group["id"],
             repository_url="https://example.edu/demo/flask-project",
             description="示例作业包含 Flask 路由、SQLite 数据访问、README 和基础测试。",
-            file_count=18,
+            files=self._demo_files(),
         )
 
     def get_dashboard(self, assignment_id: str) -> AssignmentDashboardResponse:
@@ -141,50 +145,98 @@ class AssignmentService:
         class_id: str,
         repository_url: str | None,
         description: str | None,
-        file_count: int,
+        files: list[CodeFile],
     ) -> AssignmentAnalysisResponse:
         student_name = self.students.get(student_id, "演示学生")
+        structure = self._analyze_files(files)
         repository_signal = bool(repository_url)
         description_signal = bool(description and len(description) >= 20)
-        file_signal = min(file_count, 20)
-        base = 72 + (4 if repository_signal else 0) + (3 if description_signal else 0)
-        structure_score = min(92, base + file_signal // 3)
-        quality_score = min(88, base - 2 + file_signal // 4)
-        test_score = min(82, base - 8 + file_signal // 5)
-        document_score = min(90, base + (6 if description_signal else 0))
+        file_signal = min(structure.file_count, 20)
+        has_main_flow = self._has_any(
+            structure.detected_capabilities,
+            ["路由入口", "数据访问", "页面模板", "接口定义"],
+        )
+        has_tests = bool(structure.test_files)
+        has_docs = bool(structure.documentation_files) or description_signal
+        has_config = bool(structure.config_files)
+        risk_penalty = min(len(structure.risk_signals) * 3, 9)
+
+        base = 66 + (4 if repository_signal else 0) + (3 if description_signal else 0)
+        completion_score = min(92, base + file_signal // 2 + (8 if has_main_flow else 0))
+        structure_score = min(92, base + file_signal // 3 + (8 if has_config else 0))
+        quality_score = max(58, min(88, base + (6 if has_config else 0) - risk_penalty))
+        test_score = max(52, min(84, base - 10 + min(len(structure.test_files) * 8, 18)))
+        document_score = max(56, min(90, base + (10 if has_docs else 0)))
 
         scores = [
             AssignmentScore(
                 dimension="功能完成度",
-                score=min(90, base + 5),
-                summary="核心页面、接口和数据流基本完整，主流程可以闭环运行。",
-                evidence=["存在作业入口、数据提交路径和结果展示结构", "能围绕课程要求解释实现结果"],
+                score=completion_score,
+                summary=self._score_summary(
+                    has_main_flow,
+                    "核心路由、接口或数据访问证据较清晰，主流程具备闭环基础。",
+                    "提交物中主流程证据不足，需要补充入口文件、接口实现或页面交互。",
+                ),
+                evidence=[
+                    *self._capability_evidence_lines(structure, ["路由入口", "数据访问", "接口定义"]),
+                    f"提交文件数 {structure.file_count}，可用于判断功能覆盖面。",
+                ],
             ),
             AssignmentScore(
                 dimension="代码结构",
                 score=structure_score,
-                summary="项目具备基本分层，路由、业务逻辑和配置有初步边界。",
-                evidence=["可识别入口文件和业务模块", "模块命名与 Web 项目结构基本一致"],
+                summary=self._score_summary(
+                    bool(structure.entry_files and structure.detected_frameworks),
+                    "项目入口和技术框架可识别，具备基本分层分析基础。",
+                    "项目入口或框架信号不充分，教师需要结合提交物进一步确认结构。",
+                ),
+                evidence=[
+                    self._format_paths("入口文件", structure.entry_files),
+                    self._format_items("识别框架", structure.detected_frameworks),
+                ],
             ),
             AssignmentScore(
                 dimension="工程规范",
                 score=quality_score,
-                summary="依赖、配置和运行说明具备雏形，异常处理和日志仍可加强。",
-                evidence=["有 README 或作业描述支撑运行说明", "部分边界情况缺少稳定处理"],
+                summary=self._score_summary(
+                    has_config and not structure.risk_signals,
+                    "配置、依赖或环境文件较完整，暂未发现明显工程风险信号。",
+                    "依赖配置、异常处理或工程边界仍需加强。",
+                ),
+                evidence=[
+                    self._format_paths("配置文件", structure.config_files),
+                    self._format_items("风险信号", structure.risk_signals),
+                ],
             ),
             AssignmentScore(
                 dimension="测试意识",
                 score=test_score,
-                summary="能看到基础验证意识，但自动化测试数量和覆盖面仍不足。",
-                evidence=["主流程可人工验证", "接口和 service 层测试证据偏少"],
+                summary=self._score_summary(
+                    has_tests,
+                    "提交物包含自动化测试文件，可作为质量意识证据。",
+                    "未识别到自动化测试文件，建议补充接口和业务逻辑测试。",
+                ),
+                evidence=[
+                    self._format_paths("测试文件", structure.test_files),
+                    "测试评分基于测试文件数量和覆盖信号生成。",
+                ],
             ),
             AssignmentScore(
                 dimension="文档表达",
                 score=document_score,
-                summary="能描述项目目标和运行方式，建议补充架构图、接口说明和已知限制。",
-                evidence=["作业描述和 README 可支持教师快速了解项目", "改进建议可追溯到提交物"],
+                summary=self._score_summary(
+                    has_docs,
+                    "说明文档或作业描述能支撑教师快速理解项目。",
+                    "文档证据不足，建议补充运行步骤、接口说明和已知限制。",
+                ),
+                evidence=[
+                    self._format_paths("文档文件", structure.documentation_files),
+                    "作业描述达到有效长度" if description_signal else "作业描述信息偏少",
+                ],
             ),
         ]
+        findings = self._build_findings(structure)
+        improvement_tasks = self._build_improvement_tasks(structure)
 
         return AssignmentAnalysisResponse(
             report_id=f"report_{self.assignment['id']}_{student_id}",
@@ -198,54 +250,36 @@ class AssignmentService:
             student_name=student_name,
             generated_at=self.generated_at,
             summary=(
-                f"{student_name} 的提交已经完成多维度分析。整体表现显示其具备 Web 项目主流程搭建能力，"
-                "后续应重点提升异常处理、自动化测试和工程文档完整度。"
+                f"{student_name} 的提交已经完成多维度分析。系统识别到"
+                f" {structure.file_count} 个文件、{len(structure.detected_capabilities)} 类能力信号，"
+                "评分是基于提交物证据的相对画像。"
             ),
+            code_structure=structure,
             scores=[
                 *scores,
             ],
-            findings=[
-                AssignmentFinding(
-                    severity="high",
-                    title="测试覆盖不足",
-                    detail="当前提交更偏向功能实现，缺少对登录失败、空表单、数据库异常等路径的自动化测试。",
-                    suggestion="补充 pytest 或前端请求层测试，并将关键异常路径纳入评分 Rubric。",
-                ),
-                AssignmentFinding(
-                    severity="medium",
-                    title="配置和业务逻辑边界仍可加强",
-                    detail="部分运行参数和业务处理容易混在同一层，后续扩展课程项目时维护成本会上升。",
-                    suggestion="将配置读取、数据库访问和页面路由拆到独立模块，保持 service 层职责清晰。",
-                ),
-                AssignmentFinding(
-                    severity="low",
-                    title="项目说明可继续结构化",
-                    detail="说明中已经能看出项目目标，但缺少接口、数据表和启动步骤的稳定格式。",
-                    suggestion="按课程模板补齐环境准备、启动命令、接口列表和已知问题。",
-                ),
-            ],
+            findings=findings,
             capability_evidence=[
                 CapabilityEvidence(
                     dimension="工程实践",
-                    evidence="能完成 Web 项目从需求到页面、接口、数据流的基础闭环。",
-                    source="课程作业代码提交",
+                    evidence=self._format_items(
+                        "识别到的实现能力",
+                        structure.detected_capabilities,
+                    ),
+                    source="代码文件路径与内容扫描",
                 ),
                 CapabilityEvidence(
                     dimension="问题拆解",
-                    evidence="提交物体现出按功能模块拆解任务的意识，但边界说明仍需加强。",
-                    source="项目结构与 README",
+                    evidence=self._format_paths("入口和模块文件", structure.entry_files),
+                    source="项目结构分析",
                 ),
                 CapabilityEvidence(
                     dimension="质量意识",
-                    evidence="具备基础运行验证，但自动化测试和异常处理证据不足。",
+                    evidence=self._format_paths("自动化测试文件", structure.test_files),
                     source="测试文件与代码路径分析",
                 ),
             ],
-            improvement_tasks=[
-                "补充至少 3 个接口测试，覆盖成功、失败和空输入路径。",
-                "把数据库连接、环境变量和业务 service 拆分到独立模块。",
-                "按课程模板补齐 README 中的启动步骤、接口说明和数据表说明。",
-            ],
+            improvement_tasks=improvement_tasks,
             citations=[
                 Citation(
                     title="Web 应用开发课程作业 Rubric",
@@ -269,3 +303,188 @@ class AssignmentService:
         if score >= 75:
             return f"{dimension}达到课程阶段要求，但仍有集中改进空间。"
         return f"{dimension}低于预期，需要在下一次作业中重点跟进。"
+
+    def _analyze_files(self, files: list[CodeFile]) -> CodeStructureSummary:
+        entry_files: list[str] = []
+        test_files: list[str] = []
+        documentation_files: list[str] = []
+        config_files: list[str] = []
+        frameworks: set[str] = set()
+        capabilities: set[str] = set()
+        risk_signals: set[str] = set()
+
+        for file in files:
+            path = file.path.strip()
+            lowered_path = path.lower()
+            content = file.content.lower()
+            if not path:
+                continue
+
+            if lowered_path.endswith((".py", ".ts", ".tsx", ".js", ".jsx")) and (
+                lowered_path in {"app.py", "main.py", "manage.py"}
+                or lowered_path.endswith(("/app.py", "/main.py", "/index.tsx", "/main.tsx"))
+            ):
+                entry_files.append(path)
+            if "test" in lowered_path or lowered_path.endswith((".spec.ts", ".spec.tsx")):
+                test_files.append(path)
+            if lowered_path.endswith(("readme.md", ".md", ".rst")):
+                documentation_files.append(path)
+            if lowered_path.endswith(
+                ("requirements.txt", "pyproject.toml", "package.json", ".env.example", "dockerfile")
+            ):
+                config_files.append(path)
+
+            if "from flask" in content or "flask(" in content:
+                frameworks.add("Flask")
+                capabilities.add("路由入口")
+            if "fastapi" in content:
+                frameworks.add("FastAPI")
+                capabilities.add("接口定义")
+            if "react" in content or "jsx" in lowered_path or "tsx" in lowered_path:
+                frameworks.add("React")
+                capabilities.add("页面交互")
+            if "sqlite" in content or "sqlalchemy" in content or "select " in content:
+                capabilities.add("数据访问")
+            if "@app.route" in content or "apirouter" in content or "route(" in content:
+                capabilities.add("路由入口")
+            if "render_template" in content or lowered_path.startswith("templates/"):
+                capabilities.add("页面模板")
+            if "pytest" in content or "testclient" in content or "describe(" in content:
+                capabilities.add("自动化测试")
+            if "try:" in content and "except" in content:
+                capabilities.add("异常处理")
+            if "password" in content and ("hardcode" in content or "123456" in content):
+                risk_signals.add("疑似硬编码敏感配置")
+            if "except:" in content:
+                risk_signals.add("存在过宽异常捕获")
+            if re.search(r"(^|\s|#|//)(todo|fixme)(\b|:)", content):
+                risk_signals.add("存在未完成标记")
+
+        if not files:
+            risk_signals.add("未上传代码文件")
+
+        return CodeStructureSummary(
+            file_count=len([file for file in files if file.path.strip()]),
+            entry_files=entry_files[:8],
+            test_files=test_files[:8],
+            documentation_files=documentation_files[:8],
+            config_files=config_files[:8],
+            detected_frameworks=sorted(frameworks),
+            detected_capabilities=sorted(capabilities),
+            risk_signals=sorted(risk_signals),
+        )
+
+    def _build_findings(self, structure: CodeStructureSummary) -> list[AssignmentFinding]:
+        findings: list[AssignmentFinding] = []
+        if not structure.test_files:
+            findings.append(
+                AssignmentFinding(
+                    severity="high",
+                    title="测试覆盖不足",
+                    detail="当前提交未识别到自动化测试文件，缺少对主流程和异常路径的可复现验证。",
+                    suggestion="补充 pytest、TestClient 或前端请求层测试，覆盖成功、失败和空输入路径。",
+                )
+            )
+        if not structure.config_files:
+            findings.append(
+                AssignmentFinding(
+                    severity="medium",
+                    title="依赖和配置说明不足",
+                    detail="提交物中未识别到 requirements、pyproject、package 或环境示例文件。",
+                    suggestion="补齐依赖清单、环境变量示例和启动配置，降低教师复现实验成本。",
+                )
+            )
+        if not structure.documentation_files:
+            findings.append(
+                AssignmentFinding(
+                    severity="medium",
+                    title="项目说明缺失",
+                    detail="提交物中未识别到 README 或说明文档，影响教师快速理解项目目标和运行方式。",
+                    suggestion="按课程模板补齐环境准备、启动命令、接口列表、数据表和已知问题。",
+                )
+            )
+        for signal in structure.risk_signals:
+            findings.append(
+                AssignmentFinding(
+                    severity="medium",
+                    title=signal,
+                    detail=f"代码扫描发现“{signal}”，需要结合具体文件进一步确认影响范围。",
+                    suggestion="在下一轮提交中移除风险写法，并在报告中说明修正依据。",
+                )
+            )
+        if not findings:
+            findings.append(
+                AssignmentFinding(
+                    severity="low",
+                    title="继续提升边界场景说明",
+                    detail="当前提交具备较完整的结构证据，后续仍建议补充接口边界和失败路径说明。",
+                    suggestion="在 README 中加入接口表、错误处理策略和测试覆盖范围。",
+                )
+            )
+        return findings[:5]
+
+    def _build_improvement_tasks(self, structure: CodeStructureSummary) -> list[str]:
+        tasks: list[str] = []
+        if not structure.test_files:
+            tasks.append("补充至少 3 个自动化测试，覆盖成功、失败和空输入路径。")
+        if not structure.config_files:
+            tasks.append("补齐依赖清单、环境变量示例和本地启动配置。")
+        if not structure.documentation_files:
+            tasks.append("按课程模板补齐 README 中的启动步骤、接口说明和数据表说明。")
+        if structure.risk_signals:
+            tasks.append("逐项修正代码扫描发现的风险信号，并在提交说明中记录修改依据。")
+        tasks.append("将本次报告中的能力证据同步到个人画像，用于后续路径和竞赛推荐。")
+        return tasks[:5]
+
+    def _capability_evidence_lines(
+        self,
+        structure: CodeStructureSummary,
+        names: list[str],
+    ) -> list[str]:
+        matched = [name for name in names if name in structure.detected_capabilities]
+        if not matched:
+            return ["未识别到明确的主流程能力信号"]
+        return [f"识别到{name}能力信号" for name in matched]
+
+    def _format_paths(self, label: str, paths: list[str]) -> str:
+        if not paths:
+            return f"{label}：未识别"
+        return f"{label}：" + "、".join(paths[:4])
+
+    def _format_items(self, label: str, items: list[str]) -> str:
+        if not items:
+            return f"{label}：未识别"
+        return f"{label}：" + "、".join(items[:5])
+
+    def _score_summary(self, condition: bool, positive: str, negative: str) -> str:
+        return positive if condition else negative
+
+    def _has_any(self, items: list[str], targets: list[str]) -> bool:
+        return any(target in items for target in targets)
+
+    def _demo_files(self) -> list[CodeFile]:
+        return [
+            CodeFile(
+                path="app.py",
+                content=(
+                    "from flask import Flask, request, render_template\n"
+                    "app = Flask(__name__)\n"
+                    "@app.route('/todos', methods=['GET', 'POST'])\n"
+                    "def todos():\n"
+                    "    try:\n"
+                    "        return render_template('todos.html')\n"
+                    "    except Exception:\n"
+                    "        return 'error', 500\n"
+                ),
+            ),
+            CodeFile(
+                path="services/todo_service.py",
+                content="import sqlite3\n\ndef create_todo(title):\n    return sqlite3.connect('demo.db')",
+            ),
+            CodeFile(
+                path="tests/test_app.py",
+                content="from app import app\n\ndef test_todos_page():\n    client = app.test_client()\n    assert client.get('/todos').status_code == 200",
+            ),
+            CodeFile(path="requirements.txt", content="flask\npytest\n"),
+            CodeFile(path="README.md", content="Flask Web 项目实践\n\n启动、接口和数据库说明。"),
+        ]

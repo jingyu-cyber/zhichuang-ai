@@ -29,8 +29,14 @@ export function analyzeDemoAssignment(): Promise<AssignmentReport> {
       repository_url: "https://example.edu/demo/flask-project",
       description: "示例作业包含 Flask 路由、SQLite 数据访问、README 和基础测试。",
       files: [
-        { path: "app.py", content: "from flask import Flask" },
-        { path: "services/todo_service.py", content: "def create_todo():" },
+        {
+          path: "app.py",
+          content:
+            "from flask import Flask, render_template\napp = Flask(__name__)\n@app.route('/todos')\ndef todos(): return render_template('todos.html')",
+        },
+        { path: "services/todo_service.py", content: "import sqlite3\ndef create_todo(title): return sqlite3.connect('demo.db')" },
+        { path: "tests/test_app.py", content: "def test_todos_page(): assert True" },
+        { path: "requirements.txt", content: "flask\npytest" },
         { path: "README.md", content: "Flask Web 项目实践" },
       ],
     }),

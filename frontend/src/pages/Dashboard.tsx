@@ -538,6 +538,20 @@ function StudentReport({
       </section>
       <AiGeneratedNotice text="本页作业报告和评分为 AI 生成，仅供参考；分数是基于证据的相对画像，需结合提交物核验。" />
 
+      <section className="code-structure-panel">
+        <div>
+          <span className="section-label">代码结构摘要</span>
+          <strong>{report.code_structure.file_count} 个文件</strong>
+        </div>
+        <StructureGroup label="入口" values={report.code_structure.entry_files} />
+        <StructureGroup label="测试" values={report.code_structure.test_files} />
+        <StructureGroup label="文档" values={report.code_structure.documentation_files} />
+        <StructureGroup label="配置" values={report.code_structure.config_files} />
+        <StructureGroup label="框架" values={report.code_structure.detected_frameworks} />
+        <StructureGroup label="能力信号" values={report.code_structure.detected_capabilities} />
+        <StructureGroup label="风险信号" values={report.code_structure.risk_signals} tone="warning" />
+      </section>
+
       <section className="panel-grid">
         <article className="panel wide">
           <span className="section-label">多维度评分</span>
@@ -589,6 +603,33 @@ function StudentReport({
         </article>
       </section>
     </>
+  );
+}
+
+function StructureGroup({
+  label,
+  values,
+  tone = "default",
+}: {
+  label: string;
+  values: string[];
+  tone?: "default" | "warning";
+}) {
+  return (
+    <div className="structure-group">
+      <span>{label}</span>
+      <div>
+        {values.length ? (
+          values.slice(0, 4).map((value) => (
+            <small className={tone === "warning" ? "warning" : undefined} key={value}>
+              {value}
+            </small>
+          ))
+        ) : (
+          <small>未识别</small>
+        )}
+      </div>
+    </div>
   );
 }
 

@@ -84,7 +84,7 @@
 
 ### `POST /assignments/analyze`
 
-创建一次课程作业分析任务。当前骨架返回占位报告，正式实现后应返回任务 ID 和报告 ID。
+提交课程作业代码文件、仓库链接或说明，系统生成一份基于提交物证据的作业分析报告。首版支持直接传入文件路径和文本内容，后续可接入压缩包解析或仓库拉取。
 
 请求：
 
@@ -94,7 +94,21 @@
   "course_id": "course_web_001",
   "student_id": "student_001",
   "repository_url": "https://example.com/repo.git",
-  "rubric_id": "rubric_web_001"
+  "rubric_id": "rubric_web_001",
+  "files": [
+    {
+      "path": "app.py",
+      "content": "from flask import Flask\napp = Flask(__name__)"
+    },
+    {
+      "path": "tests/test_app.py",
+      "content": "def test_home(): assert True"
+    },
+    {
+      "path": "README.md",
+      "content": "Flask Web 项目实践"
+    }
+  ]
 }
 ```
 
@@ -102,18 +116,36 @@
 
 ```json
 {
-  "report_id": "report_001",
-  "summary": "本次作业完成了基础路由和数据库模块...",
+  "report_id": "report_assignment_flask_mvp_student_001",
+  "summary": "林一舟 的提交已经完成多维度分析。系统识别到 5 个文件、4 类能力信号，评分是基于提交物证据的相对画像。",
+  "code_structure": {
+    "file_count": 5,
+    "entry_files": ["app.py"],
+    "test_files": ["tests/test_app.py"],
+    "documentation_files": ["README.md"],
+    "config_files": ["requirements.txt"],
+    "detected_frameworks": ["Flask"],
+    "detected_capabilities": ["路由入口", "数据访问", "自动化测试"],
+    "risk_signals": []
+  },
   "scores": [
     {
       "dimension": "功能完成度",
       "score": 82,
-      "summary": "核心功能基本完成，异常路径覆盖不足。"
+      "summary": "核心路由、接口或数据访问证据较清晰，主流程具备闭环基础。",
+      "evidence": ["识别到路由入口能力信号", "提交文件数 5，可用于判断功能覆盖面。"]
     }
   ],
   "findings": [
-    "数据库连接配置写在业务模块中，建议迁移到配置层。"
-  ]
+    {
+      "severity": "low",
+      "title": "继续提升边界场景说明",
+      "detail": "当前提交具备较完整的结构证据，后续仍建议补充接口边界和失败路径说明。",
+      "suggestion": "在 README 中加入接口表、错误处理策略和测试覆盖范围。"
+    }
+  ],
+  "improvement_tasks": ["将本次报告中的能力证据同步到个人画像，用于后续路径和竞赛推荐。"],
+  "ai_generated": true
 }
 ```
 

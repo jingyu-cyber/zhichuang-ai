@@ -39,6 +39,17 @@ class CapabilityEvidence(BaseModel):
     source: str
 
 
+class CodeStructureSummary(BaseModel):
+    file_count: int
+    entry_files: list[str] = Field(default_factory=list)
+    test_files: list[str] = Field(default_factory=list)
+    documentation_files: list[str] = Field(default_factory=list)
+    config_files: list[str] = Field(default_factory=list)
+    detected_frameworks: list[str] = Field(default_factory=list)
+    detected_capabilities: list[str] = Field(default_factory=list)
+    risk_signals: list[str] = Field(default_factory=list)
+
+
 class Citation(BaseModel):
     title: str
     source_type: str
@@ -72,6 +83,7 @@ class AssignmentAnalysisResponse(BaseModel):
     student_name: str
     generated_at: str
     summary: str
+    code_structure: CodeStructureSummary
     scores: list[AssignmentScore]
     findings: list[AssignmentFinding]
     capability_evidence: list[CapabilityEvidence]

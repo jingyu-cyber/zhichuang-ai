@@ -289,6 +289,56 @@ h1 {
   margin-top: 18px;
 }
 
+.code-structure-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+  padding: 18px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.code-structure-panel > div:first-child strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 24px;
+}
+
+.structure-group {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.structure-group span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.structure-group div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.structure-group small {
+  max-width: 100%;
+  padding: 5px 7px;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  background: #e8edf3;
+  border-radius: 999px;
+}
+
+.structure-group small.warning {
+  color: var(--amber);
+  background: rgba(181, 106, 16, 0.1);
+}
+
 .score-bar {
   display: grid;
   gap: 8px;
