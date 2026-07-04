@@ -8,6 +8,7 @@ from sqlalchemy import inspect, select, text
 from sqlalchemy.orm import Session
 
 from app.db.base import Base
+from app.models.plan import LearningPlan as LearningPlanRecord
 from app.models.profile import CapabilityEvidence as CapabilityEvidenceRecord
 from app.models.profile import StudentProfileRecord
 from app.schemas.growth import (
@@ -24,6 +25,7 @@ from app.schemas.growth import (
     CompetitionRecommendResponse,
     GrowthProfileResponse,
     LearningPlanRequest,
+    LearningPlanListResponse,
     LearningPlanResponse,
     LearningPlanRevisionRequest,
     PlanTask,
@@ -447,7 +449,7 @@ class GrowthService:
             foundation=payload.foundation,
         )
 
-        return LearningPlanResponse(
+        plan = LearningPlanResponse(
             plan_id=f"plan_{payload.student_id}_ai_app",
             student_id=payload.student_id,
             goal=payload.goal,
@@ -457,6 +459,8 @@ class GrowthService:
             tasks=tasks,
             checkpoints=checkpoints,
         )
+        self._save_learning_plan(plan, status="active")
+        return plan
 
     def revise_plan(
         self,
@@ -476,7 +480,7 @@ class GrowthService:
             feedback=payload.feedback,
         )
 
-        return LearningPlanResponse(
+        plan = LearningPlanResponse(
             plan_id=plan_id,
             student_id=payload.student_id,
             goal=goal,
@@ -487,6 +491,51 @@ class GrowthService:
             tasks=tasks,
             checkpoints=checkpoints,
         )
+        self._save_learning_plan(plan, status="revised")
+        return plan
+
+    def list_learning_plans(self, student_id: str) -> LearningPlanListResponse:
+        if self.db is None:
+            plan = self.generate_plan(
+                LearningPlanRequest(student_id=student_id, weeks=4, weekly_hours=8)
+            )
+            return LearningPlanListResponse(student_id=student_id, total=1, plans=[plan])
+
+        records = self.db.scalars(
+            select(LearningPlanRecord)
+            .where(LearningPlanRecord.student_id == student_id)
+            .order_by(LearningPlanRecord.created_at.desc(), LearningPlanRecord.id.asc())
+        ).all()
+        plans = [self._learning_plan_from_record(record) for record in records]
+        return LearningPlanListResponse(
+            student_id=student_id,
+            total=len(plans),
+            plans=plans,
+        )
+
+    def _save_learning_plan(self, plan: LearningPlanResponse, status: str) -> None:
+        if self.db is None:
+            return
+        record = self.db.get(LearningPlanRecord, plan.plan_id)
+        if record is None:
+            record = LearningPlanRecord(
+                id=plan.plan_id,
+                student_id=plan.student_id,
+                goal=plan.goal,
+                status=status,
+                plan_json=plan.model_dump(mode="json"),
+                created_at=datetime.utcnow(),
+            )
+            self.db.add(record)
+        else:
+            record.goal = plan.goal
+            record.status = status
+            record.plan_json = plan.model_dump(mode="json")
+        self.db.commit()
+
+    def _learning_plan_from_record(self, record: LearningPlanRecord) -> LearningPlanResponse:
+        payload = dict(record.plan_json or {})
+        return LearningPlanResponse(**payload)
 
     def _build_plan(
         self,

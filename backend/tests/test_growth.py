@@ -3,7 +3,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.main import app
-from app.schemas.growth import BasicProfileUpsert, ProfileEvidenceCreate
+from app.schemas.growth import (
+    BasicProfileUpsert,
+    LearningPlanRequest,
+    LearningPlanRevisionRequest,
+    ProfileEvidenceCreate,
+)
 from app.services.growth_service import GrowthService
 
 
@@ -78,6 +83,7 @@ def test_learning_plan_and_recommendations() -> None:
             "weekly_hours": 3,
         },
     )
+    plans_response = client.get("/api/students/student_001/plans")
     catalog_response = client.get("/api/competitions")
     competition_response = client.post(
         "/api/competitions/recommend",
@@ -100,6 +106,7 @@ def test_learning_plan_and_recommendations() -> None:
     assert plan_response.status_code == 200
     assert lean_plan_response.status_code == 200
     assert revision_response.status_code == 200
+    assert plans_response.status_code == 200
     assert catalog_response.status_code == 200
     assert competition_response.status_code == 200
     assert preparation_response.status_code == 200
@@ -111,6 +118,8 @@ def test_learning_plan_and_recommendations() -> None:
     assert revision_response.json()["weeks"] == 4
     assert revision_response.json()["revision_note"]
     assert "时间不足" in revision_response.json()["revision_note"]
+    assert plans_response.json()["total"] >= 1
+    assert plans_response.json()["plans"][0]["student_id"] == "student_001"
     assert catalog_response.json()["total"] >= 8
     assert catalog_response.json()["competitions"][0]["official_url"]
     assert len(competition_response.json()["recommendations"]) >= 2
@@ -276,3 +285,42 @@ def test_student_profile_and_evidence_persist_in_sqlite_session(tmp_path) -> Non
         for dimension in persisted.dimensions
         for item in dimension.evidence_items
     )
+
+
+def test_learning_plan_generation_and_revision_persist_in_sqlite_session(tmp_path) -> None:
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'plans.db'}",
+        connect_args={"check_same_thread": False},
+    )
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with SessionLocal() as first_session:
+        service = GrowthService(first_session)
+        generated = service.generate_plan(
+            LearningPlanRequest(
+                student_id="student_010",
+                goal="四周内完成课程作业分析 Demo",
+                weeks=4,
+                weekly_hours=6,
+                foundation="工程基础较好，需要补测试和展示材料",
+            )
+        )
+        revised = service.revise_plan(
+            generated.plan_id,
+            LearningPlanRevisionRequest(
+                student_id="student_010",
+                feedback="时间不足，需要压缩每周任务",
+                weeks=3,
+                weekly_hours=3,
+            ),
+        )
+
+    with SessionLocal() as second_session:
+        plans = GrowthService(second_session).list_learning_plans("student_010")
+
+    assert generated.plan_id == revised.plan_id
+    assert plans.total == 1
+    assert plans.plans[0].plan_id == generated.plan_id
+    assert plans.plans[0].weeks == 3
+    assert plans.plans[0].revision_note is not None
+    assert "时间不足" in plans.plans[0].revision_note

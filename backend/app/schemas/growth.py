@@ -97,6 +97,12 @@ class LearningPlanResponse(BaseModel):
     ai_generated: bool = True
 
 
+class LearningPlanListResponse(BaseModel):
+    student_id: str
+    total: int
+    plans: list[LearningPlanResponse] = Field(default_factory=list)
+
+
 class LearningPlanRevisionRequest(BaseModel):
     student_id: str = "student_001"
     feedback: str = "时间不足，需要压缩每周任务"

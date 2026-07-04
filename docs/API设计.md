@@ -391,7 +391,21 @@
 }
 ```
 
-响应包含阶段任务、资源、检查点和生成依据。`basis` 会说明目标方向、每周可投入时间、短板维度和基础描述，用于证明计划不是固定模板。
+响应包含阶段任务、资源、检查点和生成依据。`basis` 会说明目标方向、每周可投入时间、短板维度和基础描述，用于证明计划不是固定模板。生成结果写入 SQLite `learning_plans`。
+
+### `GET /students/{student_id}/plans`
+
+查询学生已生成和已修订的学习计划列表。
+
+响应：
+
+```json
+{
+  "student_id": "student_001",
+  "total": 1,
+  "plans": []
+}
+```
 
 ### `POST /plans/{plan_id}/revise`
 
@@ -408,9 +422,9 @@
 }
 ```
 
-响应仍为学习计划结构，并返回 `revision_note` 说明根据反馈调整了任务顺序、周数和投入强度。
+响应仍为学习计划结构，并返回 `revision_note` 说明根据反馈调整了任务顺序、周数和投入强度。修订结果会更新 SQLite `learning_plans` 中对应计划。
 
-### `POST /plans/{plan_id}/tasks`
+### `POST /tasks`
 
 保存计划中的任务。
 

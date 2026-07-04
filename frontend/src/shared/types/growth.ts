@@ -63,6 +63,12 @@ export type LearningPlan = {
   ai_generated: boolean;
 };
 
+export type LearningPlanListResponse = {
+  student_id: string;
+  total: number;
+  plans: LearningPlan[];
+};
+
 export type CompetitionRecommendation = {
   name: string;
   category: string;

@@ -4,6 +4,7 @@ import type {
   CompetitionRecommendResponse,
   GrowthProfile,
   LearningPlan,
+  LearningPlanListResponse,
   ProfileEvidence,
   TeacherCandidateScreenResponse,
   TeamPoolStatus,
@@ -73,6 +74,12 @@ export function generateLearningPlan(studentId = "student_001"): Promise<Learnin
       weeks: 8,
     }),
   });
+}
+
+export function fetchLearningPlans(
+  studentId = "student_001",
+): Promise<LearningPlanListResponse> {
+  return requestJson<LearningPlanListResponse>(`/students/${studentId}/plans`);
 }
 
 export function reviseLearningPlan(

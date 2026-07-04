@@ -10,6 +10,7 @@ from app.schemas.growth import (
     CompetitionRecommendRequest,
     CompetitionRecommendResponse,
     GrowthProfileResponse,
+    LearningPlanListResponse,
     LearningPlanRequest,
     LearningPlanResponse,
     LearningPlanRevisionRequest,
@@ -63,6 +64,14 @@ def generate_plan(
     db: Session = Depends(get_db),
 ) -> LearningPlanResponse:
     return GrowthService(db).generate_plan(payload)
+
+
+@router.get("/students/{student_id}/plans", response_model=LearningPlanListResponse)
+def list_learning_plans(
+    student_id: str,
+    db: Session = Depends(get_db),
+) -> LearningPlanListResponse:
+    return GrowthService(db).list_learning_plans(student_id)
 
 
 @router.post("/plans/{plan_id}/revise", response_model=LearningPlanResponse)
