@@ -31,6 +31,24 @@ export function fetchGrowthProfile(studentId = "student_001"): Promise<GrowthPro
   return requestJson<GrowthProfile>(`/students/${studentId}/profile`);
 }
 
+export function upsertBasicProfile(studentId = "student_001"): Promise<GrowthProfile> {
+  return requestJson<GrowthProfile>(`/students/${studentId}/profile`, {
+    method: "PUT",
+    body: JSON.stringify({
+      student_name: "林一舟",
+      grade: "大二",
+      major: "计算机科学与技术",
+      course_foundation: ["程序设计基础", "数据结构", "数据库系统"],
+      skill_tags: ["Flask", "RAG", "GitHub", "README"],
+      project_experiences: ["Flask Web 作业项目", "RAG 文档问答 Demo"],
+      competition_experiences: ["蓝桥杯校内训练"],
+      target_direction: "AI 应用开发 / 软件项目实践",
+      weekly_hours: 8,
+      github_url: "https://github.com/demo/zhichuang-agent",
+    }),
+  });
+}
+
 export function addProfileEvidence(studentId = "student_001"): Promise<ProfileEvidence> {
   return requestJson<ProfileEvidence>(`/students/${studentId}/profile/evidence`, {
     method: "POST",

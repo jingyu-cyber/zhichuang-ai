@@ -435,7 +435,8 @@ h1 {
   border-radius: 999px;
 }
 
-.profile-evidence-card {
+.profile-evidence-card,
+.basic-profile-card {
   display: grid;
   gap: 8px;
   margin: 14px 0 18px;
@@ -446,11 +447,32 @@ h1 {
   border-radius: 6px;
 }
 
+.basic-profile-card {
+  border-left-color: var(--green);
+}
+
 .profile-evidence-card p,
-.profile-evidence-card small {
+.profile-evidence-card small,
+.basic-profile-card p,
+.basic-profile-card small {
   margin: 0;
   color: var(--muted);
   line-height: 1.55;
+}
+
+.basic-profile-card div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.basic-profile-card span {
+  padding: 5px 7px;
+  color: var(--green);
+  background: rgba(28, 124, 84, 0.1);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .finding-item,

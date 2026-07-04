@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from app.schemas.growth import (
+    BasicProfileSummary,
+    BasicProfileUpsert,
     CapabilityDimension,
     CompetitionCatalogResponse,
     CompetitionInfo,
@@ -38,17 +40,25 @@ class GrowthService:
         "student_005": False,
     }
 
-    def get_profile(self, student_id: str) -> GrowthProfileResponse:
-        evidence_items = self._profile_evidence(student_id)
+    def get_profile(
+        self,
+        student_id: str,
+        profile_input: BasicProfileUpsert | None = None,
+    ) -> GrowthProfileResponse:
+        evidence_items = self._profile_evidence(student_id, profile_input)
+        profile_summary = self._basic_profile_summary(profile_input)
+        student_name = profile_input.student_name if profile_input else "林一舟"
+        target_path = profile_input.target_direction if profile_input else "AI 应用开发 / 软件项目实践"
         return GrowthProfileResponse(
             student_id=student_id,
-            student_name="林一舟",
-            target_path="AI 应用开发 / 软件项目实践",
+            student_name=student_name,
+            target_path=target_path,
             generated_at=self.generated_at,
+            profile_summary=profile_summary,
             dimensions=[
                 CapabilityDimension(
                     dimension="算法基础",
-                    score=76,
+                    score=self._dimension_score("算法基础", 76, profile_input),
                     confidence=0.72,
                     summary="能完成基础题和常见数据结构应用，动态规划和图论需要继续训练。",
                     evidence=["课程作业中能拆解主流程", "算法竞赛训练记录显示基础专题完成度较高"],
@@ -58,7 +68,7 @@ class GrowthService:
                 ),
                 CapabilityDimension(
                     dimension="工程实践",
-                    score=84,
+                    score=self._dimension_score("工程实践", 84, profile_input),
                     confidence=0.81,
                     summary="具备 Web 项目搭建和接口联调能力，工程边界意识正在形成。",
                     evidence=["Flask 作业完成了页面、接口和数据流闭环", "README 有基本运行说明"],
@@ -68,7 +78,7 @@ class GrowthService:
                 ),
                 CapabilityDimension(
                     dimension="AI 应用开发",
-                    score=79,
+                    score=self._dimension_score("AI 应用开发", 79, profile_input),
                     confidence=0.68,
                     summary="理解 RAG 和 Agent 应用形态，仍需补评测和部署经验。",
                     evidence=["能描述知识库问答流程", "项目计划包含 RAG、引用和评测任务"],
@@ -78,7 +88,7 @@ class GrowthService:
                 ),
                 CapabilityDimension(
                     dimension="表达与协作",
-                    score=73,
+                    score=self._dimension_score("表达与协作", 73, profile_input),
                     confidence=0.64,
                     summary="能说明项目目标，但对接口、分工和复盘记录表达还不稳定。",
                     evidence=["项目说明有目标和运行步骤", "缺少稳定的周复盘记录"],
@@ -96,8 +106,19 @@ class GrowthService:
             ],
         )
 
-    def _profile_evidence(self, student_id: str) -> list[ProfileEvidence]:
-        return [
+    def upsert_basic_profile(
+        self,
+        student_id: str,
+        payload: BasicProfileUpsert,
+    ) -> GrowthProfileResponse:
+        return self.get_profile(student_id, profile_input=payload)
+
+    def _profile_evidence(
+        self,
+        student_id: str,
+        profile_input: BasicProfileUpsert | None = None,
+    ) -> list[ProfileEvidence]:
+        evidence = [
             ProfileEvidence(
                 evidence_id=f"evidence_{student_id}_algorithm_001",
                 dimension="算法基础",
@@ -135,6 +156,86 @@ class GrowthService:
                 created_at=self.generated_at,
             ),
         ]
+        if profile_input:
+            evidence.extend(
+                [
+                    ProfileEvidence(
+                        evidence_id=f"evidence_{student_id}_basic_profile_skills",
+                        dimension="工程实践",
+                        source_type="student_basic_profile",
+                        source_title="基础画像技能标签",
+                        evidence_text="学生填写技能标签：" + "、".join(profile_input.skill_tags),
+                        confidence=0.48,
+                        created_at=self.evidence_created_at,
+                    ),
+                    ProfileEvidence(
+                        evidence_id=f"evidence_{student_id}_basic_profile_target",
+                        dimension="AI 应用开发",
+                        source_type="student_basic_profile",
+                        source_title="目标方向与时间投入",
+                        evidence_text=(
+                            f"目标方向：{profile_input.target_direction}；"
+                            f"每周投入 {profile_input.weekly_hours} 小时。"
+                        ),
+                        confidence=0.46,
+                        created_at=self.evidence_created_at,
+                    ),
+                    ProfileEvidence(
+                        evidence_id=f"evidence_{student_id}_basic_profile_competition",
+                        dimension="算法基础",
+                        source_type="student_basic_profile",
+                        source_title="竞赛经历填写",
+                        evidence_text="竞赛经历：" + "、".join(profile_input.competition_experiences),
+                        confidence=0.44,
+                        created_at=self.evidence_created_at,
+                    ),
+                ]
+            )
+        return evidence
+
+    def _basic_profile_summary(
+        self,
+        profile_input: BasicProfileUpsert | None,
+    ) -> BasicProfileSummary | None:
+        if not profile_input:
+            return None
+        return BasicProfileSummary(
+            grade=profile_input.grade,
+            major=profile_input.major,
+            target_direction=profile_input.target_direction,
+            weekly_hours=profile_input.weekly_hours,
+            skill_tags=profile_input.skill_tags,
+            project_experiences=profile_input.project_experiences,
+            competition_experiences=profile_input.competition_experiences,
+            github_url=profile_input.github_url,
+        )
+
+    def _dimension_score(
+        self,
+        dimension: str,
+        base_score: int,
+        profile_input: BasicProfileUpsert | None,
+    ) -> int:
+        if not profile_input:
+            return base_score
+        text = " ".join(
+            [
+                *profile_input.course_foundation,
+                *profile_input.skill_tags,
+                *profile_input.project_experiences,
+                *profile_input.competition_experiences,
+                profile_input.target_direction,
+                profile_input.github_url or "",
+            ]
+        )
+        boosts = {
+            "算法基础": ["数据结构", "算法", "蓝桥", "ICPC"],
+            "工程实践": ["Flask", "React", "Docker", "GitHub", "项目", "后端"],
+            "AI 应用开发": ["AI", "RAG", "机器学习", "大模型", "数据"],
+            "表达与协作": ["文档", "路演", "团队", "协作", "README"],
+        }
+        matched = sum(1 for keyword in boosts[dimension] if keyword.lower() in text.lower())
+        return min(92, base_score + matched * 2)
 
     def add_profile_evidence(
         self, student_id: str, payload: ProfileEvidenceCreate

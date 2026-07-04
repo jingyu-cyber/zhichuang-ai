@@ -266,6 +266,29 @@
 
 每个能力维度包含结构化 `evidence_items`，记录来源类型、来源标题、证据摘要和置信度。
 
+### `PUT /students/{student_id}/profile`
+
+学生提交或更新基础画像。首版字段覆盖年级、专业、课程基础、技能标签、项目经历、竞赛经历、目标方向、每周投入时间和 GitHub 链接，适合 5 分钟内完成冷启动。
+
+请求：
+
+```json
+{
+  "student_name": "林一舟",
+  "grade": "大二",
+  "major": "计算机科学与技术",
+  "course_foundation": ["程序设计基础", "数据结构", "数据库系统"],
+  "skill_tags": ["Flask", "RAG", "GitHub"],
+  "project_experiences": ["Flask Web 作业项目"],
+  "competition_experiences": ["蓝桥杯校内训练"],
+  "target_direction": "AI 应用开发 / 软件项目实践",
+  "weekly_hours": 8,
+  "github_url": "https://github.com/demo/zhichuang-agent"
+}
+```
+
+响应返回更新后的画像，并在 `profile_summary` 中展示填写摘要和 `completion_minutes_estimate`。
+
 ### `POST /students/{student_id}/profile/evidence`
 
 学生补充自评或证据材料，用于后续画像更新。

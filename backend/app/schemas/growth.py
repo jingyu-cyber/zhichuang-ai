@@ -22,11 +22,37 @@ class CapabilityDimension(BaseModel):
     evidence_items: list[ProfileEvidence] = Field(default_factory=list)
 
 
+class BasicProfileSummary(BaseModel):
+    grade: str
+    major: str
+    target_direction: str
+    weekly_hours: int
+    skill_tags: list[str] = Field(default_factory=list)
+    project_experiences: list[str] = Field(default_factory=list)
+    competition_experiences: list[str] = Field(default_factory=list)
+    github_url: str | None = None
+    completion_minutes_estimate: int = 5
+
+
+class BasicProfileUpsert(BaseModel):
+    student_name: str = "林一舟"
+    grade: str = "大二"
+    major: str = "计算机科学与技术"
+    course_foundation: list[str] = Field(default_factory=lambda: ["程序设计基础", "数据库系统"])
+    skill_tags: list[str] = Field(default_factory=lambda: ["Flask", "RAG", "后端接口"])
+    project_experiences: list[str] = Field(default_factory=lambda: ["Flask Web 作业项目"])
+    competition_experiences: list[str] = Field(default_factory=lambda: ["蓝桥杯校内训练"])
+    target_direction: str = "AI 应用开发 / 软件项目实践"
+    weekly_hours: int = 8
+    github_url: str | None = "https://github.com/demo/zhichuang-agent"
+
+
 class GrowthProfileResponse(BaseModel):
     student_id: str
     student_name: str
     target_path: str
     generated_at: str
+    profile_summary: BasicProfileSummary | None = None
     dimensions: list[CapabilityDimension]
     strengths: list[str]
     risks: list[str]

@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.schemas.growth import (
+    BasicProfileUpsert,
     CompetitionCatalogResponse,
     CompetitionRecommendRequest,
     CompetitionRecommendResponse,
@@ -25,6 +26,14 @@ router = APIRouter()
 @router.get("/students/{student_id}/profile", response_model=GrowthProfileResponse)
 def get_student_profile(student_id: str) -> GrowthProfileResponse:
     return GrowthService().get_profile(student_id)
+
+
+@router.put("/students/{student_id}/profile", response_model=GrowthProfileResponse)
+def upsert_student_profile(
+    student_id: str,
+    payload: BasicProfileUpsert,
+) -> GrowthProfileResponse:
+    return GrowthService().upsert_basic_profile(student_id, payload)
 
 
 @router.post("/students/{student_id}/profile/evidence", response_model=ProfileEvidence)

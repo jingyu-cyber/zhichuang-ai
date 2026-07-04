@@ -22,11 +22,24 @@ export type GrowthProfile = {
   student_name: string;
   target_path: string;
   generated_at: string;
+  profile_summary?: BasicProfileSummary | null;
   dimensions: CapabilityDimension[];
   strengths: string[];
   risks: string[];
   next_actions: string[];
   ai_generated: boolean;
+};
+
+export type BasicProfileSummary = {
+  grade: string;
+  major: string;
+  target_direction: string;
+  weekly_hours: number;
+  skill_tags: string[];
+  project_experiences: string[];
+  competition_experiences: string[];
+  github_url?: string | null;
+  completion_minutes_estimate: number;
 };
 
 export type PlanTask = {

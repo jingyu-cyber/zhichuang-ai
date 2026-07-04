@@ -15,6 +15,7 @@ import {
   recommendTeam,
   reviseLearningPlan,
   updateTeamPoolStatus,
+  upsertBasicProfile,
 } from "../shared/api/growth";
 import { fetchEvaluationDashboard } from "../shared/api/evaluations";
 import { fetchKnowledgeDocuments, searchKnowledge } from "../shared/api/knowledge";
@@ -103,7 +104,7 @@ export function Dashboard() {
         ] = await Promise.all([
           analyzeDemoAssignment("demo-token-teacher_001"),
           fetchAssignmentDashboard("demo-token-teacher_001"),
-          fetchGrowthProfile(),
+          upsertBasicProfile(),
           addProfileEvidence(),
           generateLearningPlan(),
           fetchCompetitionCatalog(),
@@ -903,6 +904,26 @@ function GrowthPath({
         </article>
 
         <article className="panel">
+          {profile.profile_summary && (
+            <>
+              <span className="section-label">基础画像采集</span>
+              <div className="basic-profile-card">
+                <strong>
+                  {profile.profile_summary.grade} · {profile.profile_summary.major}
+                </strong>
+                <p>{profile.profile_summary.target_direction}</p>
+                <small>{profile.profile_summary.weekly_hours} 小时/周 · 预计 5 分钟完成</small>
+                <div>
+                  {profile.profile_summary.skill_tags.map((tag) => (
+                    <span key={tag}>{tag}</span>
+                  ))}
+                </div>
+                {profile.profile_summary.github_url && (
+                  <small>{profile.profile_summary.github_url}</small>
+                )}
+              </div>
+            </>
+          )}
           <span className="section-label">补充证据</span>
           <div className="profile-evidence-card">
             <strong>{profileEvidence.dimension}</strong>

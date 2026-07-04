@@ -6,6 +6,21 @@ from app.main import app
 def test_student_profile_returns_capability_dimensions() -> None:
     client = TestClient(app)
     response = client.get("/api/students/student_001/profile")
+    upsert_response = client.put(
+        "/api/students/student_001/profile",
+        json={
+            "student_name": "林一舟",
+            "grade": "大二",
+            "major": "计算机科学与技术",
+            "course_foundation": ["程序设计基础", "数据结构", "数据库系统"],
+            "skill_tags": ["Flask", "RAG", "GitHub", "README"],
+            "project_experiences": ["Flask Web 作业项目", "RAG 文档问答 Demo"],
+            "competition_experiences": ["蓝桥杯校内训练"],
+            "target_direction": "AI 应用开发 / 软件项目实践",
+            "weekly_hours": 8,
+            "github_url": "https://github.com/demo/zhichuang-agent",
+        },
+    )
     evidence_response = client.post(
         "/api/students/student_001/profile/evidence",
         json={
@@ -18,11 +33,21 @@ def test_student_profile_returns_capability_dimensions() -> None:
     )
 
     assert response.status_code == 200
+    assert upsert_response.status_code == 200
     assert evidence_response.status_code == 200
     payload = response.json()
+    upsert_payload = upsert_response.json()
     assert payload["student_name"] == "林一舟"
     assert len(payload["dimensions"]) == 4
     assert all(dimension["evidence_items"] for dimension in payload["dimensions"])
+    assert upsert_payload["profile_summary"]["completion_minutes_estimate"] == 5
+    assert upsert_payload["target_path"] == "AI 应用开发 / 软件项目实践"
+    assert "RAG" in upsert_payload["profile_summary"]["skill_tags"]
+    assert any(
+        item["source_type"] == "student_basic_profile"
+        for dimension in upsert_payload["dimensions"]
+        for item in dimension["evidence_items"]
+    )
     assert evidence_response.json()["dimension"] == "工程实践"
     assert evidence_response.json()["source_type"] == "student_self_report"
 
