@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.db.base import Base
 from app.models.plan import LearningPlan as LearningPlanRecord
+from app.models.plan import TeamPoolStatusRecord, TeamRecommendation, TeamRequestRecord
 from app.models.profile import CapabilityEvidence as CapabilityEvidenceRecord
 from app.models.profile import StudentProfileRecord
 from app.schemas.growth import (
@@ -987,7 +988,7 @@ class GrowthService:
             if candidate.student_id != payload.student_id
             and self._is_team_pool_enabled(candidate.student_id)
         ]
-        return TeamRecommendResponse(
+        response = TeamRecommendResponse(
             requester_id=payload.student_id,
             project_goal=payload.project_goal,
             candidates=candidates,
@@ -998,6 +999,8 @@ class GrowthService:
                 "接口、页面和演示数据同时推进，避免答辩前只剩单点功能。",
             ],
         )
+        self._save_team_recommendation(response, payload)
+        return response
 
     def screen_teacher_candidates(
         self,
@@ -1019,7 +1022,7 @@ class GrowthService:
         )
 
     def create_team_request(self, payload: TeamRequestCreate) -> TeamRequestCard:
-        return TeamRequestCard(
+        card = TeamRequestCard(
             team_request_id=f"team_req_{payload.student_id}_ai_app",
             student_id=payload.student_id,
             competition_name=payload.competition_name,
@@ -1033,6 +1036,16 @@ class GrowthService:
             status="已发布" if payload.team_status_enabled else "仅保存草稿",
             created_at=self.team_created_at,
         )
+        self._save_team_request(card)
+        if self.db is not None:
+            self.update_team_pool_status(
+                payload.student_id,
+                TeamPoolStatusUpdate(
+                    team_status_enabled=payload.team_status_enabled,
+                    contact_visible=False,
+                ),
+            )
+        return card
 
     def get_team_pool_status(self, student_id: str) -> TeamPoolStatus:
         enabled = self._is_team_pool_enabled(student_id)
@@ -1052,7 +1065,17 @@ class GrowthService:
         student_id: str,
         payload: TeamPoolStatusUpdate,
     ) -> TeamPoolStatus:
-        self.team_pool_enabled[student_id] = payload.team_status_enabled
+        if self.db is None:
+            self.team_pool_enabled[student_id] = payload.team_status_enabled
+        else:
+            record = self.db.get(TeamPoolStatusRecord, student_id)
+            if record is None:
+                record = TeamPoolStatusRecord(student_id=student_id)
+                self.db.add(record)
+            record.team_status_enabled = payload.team_status_enabled
+            record.contact_visible = False
+            record.updated_at = datetime.utcnow()
+            self.db.commit()
         return TeamPoolStatus(
             student_id=student_id,
             team_status_enabled=payload.team_status_enabled,
@@ -1063,6 +1086,57 @@ class GrowthService:
                 else "已撤回组队授权；不会出现在队友推荐结果中。"
             ),
         )
+
+    def _save_team_request(self, card: TeamRequestCard) -> None:
+        if self.db is None:
+            return
+        record = self.db.get(TeamRequestRecord, card.team_request_id)
+        if record is None:
+            record = TeamRequestRecord(
+                id=card.team_request_id,
+                student_id=card.student_id,
+                competition_name=card.competition_name,
+                project_direction=card.project_direction,
+                request_json=card.model_dump(mode="json"),
+                status=card.status,
+                created_at=self._parse_datetime(card.created_at),
+            )
+            self.db.add(record)
+        else:
+            record.competition_name = card.competition_name
+            record.project_direction = card.project_direction
+            record.request_json = card.model_dump(mode="json")
+            record.status = card.status
+        self.db.commit()
+
+    def _save_team_recommendation(
+        self,
+        response: TeamRecommendResponse,
+        payload: TeamRecommendRequest,
+    ) -> None:
+        if self.db is None:
+            return
+        recommendation_id = self._team_recommendation_id(payload)
+        record = self.db.get(TeamRecommendation, recommendation_id)
+        if record is None:
+            record = TeamRecommendation(
+                id=recommendation_id,
+                requester_id=response.requester_id,
+                target=response.project_goal,
+                recommendations_json=response.model_dump(mode="json"),
+                created_at=datetime.utcnow(),
+            )
+            self.db.add(record)
+        else:
+            record.target = response.project_goal
+            record.recommendations_json = response.model_dump(mode="json")
+        self.db.commit()
+
+    def _team_recommendation_id(self, payload: TeamRecommendRequest) -> str:
+        raw = (
+            f"{payload.student_id}:{payload.team_request_id or ''}:{payload.project_goal}"
+        ).encode("utf-8")
+        return f"team_rec_{sha1(raw).hexdigest()[:12]}"
 
     def _team_candidates(self) -> list[TeamCandidate]:
         return [
@@ -1241,4 +1315,18 @@ class GrowthService:
         return "储备观察"
 
     def _is_team_pool_enabled(self, student_id: str) -> bool:
+        if self.db is not None:
+            record = self.db.get(TeamPoolStatusRecord, student_id)
+            if record is not None:
+                return record.team_status_enabled
+            if student_id in self.team_pool_enabled:
+                seed_record = TeamPoolStatusRecord(
+                    student_id=student_id,
+                    team_status_enabled=self.team_pool_enabled[student_id],
+                    contact_visible=False,
+                    updated_at=datetime.utcnow(),
+                )
+                self.db.add(seed_record)
+                self.db.commit()
+                return seed_record.team_status_enabled
         return self.team_pool_enabled.get(student_id, False)

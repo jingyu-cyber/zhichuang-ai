@@ -1,13 +1,17 @@
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from app.main import app
+from app.models.plan import TeamPoolStatusRecord, TeamRecommendation, TeamRequestRecord
 from app.schemas.growth import (
     BasicProfileUpsert,
     LearningPlanRequest,
     LearningPlanRevisionRequest,
     ProfileEvidenceCreate,
+    TeamPoolStatusUpdate,
+    TeamRecommendRequest,
+    TeamRequestCreate,
 )
 from app.services.growth_service import GrowthService
 
@@ -324,3 +328,59 @@ def test_learning_plan_generation_and_revision_persist_in_sqlite_session(tmp_pat
     assert plans.plans[0].weeks == 3
     assert plans.plans[0].revision_note is not None
     assert "时间不足" in plans.plans[0].revision_note
+
+
+def test_team_request_status_and_recommendation_persist_in_sqlite_session(tmp_path) -> None:
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'teams.db'}",
+        connect_args={"check_same_thread": False},
+    )
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with SessionLocal() as first_session:
+        service = GrowthService(first_session)
+        request = service.create_team_request(
+            TeamRequestCreate(
+                student_id="student_001",
+                competition_name="中国大学生计算机设计大赛",
+                project_direction="AI 应用开发与教学智能体",
+                missing_roles=["前端与交互", "算法与评测"],
+                expected_skills=["React", "RAG"],
+                weekly_hours=8,
+                communication="每周一次线上同步",
+                team_status_enabled=True,
+            )
+        )
+        service.update_team_pool_status(
+            "student_002",
+            TeamPoolStatusUpdate(team_status_enabled=False, contact_visible=True),
+        )
+        recommendation = service.recommend_team(
+            TeamRecommendRequest(
+                student_id="student_001",
+                project_goal="作业代码分析 Demo",
+                team_request_id=request.team_request_id,
+            )
+        )
+
+    with SessionLocal() as second_session:
+        service = GrowthService(second_session)
+        status = service.get_team_pool_status("student_002")
+        team_request = second_session.get(TeamRequestRecord, request.team_request_id)
+        pool_status = second_session.get(TeamPoolStatusRecord, "student_002")
+        recommendations = second_session.scalars(select(TeamRecommendation)).all()
+        recommendation_after_reload = service.recommend_team(
+            TeamRecommendRequest(student_id="student_001", project_goal="作业代码分析 Demo")
+        )
+        team_request_exists = team_request is not None
+        pool_status_enabled = pool_status.team_status_enabled if pool_status else None
+        recommendation_count = len(recommendations)
+
+    assert team_request_exists
+    assert pool_status_enabled is False
+    assert status.team_status_enabled is False
+    assert recommendation_count >= 1
+    assert "student_002" not in [candidate.student_id for candidate in recommendation.candidates]
+    assert "student_002" not in [
+        candidate.student_id for candidate in recommendation_after_reload.candidates
+    ]

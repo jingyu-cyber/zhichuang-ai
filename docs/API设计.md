@@ -568,7 +568,7 @@
 }
 ```
 
-响应包含组队需求卡片、发布状态、进入推荐池状态和联系方式可见性。联系方式默认不公开。
+响应包含组队需求卡片、发布状态、进入推荐池状态和联系方式可见性。组队需求写入 SQLite `team_requests`，联系方式默认不公开。
 
 ### `GET /students/{student_id}/team-status`
 
@@ -576,7 +576,7 @@
 
 ### `PATCH /students/{student_id}/team-status`
 
-学生开启或撤回进入组队推荐池的授权。联系方式默认不公开，即使请求传入 `contact_visible: true`，首版仍返回 `false`。
+学生开启或撤回进入组队推荐池的授权，状态写入 SQLite `team_pool_statuses`。联系方式默认不公开，即使请求传入 `contact_visible: true`，首版仍返回 `false`。
 
 请求：
 
@@ -601,6 +601,7 @@
 - 推荐证据。
 
 推荐候选只包含主动开启组队状态的学生；未授权学生不会出现在结果中。演示接口返回前端交互、算法评测等互补角色。
+推荐结果写入 SQLite `team_recommendations`，用于后续复盘推荐依据和项目组队过程。
 
 ## 10. 知识库
 

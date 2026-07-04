@@ -126,23 +126,33 @@ def screen_teacher_candidates(
 
 
 @router.post("/teams/recommend", response_model=TeamRecommendResponse)
-def recommend_team(payload: TeamRecommendRequest) -> TeamRecommendResponse:
-    return GrowthService().recommend_team(payload)
+def recommend_team(
+    payload: TeamRecommendRequest,
+    db: Session = Depends(get_db),
+) -> TeamRecommendResponse:
+    return GrowthService(db).recommend_team(payload)
 
 
 @router.post("/teams/requests", response_model=TeamRequestCard)
-def create_team_request(payload: TeamRequestCreate) -> TeamRequestCard:
-    return GrowthService().create_team_request(payload)
+def create_team_request(
+    payload: TeamRequestCreate,
+    db: Session = Depends(get_db),
+) -> TeamRequestCard:
+    return GrowthService(db).create_team_request(payload)
 
 
 @router.get("/students/{student_id}/team-status", response_model=TeamPoolStatus)
-def get_team_pool_status(student_id: str) -> TeamPoolStatus:
-    return GrowthService().get_team_pool_status(student_id)
+def get_team_pool_status(
+    student_id: str,
+    db: Session = Depends(get_db),
+) -> TeamPoolStatus:
+    return GrowthService(db).get_team_pool_status(student_id)
 
 
 @router.patch("/students/{student_id}/team-status", response_model=TeamPoolStatus)
 def update_team_pool_status(
     student_id: str,
     payload: TeamPoolStatusUpdate,
+    db: Session = Depends(get_db),
 ) -> TeamPoolStatus:
-    return GrowthService().update_team_pool_status(student_id, payload)
+    return GrowthService(db).update_team_pool_status(student_id, payload)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, JSON, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -38,3 +38,24 @@ class TeamRecommendation(Base):
     target: Mapped[str] = mapped_column(String(300), nullable=False)
     recommendations_json: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class TeamRequestRecord(Base):
+    __tablename__ = "team_requests"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    student_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    competition_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    project_direction: Mapped[str] = mapped_column(String(300), nullable=False)
+    request_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(32), default="已发布", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class TeamPoolStatusRecord(Base):
+    __tablename__ = "team_pool_statuses"
+
+    student_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    team_status_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    contact_visible: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
