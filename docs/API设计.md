@@ -302,6 +302,8 @@
 
 教师在授权课程或班级范围内查看学生画像摘要。
 
+已填写的基础画像和补充证据从 SQLite 读取；未填写时返回演示冷启动画像，保证公开 Demo 可直接展示。
+
 画像返回：
 
 - 维度分数。
@@ -332,7 +334,7 @@
 }
 ```
 
-响应返回更新后的画像，并在 `profile_summary` 中展示填写摘要和 `completion_minutes_estimate`。
+响应返回更新后的画像，并写入 SQLite `student_profiles`。`profile_summary` 展示课程基础、技能标签、项目/竞赛经历、目标方向、每周投入时间、GitHub 链接和 `completion_minutes_estimate`。
 
 ### `POST /students/{student_id}/profile/evidence`
 
@@ -349,6 +351,8 @@
   "confidence": 0.42
 }
 ```
+
+响应返回稳定 `evidence_id`。证据写入 SQLite `capability_evidence`，后续 `GET /students/{student_id}/profile` 会按能力维度合并展示。
 
 响应返回已记录的证据项。学生自评证据可用于冷启动或补充说明，置信度低于作业报告、竞赛证书、教师评价等可验证证据。
 

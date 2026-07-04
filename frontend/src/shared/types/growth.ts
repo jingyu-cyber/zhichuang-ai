@@ -33,6 +33,7 @@ export type GrowthProfile = {
 export type BasicProfileSummary = {
   grade: string;
   major: string;
+  course_foundation: string[];
   target_direction: string;
   weekly_hours: number;
   skill_tags: string[];

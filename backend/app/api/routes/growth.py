@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
+from sqlalchemy.orm import Session
 
+from app.db.session import get_db
 from app.schemas.growth import (
     BasicProfileUpsert,
     CompetitionCatalogResponse,
@@ -30,31 +32,46 @@ DEMO_CLASS_NAMES = {"class_cs_2024_01": "2024 级计算机科学与技术 1 班"
 
 
 @router.get("/students/{student_id}/profile", response_model=GrowthProfileResponse)
-def get_student_profile(student_id: str) -> GrowthProfileResponse:
-    return GrowthService().get_profile(student_id)
+def get_student_profile(
+    student_id: str,
+    db: Session = Depends(get_db),
+) -> GrowthProfileResponse:
+    return GrowthService(db).get_profile(student_id)
 
 
 @router.put("/students/{student_id}/profile", response_model=GrowthProfileResponse)
 def upsert_student_profile(
     student_id: str,
     payload: BasicProfileUpsert,
+    db: Session = Depends(get_db),
 ) -> GrowthProfileResponse:
-    return GrowthService().upsert_basic_profile(student_id, payload)
+    return GrowthService(db).upsert_basic_profile(student_id, payload)
 
 
 @router.post("/students/{student_id}/profile/evidence", response_model=ProfileEvidence)
-def add_profile_evidence(student_id: str, payload: ProfileEvidenceCreate) -> ProfileEvidence:
-    return GrowthService().add_profile_evidence(student_id, payload)
+def add_profile_evidence(
+    student_id: str,
+    payload: ProfileEvidenceCreate,
+    db: Session = Depends(get_db),
+) -> ProfileEvidence:
+    return GrowthService(db).add_profile_evidence(student_id, payload)
 
 
 @router.post("/plans/generate", response_model=LearningPlanResponse)
-def generate_plan(payload: LearningPlanRequest) -> LearningPlanResponse:
-    return GrowthService().generate_plan(payload)
+def generate_plan(
+    payload: LearningPlanRequest,
+    db: Session = Depends(get_db),
+) -> LearningPlanResponse:
+    return GrowthService(db).generate_plan(payload)
 
 
 @router.post("/plans/{plan_id}/revise", response_model=LearningPlanResponse)
-def revise_plan(plan_id: str, payload: LearningPlanRevisionRequest) -> LearningPlanResponse:
-    return GrowthService().revise_plan(plan_id, payload)
+def revise_plan(
+    plan_id: str,
+    payload: LearningPlanRevisionRequest,
+    db: Session = Depends(get_db),
+) -> LearningPlanResponse:
+    return GrowthService(db).revise_plan(plan_id, payload)
 
 
 @router.post("/competitions/recommend", response_model=CompetitionRecommendResponse)

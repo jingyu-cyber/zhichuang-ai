@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+from datetime import datetime
+from hashlib import sha1
 from typing import TypedDict
 
+from sqlalchemy import inspect, select, text
+from sqlalchemy.orm import Session
+
+from app.db.base import Base
+from app.models.profile import CapabilityEvidence as CapabilityEvidenceRecord
+from app.models.profile import StudentProfileRecord
 from app.schemas.growth import (
     BasicProfileSummary,
     BasicProfileUpsert,
@@ -56,11 +64,19 @@ class GrowthService:
         "student_005": False,
     }
 
+    def __init__(self, db: Session | None = None) -> None:
+        self.db = db
+        if self.db is not None:
+            Base.metadata.create_all(bind=self.db.get_bind())
+            self._ensure_profile_schema()
+
     def get_profile(
         self,
         student_id: str,
         profile_input: BasicProfileUpsert | None = None,
     ) -> GrowthProfileResponse:
+        if profile_input is None:
+            profile_input = self._stored_profile_input(student_id)
         evidence_items = self._profile_evidence(student_id, profile_input)
         profile_summary = self._basic_profile_summary(profile_input)
         student_name = profile_input.student_name if profile_input else "林一舟"
@@ -127,6 +143,21 @@ class GrowthService:
         student_id: str,
         payload: BasicProfileUpsert,
     ) -> GrowthProfileResponse:
+        if self.db is not None:
+            record = self.db.get(StudentProfileRecord, student_id)
+            if record is None:
+                record = StudentProfileRecord(
+                    student_id=student_id,
+                    student_name=payload.student_name,
+                    grade=payload.grade,
+                    major=payload.major,
+                    target_direction=payload.target_direction,
+                    weekly_hours=payload.weekly_hours,
+                    created_at=datetime.utcnow(),
+                )
+                self.db.add(record)
+            self._apply_profile_payload(record, payload)
+            self.db.commit()
         return self.get_profile(student_id, profile_input=payload)
 
     def _profile_evidence(
@@ -207,6 +238,7 @@ class GrowthService:
                     ),
                 ]
             )
+        evidence.extend(self._stored_profile_evidence(student_id))
         return evidence
 
     def _basic_profile_summary(
@@ -218,6 +250,7 @@ class GrowthService:
         return BasicProfileSummary(
             grade=profile_input.grade,
             major=profile_input.major,
+            course_foundation=profile_input.course_foundation,
             target_direction=profile_input.target_direction,
             weekly_hours=profile_input.weekly_hours,
             skill_tags=profile_input.skill_tags,
@@ -256,15 +289,154 @@ class GrowthService:
     def add_profile_evidence(
         self, student_id: str, payload: ProfileEvidenceCreate
     ) -> ProfileEvidence:
-        return ProfileEvidence(
-            evidence_id=f"evidence_{student_id}_manual_{abs(hash(payload.evidence_text)) % 10000}",
+        evidence = ProfileEvidence(
+            evidence_id=self._manual_evidence_id(student_id, payload),
             dimension=payload.dimension,
             source_type=payload.source_type,
             source_title=payload.source_title,
             evidence_text=payload.evidence_text,
             confidence=payload.confidence,
-            created_at=self.evidence_created_at,
+            created_at=datetime.utcnow().isoformat(),
         )
+        if self.db is None:
+            return evidence
+
+        existing = self.db.get(CapabilityEvidenceRecord, evidence.evidence_id)
+        if existing is None:
+            record = self._evidence_record_from_schema(student_id, evidence)
+            self.db.add(record)
+        else:
+            record = existing
+            existing.dimension = evidence.dimension
+            existing.source_type = evidence.source_type
+            existing.source_id = evidence.source_title
+            existing.source_title = evidence.source_title
+            existing.evidence_text = evidence.evidence_text
+            existing.confidence = evidence.confidence
+            existing.weight = evidence.confidence
+        self.db.commit()
+        self.db.refresh(record)
+        return self._evidence_schema_from_record(record)
+
+    def _stored_profile_input(self, student_id: str) -> BasicProfileUpsert | None:
+        if self.db is None:
+            return None
+        record = self.db.get(StudentProfileRecord, student_id)
+        if record is None:
+            return None
+        return BasicProfileUpsert(
+            student_name=record.student_name,
+            grade=record.grade,
+            major=record.major,
+            course_foundation=list(record.course_foundation_json or []),
+            skill_tags=list(record.skill_tags_json or []),
+            project_experiences=list(record.project_experiences_json or []),
+            competition_experiences=list(record.competition_experiences_json or []),
+            target_direction=record.target_direction,
+            weekly_hours=record.weekly_hours,
+            github_url=record.github_url,
+        )
+
+    def _apply_profile_payload(
+        self,
+        record: StudentProfileRecord,
+        payload: BasicProfileUpsert,
+    ) -> None:
+        record.student_name = payload.student_name
+        record.grade = payload.grade
+        record.major = payload.major
+        record.course_foundation_json = payload.course_foundation
+        record.skill_tags_json = payload.skill_tags
+        record.project_experiences_json = payload.project_experiences
+        record.competition_experiences_json = payload.competition_experiences
+        record.target_direction = payload.target_direction
+        record.weekly_hours = payload.weekly_hours
+        record.github_url = payload.github_url
+        record.updated_at = datetime.utcnow()
+
+    def _stored_profile_evidence(self, student_id: str) -> list[ProfileEvidence]:
+        if self.db is None:
+            return []
+        records = self.db.scalars(
+            select(CapabilityEvidenceRecord)
+            .where(CapabilityEvidenceRecord.student_id == student_id)
+            .order_by(
+                CapabilityEvidenceRecord.created_at.asc(),
+                CapabilityEvidenceRecord.id.asc(),
+            )
+        ).all()
+        return [self._evidence_schema_from_record(record) for record in records]
+
+    def _manual_evidence_id(
+        self,
+        student_id: str,
+        payload: ProfileEvidenceCreate,
+    ) -> str:
+        raw = (
+            f"{student_id}:{payload.dimension}:{payload.source_type}:"
+            f"{payload.source_title}:{payload.evidence_text}"
+        ).encode("utf-8")
+        return f"evidence_{student_id}_manual_{sha1(raw).hexdigest()[:10]}"
+
+    def _evidence_record_from_schema(
+        self,
+        student_id: str,
+        evidence: ProfileEvidence,
+    ) -> CapabilityEvidenceRecord:
+        return CapabilityEvidenceRecord(
+            id=evidence.evidence_id,
+            student_id=student_id,
+            dimension=evidence.dimension,
+            source_type=evidence.source_type,
+            source_id=evidence.source_title,
+            source_title=evidence.source_title,
+            evidence_text=evidence.evidence_text,
+            confidence=evidence.confidence,
+            weight=evidence.confidence,
+            created_at=self._parse_datetime(evidence.created_at),
+        )
+
+    def _evidence_schema_from_record(
+        self,
+        record: CapabilityEvidenceRecord,
+    ) -> ProfileEvidence:
+        return ProfileEvidence(
+            evidence_id=record.id,
+            dimension=record.dimension,
+            source_type=record.source_type,
+            source_title=record.source_title or record.source_id,
+            evidence_text=record.evidence_text,
+            confidence=record.confidence if record.confidence is not None else record.weight,
+            created_at=record.created_at.isoformat(),
+        )
+
+    def _parse_datetime(self, value: str) -> datetime:
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return datetime.utcnow()
+
+    def _ensure_profile_schema(self) -> None:
+        if self.db is None:
+            return
+        bind = self.db.get_bind()
+        inspector = inspect(bind)
+        if "capability_evidence" not in set(inspector.get_table_names()):
+            return
+        existing_columns = {
+            column["name"] for column in inspector.get_columns("capability_evidence")
+        }
+        statements = []
+        if "source_title" not in existing_columns:
+            statements.append(
+                "ALTER TABLE capability_evidence ADD COLUMN source_title VARCHAR(200)"
+            )
+        if "confidence" not in existing_columns:
+            statements.append("ALTER TABLE capability_evidence ADD COLUMN confidence FLOAT")
+        for statement in statements:
+            self.db.execute(text(statement))
+        if statements:
+            self.db.commit()
 
     def generate_plan(self, payload: LearningPlanRequest) -> LearningPlanResponse:
         tasks, basis, checkpoints = self._build_plan(

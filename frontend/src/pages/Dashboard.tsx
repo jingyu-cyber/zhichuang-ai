@@ -1279,6 +1279,9 @@ function GrowthPath({
                     <span key={tag}>{tag}</span>
                   ))}
                 </div>
+                <small>
+                  课程基础：{profile.profile_summary.course_foundation.join(" / ")}
+                </small>
                 {profile.profile_summary.github_url && (
                   <small>{profile.profile_summary.github_url}</small>
                 )}

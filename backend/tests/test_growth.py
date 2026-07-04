@@ -1,6 +1,10 @@
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from app.main import app
+from app.schemas.growth import BasicProfileUpsert, ProfileEvidenceCreate
+from app.services.growth_service import GrowthService
 
 
 def test_student_profile_returns_capability_dimensions() -> None:
@@ -216,3 +220,59 @@ def test_team_request_and_pool_status() -> None:
         candidate["student_id"]
         for candidate in team_response_after_revoke.json()["candidates"]
     ]
+
+
+def test_student_profile_and_evidence_persist_in_sqlite_session(tmp_path) -> None:
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'growth.db'}",
+        connect_args={"check_same_thread": False},
+    )
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with SessionLocal() as first_session:
+        service = GrowthService(first_session)
+        profile = service.upsert_basic_profile(
+            "student_009",
+            BasicProfileUpsert(
+                student_name="赵知行",
+                grade="大三",
+                major="软件工程",
+                course_foundation=["数据结构", "软件工程"],
+                skill_tags=["React", "FastAPI", "RAG"],
+                project_experiences=["课程作业分析平台"],
+                competition_experiences=["中国大学生计算机设计大赛校赛"],
+                target_direction="AI 应用开发 / 软件项目实践",
+                weekly_hours=10,
+                github_url="https://github.com/demo/student-009",
+            ),
+        )
+        evidence = service.add_profile_evidence(
+            "student_009",
+            ProfileEvidenceCreate(
+                dimension="工程实践",
+                source_type="assignment_report",
+                source_title="课程作业代码分析报告",
+                evidence_text="上传了作业代码，系统识别到接口、测试和 README 证据。",
+                confidence=0.77,
+            ),
+        )
+
+    with SessionLocal() as second_session:
+        persisted = GrowthService(second_session).get_profile("student_009")
+
+    assert profile.profile_summary is not None
+    assert profile.profile_summary.course_foundation == ["数据结构", "软件工程"]
+    assert persisted.student_name == "赵知行"
+    assert persisted.profile_summary is not None
+    assert persisted.profile_summary.skill_tags == ["React", "FastAPI", "RAG"]
+    assert persisted.profile_summary.course_foundation == ["数据结构", "软件工程"]
+    assert any(
+        item.evidence_id == evidence.evidence_id
+        for dimension in persisted.dimensions
+        for item in dimension.evidence_items
+    )
+    assert any(
+        item.source_title == "课程作业代码分析报告"
+        for dimension in persisted.dimensions
+        for item in dimension.evidence_items
+    )

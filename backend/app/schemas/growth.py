@@ -25,6 +25,7 @@ class CapabilityDimension(BaseModel):
 class BasicProfileSummary(BaseModel):
     grade: str
     major: str
+    course_foundation: list[str] = Field(default_factory=list)
     target_direction: str
     weekly_hours: int
     skill_tags: list[str] = Field(default_factory=list)
