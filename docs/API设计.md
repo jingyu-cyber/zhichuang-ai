@@ -16,6 +16,26 @@
 
 ## 2. 智能体对话
 
+## 2.1 演示账号
+
+### `GET /auth/demo-accounts`
+
+公网 Demo 获取学生、教师、管理员三个演示账号。
+
+### `POST /auth/demo-session`
+
+请求：
+
+```json
+{
+  "user_id": "teacher_001"
+}
+```
+
+响应包含演示 token、账号角色、授权课程、授权班级和可访问模块。
+
+## 2.2 智能体对话
+
 ### `POST /agent/chat`
 
 用于学生或教师发起自然语言任务。

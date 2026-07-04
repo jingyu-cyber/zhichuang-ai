@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { askAgent } from "../shared/api/agent";
 import { analyzeDemoAssignment, fetchAssignmentDashboard } from "../shared/api/assignments";
+import { createDemoSession, fetchDemoAccounts } from "../shared/api/auth";
 import {
   fetchGrowthProfile,
   generateLearningPlan,
@@ -11,6 +12,7 @@ import {
 import { fetchKnowledgeDocuments, searchKnowledge } from "../shared/api/knowledge";
 import type { ChatResponse } from "../shared/types/agent";
 import type { AssignmentDashboard, AssignmentReport } from "../shared/types/assignments";
+import type { DemoAccount } from "../shared/types/auth";
 import type {
   CompetitionRecommendResponse,
   GrowthProfile,
@@ -18,8 +20,7 @@ import type {
   TeamRecommendResponse,
 } from "../shared/types/growth";
 import type { KnowledgeDocumentsResponse, KnowledgeSearchResponse } from "../shared/types/knowledge";
-
-type ViewMode = "student" | "teacher" | "knowledge" | "growth" | "kb";
+import type { ViewMode } from "../shared/types/navigation";
 
 export function Dashboard() {
   const [mode, setMode] = useState<ViewMode>("teacher");
@@ -33,6 +34,8 @@ export function Dashboard() {
   const [knowledgeSearch, setKnowledgeSearch] = useState<KnowledgeSearchResponse | null>(null);
   const [knowledgeQuery, setKnowledgeQuery] = useState("作业 Rubric");
   const [knowledgeLoading, setKnowledgeLoading] = useState(false);
+  const [accounts, setAccounts] = useState<DemoAccount[]>([]);
+  const [currentAccount, setCurrentAccount] = useState<DemoAccount | null>(null);
   const [chatQuestion, setChatQuestion] = useState("如何准备算法竞赛？");
   const [chatResponse, setChatResponse] = useState<ChatResponse | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
@@ -55,16 +58,18 @@ export function Dashboard() {
           teamData,
           knowledgeData,
           searchData,
+          accountsData,
         ] = await Promise.all([
-            analyzeDemoAssignment(),
-            fetchAssignmentDashboard(),
-            fetchGrowthProfile(),
-            generateLearningPlan(),
-            recommendCompetitions(),
-            recommendTeam(),
-            fetchKnowledgeDocuments(),
-            searchKnowledge("作业 Rubric"),
-          ]);
+          analyzeDemoAssignment(),
+          fetchAssignmentDashboard(),
+          fetchGrowthProfile(),
+          generateLearningPlan(),
+          recommendCompetitions(),
+          recommendTeam(),
+          fetchKnowledgeDocuments(),
+          searchKnowledge("作业 Rubric"),
+          fetchDemoAccounts(),
+        ]);
 
         if (mounted) {
           setReport(reportData);
@@ -75,6 +80,8 @@ export function Dashboard() {
           setTeam(teamData);
           setKnowledgeDocs(knowledgeData);
           setKnowledgeSearch(searchData);
+          setAccounts(accountsData.accounts);
+          setCurrentAccount(accountsData.accounts.find((account) => account.role === "teacher") ?? accountsData.accounts[0]);
         }
       } catch (err) {
         if (mounted) {
@@ -112,6 +119,17 @@ export function Dashboard() {
       setError(err instanceof Error ? err.message : "知识库问答加载失败");
     } finally {
       setChatLoading(false);
+    }
+  }
+
+  async function handleAccountChange(userId: string) {
+    try {
+      setError(null);
+      const session = await createDemoSession(userId);
+      setCurrentAccount(session.account);
+      setMode(session.account.default_view);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "演示账号切换失败");
     }
   }
 
@@ -172,6 +190,28 @@ export function Dashboard() {
           <strong>Flask Web 项目实践</strong>
           <p>系统分析作业代码与说明，教师直接查看学情诊断。</p>
         </div>
+
+        {currentAccount && (
+          <div className="account-panel">
+            <label htmlFor="demo-account">演示账号</label>
+            <select
+              id="demo-account"
+              value={currentAccount.user_id}
+              onChange={(event) => handleAccountChange(event.target.value)}
+            >
+              {accounts.map((account) => (
+                <option key={account.user_id} value={account.user_id}>
+                  {account.name} · {account.title}
+                </option>
+              ))}
+            </select>
+            <div className="account-scope">
+              <strong>{currentAccount.role.toUpperCase()}</strong>
+              <span>{currentAccount.authorized_courses.join(" / ")}</span>
+              <span>{currentAccount.authorized_classes.join(" / ")}</span>
+            </div>
+          </div>
+        )}
       </aside>
 
       <section className="content">
