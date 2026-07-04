@@ -14,6 +14,14 @@ export type EvaluationCase = {
   status: string;
 };
 
+export type EvaluationCaseCreate = {
+  scenario: string;
+  input_question: string;
+  expected_focus: string[];
+  priority: string;
+  status: string;
+};
+
 export type EvaluationRecord = {
   record_id: string;
   case_id: string;
@@ -26,6 +34,22 @@ export type EvaluationRecord = {
   reviewer: string;
   evaluated_at: string;
   ai_generated: boolean;
+};
+
+export type EvaluationRecordCreate = {
+  case_id: string;
+  scenario: string;
+  input_question: string;
+  system_output: string;
+  citations?: EvaluationCitation[];
+  manual_score: number;
+  issue_notes: string;
+  reviewer: string;
+};
+
+export type EvaluationUpsertResponse = {
+  item_id: string;
+  message: string;
 };
 
 export type EvaluationSummary = {

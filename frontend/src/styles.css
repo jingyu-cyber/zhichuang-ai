@@ -1327,6 +1327,39 @@ h1 {
   margin-top: 16px;
 }
 
+.evaluation-admin-card {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--green);
+  border-radius: 6px;
+}
+
+.evaluation-admin-card span {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.evaluation-admin-card button {
+  justify-self: start;
+  min-height: 38px;
+  padding: 0 12px;
+  color: #fff;
+  background: var(--green);
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.evaluation-admin-card button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .eval-case,
 .eval-record {
   padding: 14px;

@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from app.schemas.evaluations import (
     EvaluationCase,
+    EvaluationCaseCreate,
     EvaluationCitation,
     EvaluationDashboardResponse,
     EvaluationRecord,
+    EvaluationRecordCreate,
     EvaluationSummary,
+    EvaluationUpsertResponse,
 )
 
 
@@ -164,3 +167,45 @@ class EvaluationService:
 
     def list_records(self) -> list[EvaluationRecord]:
         return self.records
+
+    def create_case(self, payload: EvaluationCaseCreate) -> EvaluationUpsertResponse:
+        case_id = f"eval_custom_{len(self.cases) + 1:03d}"
+        self.cases.append(
+            EvaluationCase(
+                case_id=case_id,
+                scenario=payload.scenario,
+                input_question=payload.input_question,
+                expected_focus=payload.expected_focus,
+                priority=payload.priority,
+                status=payload.status,
+            )
+        )
+        return EvaluationUpsertResponse(item_id=case_id, message="测试案例已记录。")
+
+    def create_record(self, payload: EvaluationRecordCreate) -> EvaluationUpsertResponse:
+        record_id = f"record_custom_{len(self.records) + 1:03d}"
+        self.records.append(
+            EvaluationRecord(
+                record_id=record_id,
+                case_id=payload.case_id,
+                scenario=payload.scenario,
+                input_question=payload.input_question,
+                system_output=payload.system_output,
+                citations=payload.citations or self._default_citations(payload.scenario),
+                manual_score=payload.manual_score,
+                issue_notes=payload.issue_notes,
+                reviewer=payload.reviewer,
+                evaluated_at=self.evaluated_at,
+            )
+        )
+        return EvaluationUpsertResponse(item_id=record_id, message="测试输出记录已保存。")
+
+    def _default_citations(self, scenario: str) -> list[EvaluationCitation]:
+        return [
+            EvaluationCitation(
+                title=f"{scenario}测试依据",
+                source_type="evaluation_case",
+                path="测试评测",
+                snippet="评测记录需要保存输入、输出、引用来源、评分和问题记录。",
+            )
+        ]

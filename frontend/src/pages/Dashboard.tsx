@@ -19,7 +19,11 @@ import {
   updateTeamPoolStatus,
   upsertBasicProfile,
 } from "../shared/api/growth";
-import { fetchEvaluationDashboard } from "../shared/api/evaluations";
+import {
+  createEvaluationCase,
+  createEvaluationRecord,
+  fetchEvaluationDashboard,
+} from "../shared/api/evaluations";
 import {
   createKnowledgeDocument,
   fetchKnowledgeDocumentVersions,
@@ -87,6 +91,7 @@ export function Dashboard() {
   const [taskLoading, setTaskLoading] = useState(false);
   const [evaluationDashboard, setEvaluationDashboard] =
     useState<EvaluationDashboardResponse | null>(null);
+  const [evaluationLoading, setEvaluationLoading] = useState(false);
   const [courses, setCourses] = useState<CourseListResponse | null>(null);
   const [classes, setClasses] = useState<ClassListResponse | null>(null);
   const [students, setStudents] = useState<StudentListResponse | null>(null);
@@ -448,6 +453,35 @@ export function Dashboard() {
     }
   }
 
+  async function handleCreateEvaluationArtifact() {
+    try {
+      setEvaluationLoading(true);
+      setError(null);
+      const caseResponse = await createEvaluationCase({
+        scenario: "竞赛准备计划",
+        input_question: "为中国大学生计算机设计大赛生成 4 周准备计划",
+        expected_focus: ["时间节点", "官方依据", "交付物"],
+        priority: "P0",
+        status: "已记录",
+      });
+      await createEvaluationRecord({
+        case_id: caseResponse.item_id,
+        scenario: "竞赛准备计划",
+        input_question: "为中国大学生计算机设计大赛生成 4 周准备计划",
+        system_output: "系统生成 4 周准备计划，包含报名节点、作品交付物和官方依据。",
+        manual_score: 88,
+        issue_notes: "计划结构完整，引用依据明确。",
+        reviewer: "项目评测组",
+      });
+      setEvaluationDashboard(await fetchEvaluationDashboard());
+      setMode("evaluations");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "评测记录保存失败");
+    } finally {
+      setEvaluationLoading(false);
+    }
+  }
+
   return (
     <main className="workspace">
       <aside className="sidebar">
@@ -639,7 +673,11 @@ export function Dashboard() {
         )}
 
         {!loading && !error && mode === "evaluations" && evaluationDashboard && (
-          <EvaluationDashboard dashboard={evaluationDashboard} />
+          <EvaluationDashboard
+            dashboard={evaluationDashboard}
+            loading={evaluationLoading}
+            onCreateArtifact={handleCreateEvaluationArtifact}
+          />
         )}
 
         {!loading && !error && mode === "academic" && courses && classes && students && (
@@ -1622,7 +1660,15 @@ function TaskCard({ task }: { task: LearningTask }) {
   );
 }
 
-function EvaluationDashboard({ dashboard }: { dashboard: EvaluationDashboardResponse }) {
+function EvaluationDashboard({
+  dashboard,
+  loading,
+  onCreateArtifact,
+}: {
+  dashboard: EvaluationDashboardResponse;
+  loading: boolean;
+  onCreateArtifact: () => void;
+}) {
   return (
     <>
       <section className="summary-strip">
@@ -1681,6 +1727,13 @@ function EvaluationDashboard({ dashboard }: { dashboard: EvaluationDashboardResp
           <div className="evaluation-rubric">
             <p>每条记录保留输入、系统输出、引用来源、人工评分和问题记录。</p>
             <p>事实性内容重点检查是否可追溯，推荐类内容重点检查是否解释适合原因与短板。</p>
+          </div>
+          <div className="evaluation-admin-card">
+            <strong>维护评测样例</strong>
+            <span>新增竞赛准备计划测试案例和输出记录。</span>
+            <button onClick={onCreateArtifact} disabled={loading}>
+              {loading ? "保存中" : "新增案例与记录"}
+            </button>
           </div>
         </article>
       </section>

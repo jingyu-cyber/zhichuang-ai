@@ -704,9 +704,43 @@
 
 查询典型测试案例清单。
 
+### `POST /evaluations/cases`
+
+管理员新增典型测试案例。学生或教师账号访问返回 `403`。
+
+请求：
+
+```json
+{
+  "scenario": "竞赛准备计划",
+  "input_question": "为中国大学生计算机设计大赛生成 4 周准备计划",
+  "expected_focus": ["时间节点", "官方依据", "交付物"],
+  "priority": "P0",
+  "status": "已记录"
+}
+```
+
 ### `GET /evaluations/records`
 
 查询测试输出记录清单。
+
+### `POST /evaluations/records`
+
+管理员新增测试输出记录，保存输入、系统输出、引用来源、人工评分和问题记录。
+
+请求：
+
+```json
+{
+  "case_id": "eval_custom_004",
+  "scenario": "竞赛准备计划",
+  "input_question": "为中国大学生计算机设计大赛生成 4 周准备计划",
+  "system_output": "系统生成 4 周准备计划，包含报名节点和作品交付物。",
+  "manual_score": 88,
+  "issue_notes": "计划结构完整，引用依据明确。",
+  "reviewer": "项目评测组"
+}
+```
 
 当前演示版本至少提供 3 个典型测试案例和 3 条完整输出记录。
 

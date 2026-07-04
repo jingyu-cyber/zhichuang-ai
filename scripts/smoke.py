@@ -233,6 +233,38 @@ def main() -> int:
     evaluations = client.get_json("/evaluations/dashboard")
     assert_true(evaluations["cases"], "evaluation cases missing")
     assert_true(evaluations["records"], "evaluation records missing")
+    eval_case = client.post_json(
+        "/evaluations/cases",
+        {
+            "scenario": "竞赛准备计划",
+            "input_question": "为中国大学生计算机设计大赛生成 4 周准备计划",
+            "expected_focus": ["时间节点", "官方依据", "交付物"],
+            "priority": "P0",
+            "status": "已记录",
+        },
+        headers=admin_header,
+    )
+    eval_record = client.post_json(
+        "/evaluations/records",
+        {
+            "case_id": eval_case["item_id"],
+            "scenario": "竞赛准备计划",
+            "input_question": "为中国大学生计算机设计大赛生成 4 周准备计划",
+            "system_output": "系统生成 4 周准备计划，包含报名节点和作品交付物。",
+            "manual_score": 88,
+            "issue_notes": "计划结构完整，引用依据明确。",
+            "reviewer": "项目评测组",
+        },
+        headers=admin_header,
+    )
+    assert_true(eval_case["item_id"], "evaluation case create failed")
+    assert_true(eval_record["item_id"], "evaluation record create failed")
+    client.expect_forbidden(
+        "POST",
+        "/evaluations/cases",
+        {"scenario": "学生尝试维护评测"},
+        headers=student_header,
+    )
 
     courses = client.get_json("/courses")
     assert_true(courses["courses"], "courses missing")
