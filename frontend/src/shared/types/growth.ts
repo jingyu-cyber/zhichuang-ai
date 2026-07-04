@@ -42,6 +42,8 @@ export type LearningPlan = {
   goal: string;
   weeks: number;
   overview: string;
+  basis: string[];
+  revision_note?: string | null;
   tasks: PlanTask[];
   checkpoints: string[];
   ai_generated: boolean;

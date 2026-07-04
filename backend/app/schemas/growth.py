@@ -46,6 +46,8 @@ class LearningPlanRequest(BaseModel):
     student_id: str = "student_001"
     goal: str = "三个月内完成 AI 应用开发 Demo 并准备校级双创项目"
     weeks: int = 8
+    weekly_hours: int = 8
+    foundation: str = "工程实践较好，算法和测试需要补强"
 
 
 class PlanTask(BaseModel):
@@ -61,9 +63,18 @@ class LearningPlanResponse(BaseModel):
     goal: str
     weeks: int
     overview: str
+    basis: list[str] = Field(default_factory=list)
+    revision_note: str | None = None
     tasks: list[PlanTask]
     checkpoints: list[str]
     ai_generated: bool = True
+
+
+class LearningPlanRevisionRequest(BaseModel):
+    student_id: str = "student_001"
+    feedback: str = "时间不足，需要压缩每周任务"
+    weeks: int | None = None
+    weekly_hours: int | None = None
 
 
 class CompetitionRecommendRequest(BaseModel):

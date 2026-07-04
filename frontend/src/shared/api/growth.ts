@@ -55,6 +55,22 @@ export function generateLearningPlan(studentId = "student_001"): Promise<Learnin
   });
 }
 
+export function reviseLearningPlan(
+  planId: string,
+  feedback: string,
+  studentId = "student_001",
+): Promise<LearningPlan> {
+  return requestJson<LearningPlan>(`/plans/${planId}/revise`, {
+    method: "POST",
+    body: JSON.stringify({
+      student_id: studentId,
+      feedback,
+      weeks: feedback.includes("时间不足") ? 4 : 8,
+      weekly_hours: feedback.includes("时间不足") ? 3 : 8,
+    }),
+  });
+}
+
 export function recommendCompetitions(
   studentId = "student_001",
 ): Promise<CompetitionRecommendResponse> {

@@ -626,6 +626,46 @@ h1 {
   margin-top: 22px;
 }
 
+.plan-control-strip,
+.plan-feedback-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.plan-control-strip small {
+  padding: 6px 8px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.plan-revision-note {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  color: var(--ink);
+  background: rgba(28, 124, 84, 0.08);
+  border-left: 4px solid var(--green);
+  border-radius: 6px;
+}
+
+.plan-feedback-actions button {
+  padding: 8px 10px;
+  color: var(--blue);
+  background: rgba(23, 78, 166, 0.08);
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.plan-feedback-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .timeline {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

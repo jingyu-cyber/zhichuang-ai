@@ -13,6 +13,7 @@ import {
   generateLearningPlan,
   recommendCompetitions,
   recommendTeam,
+  reviseLearningPlan,
 } from "../shared/api/growth";
 import { fetchEvaluationDashboard } from "../shared/api/evaluations";
 import { fetchKnowledgeDocuments, searchKnowledge } from "../shared/api/knowledge";
@@ -43,6 +44,7 @@ export function Dashboard() {
   const [profile, setProfile] = useState<GrowthProfile | null>(null);
   const [profileEvidence, setProfileEvidence] = useState<ProfileEvidence | null>(null);
   const [plan, setPlan] = useState<LearningPlan | null>(null);
+  const [planRevisionLoading, setPlanRevisionLoading] = useState(false);
   const [competitions, setCompetitions] = useState<CompetitionRecommendResponse | null>(null);
   const [competitionCatalog, setCompetitionCatalog] =
     useState<CompetitionCatalogResponse | null>(null);
@@ -186,6 +188,8 @@ export function Dashboard() {
           team,
           teamRequest,
           teamStatus,
+          planRevisionLoading,
+          onRevisePlan: handleRevisePlan,
         }
       : null;
 
@@ -238,6 +242,21 @@ export function Dashboard() {
       setError(err instanceof Error ? err.message : "知识库检索失败");
     } finally {
       setKnowledgeLoading(false);
+    }
+  }
+
+  async function handleRevisePlan(feedback: string) {
+    if (!plan) return;
+    try {
+      setPlanRevisionLoading(true);
+      setError(null);
+      const revisedPlan = await reviseLearningPlan(plan.plan_id, feedback, plan.student_id);
+      setPlan(revisedPlan);
+      setMode("growth");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "学习计划更新失败");
+    } finally {
+      setPlanRevisionLoading(false);
     }
   }
 
@@ -808,6 +827,8 @@ function GrowthPath({
   team,
   teamRequest,
   teamStatus,
+  planRevisionLoading,
+  onRevisePlan,
 }: {
   profile: GrowthProfile;
   profileEvidence: ProfileEvidence;
@@ -817,6 +838,8 @@ function GrowthPath({
   team: TeamRecommendResponse;
   teamRequest: TeamRequestCard;
   teamStatus: TeamPoolStatus;
+  planRevisionLoading: boolean;
+  onRevisePlan: (feedback: string) => void;
 }) {
   return (
     <>
@@ -887,6 +910,25 @@ function GrowthPath({
             <h2>{plan.goal}</h2>
           </div>
           <span className="muted">{plan.weeks} 周</span>
+        </div>
+        <div className="plan-control-strip">
+          {plan.basis.map((item) => (
+            <small key={item}>{item}</small>
+          ))}
+        </div>
+        {plan.revision_note && <p className="plan-revision-note">{plan.revision_note}</p>}
+        <div className="plan-feedback-actions">
+          {["时间不足，需要压缩每周任务", "基础薄弱，需要先补基础", "想转方向到 AI 应用开发"].map(
+            (feedback) => (
+              <button
+                key={feedback}
+                onClick={() => onRevisePlan(feedback)}
+                disabled={planRevisionLoading}
+              >
+                {feedback}
+              </button>
+            ),
+          )}
         </div>
         <div className="timeline">
           {plan.tasks.map((task) => (

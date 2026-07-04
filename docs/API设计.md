@@ -310,15 +310,30 @@
 {
   "student_id": "student_001",
   "goal": "三个月内完成 AI 应用开发 Demo 并准备校级双创项目",
-  "weeks": 8
+  "weeks": 8,
+  "weekly_hours": 8,
+  "foundation": "工程实践较好，算法和测试需要补强"
 }
 ```
 
-响应包含阶段任务、资源和检查点。
+响应包含阶段任务、资源、检查点和生成依据。`basis` 会说明目标方向、每周可投入时间、短板维度和基础描述，用于证明计划不是固定模板。
 
 ### `POST /plans/{plan_id}/revise`
 
 用户确认后修改学习计划。
+
+请求：
+
+```json
+{
+  "student_id": "student_001",
+  "feedback": "时间不足，需要压缩每周任务",
+  "weeks": 4,
+  "weekly_hours": 3
+}
+```
+
+响应仍为学习计划结构，并返回 `revision_note` 说明根据反馈调整了任务顺序、周数和投入强度。
 
 ### `POST /plans/{plan_id}/tasks`
 

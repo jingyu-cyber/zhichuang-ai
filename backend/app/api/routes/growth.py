@@ -7,6 +7,7 @@ from app.schemas.growth import (
     GrowthProfileResponse,
     LearningPlanRequest,
     LearningPlanResponse,
+    LearningPlanRevisionRequest,
     ProfileEvidence,
     ProfileEvidenceCreate,
     TeamPoolStatus,
@@ -33,6 +34,11 @@ def add_profile_evidence(student_id: str, payload: ProfileEvidenceCreate) -> Pro
 @router.post("/plans/generate", response_model=LearningPlanResponse)
 def generate_plan(payload: LearningPlanRequest) -> LearningPlanResponse:
     return GrowthService().generate_plan(payload)
+
+
+@router.post("/plans/{plan_id}/revise", response_model=LearningPlanResponse)
+def revise_plan(plan_id: str, payload: LearningPlanRevisionRequest) -> LearningPlanResponse:
+    return GrowthService().revise_plan(plan_id, payload)
 
 
 @router.post("/competitions/recommend", response_model=CompetitionRecommendResponse)

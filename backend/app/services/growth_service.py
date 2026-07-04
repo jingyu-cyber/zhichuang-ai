@@ -10,6 +10,7 @@ from app.schemas.growth import (
     GrowthProfileResponse,
     LearningPlanRequest,
     LearningPlanResponse,
+    LearningPlanRevisionRequest,
     PlanTask,
     ProfileEvidence,
     ProfileEvidenceCreate,
@@ -141,66 +142,211 @@ class GrowthService:
         )
 
     def generate_plan(self, payload: LearningPlanRequest) -> LearningPlanResponse:
-        tasks = [
-            PlanTask(
-                week=1,
-                title="补齐工程基线",
-                outcome="作业项目具备 README、接口列表、测试入口和演示数据。",
-                resources=["Web 应用开发课程 Rubric", "软件项目实践案例模板"],
-            ),
-            PlanTask(
-                week=2,
-                title="完成 RAG 问答闭环",
-                outcome="知识库问答能返回答案、引用来源和推荐路径。",
-                resources=["AI 应用开发学习路径", "RAG 知识库建设 SOP"],
-            ),
-            PlanTask(
-                week=3,
-                title="接入作业分析报告",
-                outcome="系统能生成学生报告和教师班级看板。",
-                resources=["课程作业代码分析 SOP", "教师学情诊断看板说明"],
-            ),
-            PlanTask(
-                week=4,
-                title="形成竞赛准备节奏",
-                outcome="完成基础语法、数据结构和搜索专题复盘。",
-                resources=["算法竞赛训练路径", "蓝桥杯训练资料"],
-            ),
-            PlanTask(
-                week=5,
-                title="完善项目案例材料",
-                outcome="输出需求、架构、接口、数据模型和测试记录。",
-                resources=["软件项目实践案例模板"],
-            ),
-            PlanTask(
-                week=6,
-                title="组队协作与分工",
-                outcome="确定后端、前端、算法、表达四类角色和协作节奏。",
-                resources=["组队推荐能力互补规则"],
-            ),
-            PlanTask(
-                week=7,
-                title="演示与评测",
-                outcome="准备固定演示账号、示例作业、知识库问答和教师看板脚本。",
-                resources=["开发 SOP", "评测样例清单"],
-            ),
-            PlanTask(
-                week=8,
-                title="复盘与下一轮迭代",
-                outcome="根据报告和演示反馈更新画像、任务和项目路线。",
-                resources=["定期复盘流程", "能力画像评分口径"],
-            ),
-        ][: max(1, min(payload.weeks, 8))]
+        tasks, basis, checkpoints = self._build_plan(
+            student_id=payload.student_id,
+            goal=payload.goal,
+            weeks=payload.weeks,
+            weekly_hours=payload.weekly_hours,
+            foundation=payload.foundation,
+        )
 
         return LearningPlanResponse(
             plan_id=f"plan_{payload.student_id}_ai_app",
             student_id=payload.student_id,
             goal=payload.goal,
             weeks=payload.weeks,
-            overview="计划围绕工程基线、RAG Demo、作业分析、竞赛训练和项目表达五条线推进。",
+            overview=self._plan_overview(payload.goal, payload.weekly_hours),
+            basis=basis,
             tasks=tasks,
-            checkpoints=["第 2 周完成知识库问答", "第 4 周完成一次算法专题复盘", "第 7 周完成公网 Demo 演示脚本"],
+            checkpoints=checkpoints,
         )
+
+    def revise_plan(
+        self,
+        plan_id: str,
+        payload: LearningPlanRevisionRequest,
+    ) -> LearningPlanResponse:
+        weeks = payload.weeks or (4 if "时间不足" in payload.feedback else 8)
+        weekly_hours = payload.weekly_hours or (4 if "时间不足" in payload.feedback else 8)
+        goal = self._goal_from_feedback(payload.feedback)
+        foundation = "基础薄弱" if "基础薄弱" in payload.feedback else "已生成计划的阶段反馈"
+        tasks, basis, checkpoints = self._build_plan(
+            student_id=payload.student_id,
+            goal=goal,
+            weeks=weeks,
+            weekly_hours=weekly_hours,
+            foundation=foundation,
+            feedback=payload.feedback,
+        )
+
+        return LearningPlanResponse(
+            plan_id=plan_id,
+            student_id=payload.student_id,
+            goal=goal,
+            weeks=weeks,
+            overview=self._plan_overview(goal, weekly_hours),
+            basis=basis,
+            revision_note=f"已根据反馈“{payload.feedback}”调整任务顺序、周数和投入强度。",
+            tasks=tasks,
+            checkpoints=checkpoints,
+        )
+
+    def _build_plan(
+        self,
+        student_id: str,
+        goal: str,
+        weeks: int,
+        weekly_hours: int,
+        foundation: str,
+        feedback: str | None = None,
+    ) -> tuple[list[PlanTask], list[str], list[str]]:
+        profile = self.get_profile(student_id)
+        weak_dimensions = sorted(profile.dimensions, key=lambda item: item.score)[:2]
+        basis = [
+            f"目标方向：{goal}",
+            f"每周可投入：{weekly_hours} 小时",
+            "短板维度：" + "、".join(item.dimension for item in weak_dimensions),
+            f"基础描述：{foundation}",
+        ]
+        if feedback:
+            basis.append(f"用户反馈：{feedback}")
+
+        tasks = self._task_pool(goal)
+        if "算法" in goal or "竞赛" in goal:
+            tasks = self._prioritize(tasks, ["算法", "复盘", "竞赛"])
+        if "AI" in goal or "RAG" in goal or "大模型" in goal:
+            tasks = self._prioritize(tasks, ["RAG", "评测", "Demo"])
+        if "软件" in goal or "项目" in goal or "工程" in goal:
+            tasks = self._prioritize(tasks, ["工程", "测试", "文档"])
+        if weekly_hours <= 4 or (feedback and "时间不足" in feedback):
+            tasks = self._prioritize(tasks, ["最小", "测试", "复盘"])
+        if "基础薄弱" in foundation or (feedback and "基础薄弱" in feedback):
+            tasks = self._prioritize(tasks, ["基础", "训练", "补齐"])
+        if feedback and "转方向" in feedback:
+            tasks = self._prioritize(tasks, ["方向", "Demo", "案例"])
+
+        capped_weeks = max(1, min(weeks, 8))
+        selected = [
+            PlanTask(
+                week=index,
+                title=task.title,
+                outcome=task.outcome,
+                resources=task.resources,
+            )
+            for index, task in enumerate(tasks[:capped_weeks], start=1)
+        ]
+        checkpoints = self._checkpoints(selected, goal)
+        return selected, basis, checkpoints
+
+    def _task_pool(self, goal: str) -> list[PlanTask]:
+        return [
+            PlanTask(
+                week=0,
+                title="补齐基础训练",
+                outcome="完成目标方向相关的基础概念、术语和最小练习记录。",
+                resources=["程序设计基础课程大纲", "数据结构课程知识点"],
+            ),
+            PlanTask(
+                week=0,
+                title="补齐工程基线",
+                outcome="作业项目具备 README、接口列表、测试入口和演示数据。",
+                resources=["Web 应用开发课程 Rubric", "软件项目实践案例模板"],
+            ),
+            PlanTask(
+                week=0,
+                title="完成 RAG 问答 Demo",
+                outcome="知识库问答能返回答案、引用来源和推荐路径。",
+                resources=["AI 应用开发学习路径", "RAG 知识库建设 SOP"],
+            ),
+            PlanTask(
+                week=0,
+                title="建立算法训练节奏",
+                outcome="完成基础语法、数据结构和搜索专题复盘。",
+                resources=["算法竞赛训练路径", "蓝桥杯训练资料"],
+            ),
+            PlanTask(
+                week=0,
+                title="接入作业分析报告",
+                outcome="系统能生成学生报告和教师班级看板。",
+                resources=["课程作业代码分析 SOP", "教师学情诊断看板说明"],
+            ),
+            PlanTask(
+                week=0,
+                title="补齐自动化测试",
+                outcome="为核心接口和异常路径补充可复现测试记录。",
+                resources=["Web 应用开发课程作业 Rubric", "评测样例清单"],
+            ),
+            PlanTask(
+                week=0,
+                title="完成最小可展示版本",
+                outcome="保留一条学生端和一条教师端演示主线，压缩非关键功能。",
+                resources=["开发 SOP", "公网 Demo 部署说明"],
+            ),
+            PlanTask(
+                week=0,
+                title="整理项目案例材料",
+                outcome="输出需求、架构、接口、数据模型和测试记录。",
+                resources=["软件项目实践案例模板"],
+            ),
+            PlanTask(
+                week=0,
+                title="组队协作与分工",
+                outcome="确定后端、前端、算法、表达四类角色和协作节奏。",
+                resources=["组队推荐能力互补规则"],
+            ),
+            PlanTask(
+                week=0,
+                title="方向切换验证",
+                outcome=f"围绕“{goal}”完成一次目标拆解和可行性确认。",
+                resources=["能力画像评分口径", "AI 应用开发学习路径"],
+            ),
+            PlanTask(
+                week=0,
+                title="演示与评测",
+                outcome="准备固定演示账号、示例作业、知识库问答和教师看板脚本。",
+                resources=["开发 SOP", "评测样例清单"],
+            ),
+            PlanTask(
+                week=0,
+                title="周复盘与路径更新",
+                outcome="根据任务完成情况更新画像、任务和项目路线。",
+                resources=["定期复盘流程", "能力画像评分口径"],
+            ),
+        ]
+
+    def _prioritize(self, tasks: list[PlanTask], keywords: list[str]) -> list[PlanTask]:
+        return sorted(
+            tasks,
+            key=lambda task: (
+                not any(keyword in task.title or keyword in task.outcome for keyword in keywords),
+                task.title,
+            ),
+        )
+
+    def _checkpoints(self, tasks: list[PlanTask], goal: str) -> list[str]:
+        if not tasks:
+            return []
+        middle = tasks[min(len(tasks) - 1, max(0, len(tasks) // 2))]
+        final = tasks[-1]
+        return [
+            f"第 1 周完成：{tasks[0].title}",
+            f"中期检查：{middle.outcome}",
+            f"结束检查：{final.outcome}",
+            f"目标核验：{goal}",
+        ]
+
+    def _plan_overview(self, goal: str, weekly_hours: int) -> str:
+        intensity = "轻量节奏" if weekly_hours <= 4 else "标准节奏"
+        return f"计划按{intensity}推进，围绕“{goal}”安排基础补齐、项目实践、评测复盘和展示材料。"
+
+    def _goal_from_feedback(self, feedback: str) -> str:
+        if "转方向" in feedback:
+            return "转向 AI 应用开发并保留软件项目实践基础"
+        if "基础薄弱" in feedback:
+            return "补齐计算机基础并完成一个可运行项目 Demo"
+        if "时间不足" in feedback:
+            return "用更少时间完成 AI 应用开发最小可展示版本"
+        return "根据阶段反馈更新 AI 应用开发学习计划"
 
     def recommend_competitions(
         self, payload: CompetitionRecommendRequest
