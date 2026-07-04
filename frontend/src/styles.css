@@ -390,6 +390,55 @@ h1 {
   box-shadow: var(--shadow);
 }
 
+.task-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 22px;
+  margin-top: 28px;
+  padding: 26px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.task-hero h2 {
+  margin: 4px 0 8px;
+  font-size: 26px;
+}
+
+.task-hero p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.task-actions {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 168px;
+}
+
+.task-actions button {
+  min-height: 40px;
+  color: #fff;
+  background: var(--blue);
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.task-actions button:last-child {
+  background: var(--ink);
+}
+
+.task-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .growth-hero h2 {
   margin: 4px 0 8px;
   font-size: 26px;
@@ -505,6 +554,86 @@ h1 {
 .recommend-card small {
   grid-column: 1 / -1;
   margin: 0;
+}
+
+.task-board {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.task-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 54px;
+  gap: 8px 12px;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--amber);
+  border-radius: 6px;
+}
+
+.task-card.done {
+  border-left-color: var(--green);
+}
+
+.task-card.doing {
+  border-left-color: var(--blue);
+}
+
+.task-card b {
+  display: grid;
+  place-items: center;
+  height: 42px;
+  color: #fff;
+  background: var(--ink);
+  border-radius: 50%;
+  font-size: 13px;
+}
+
+.task-card span,
+.task-card p,
+.task-card small,
+.review-box p,
+.review-box small {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.task-card span {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.task-card p,
+.task-card small {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.review-box {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.review-box p {
+  margin: 0;
+}
+
+.review-next {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.review-next span {
+  padding: 9px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
 }
 
 .task-list {
@@ -666,8 +795,14 @@ h1 {
   .kb-overview,
   .panel-grid,
   .growth-hero,
-  .timeline {
+  .task-hero,
+  .timeline,
+  .task-board {
     grid-template-columns: 1fr;
+  }
+
+  .task-hero {
+    display: grid;
   }
 
   .report-row {

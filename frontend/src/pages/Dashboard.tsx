@@ -10,6 +10,7 @@ import {
   recommendTeam,
 } from "../shared/api/growth";
 import { fetchKnowledgeDocuments, searchKnowledge } from "../shared/api/knowledge";
+import { fetchStudentTasks, generateReview, saveTask } from "../shared/api/tasks";
 import type { ChatResponse } from "../shared/types/agent";
 import type { AssignmentDashboard, AssignmentReport } from "../shared/types/assignments";
 import type { DemoAccount } from "../shared/types/auth";
@@ -21,6 +22,7 @@ import type {
 } from "../shared/types/growth";
 import type { KnowledgeDocumentsResponse, KnowledgeSearchResponse } from "../shared/types/knowledge";
 import type { ViewMode } from "../shared/types/navigation";
+import type { LearningTask, ReviewResponse, TaskListResponse } from "../shared/types/tasks";
 
 export function Dashboard() {
   const [mode, setMode] = useState<ViewMode>("teacher");
@@ -36,6 +38,9 @@ export function Dashboard() {
   const [knowledgeLoading, setKnowledgeLoading] = useState(false);
   const [accounts, setAccounts] = useState<DemoAccount[]>([]);
   const [currentAccount, setCurrentAccount] = useState<DemoAccount | null>(null);
+  const [taskList, setTaskList] = useState<TaskListResponse | null>(null);
+  const [review, setReview] = useState<ReviewResponse | null>(null);
+  const [taskLoading, setTaskLoading] = useState(false);
   const [chatQuestion, setChatQuestion] = useState("如何准备算法竞赛？");
   const [chatResponse, setChatResponse] = useState<ChatResponse | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
@@ -59,6 +64,7 @@ export function Dashboard() {
           knowledgeData,
           searchData,
           accountsData,
+          taskData,
         ] = await Promise.all([
           analyzeDemoAssignment(),
           fetchAssignmentDashboard(),
@@ -69,6 +75,7 @@ export function Dashboard() {
           fetchKnowledgeDocuments(),
           searchKnowledge("作业 Rubric"),
           fetchDemoAccounts(),
+          fetchStudentTasks(),
         ]);
 
         if (mounted) {
@@ -81,7 +88,11 @@ export function Dashboard() {
           setKnowledgeDocs(knowledgeData);
           setKnowledgeSearch(searchData);
           setAccounts(accountsData.accounts);
-          setCurrentAccount(accountsData.accounts.find((account) => account.role === "teacher") ?? accountsData.accounts[0]);
+          setCurrentAccount(
+            accountsData.accounts.find((account) => account.role === "teacher") ??
+              accountsData.accounts[0],
+          );
+          setTaskList(taskData);
         }
       } catch (err) {
         if (mounted) {
@@ -148,6 +159,42 @@ export function Dashboard() {
     }
   }
 
+  async function handleGenerateReview() {
+    try {
+      setTaskLoading(true);
+      setError(null);
+      const response = await generateReview();
+      setReview(response);
+      setMode("tasks");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "复盘生成失败");
+    } finally {
+      setTaskLoading(false);
+    }
+  }
+
+  async function handleSaveTask() {
+    try {
+      setTaskLoading(true);
+      setError(null);
+      const task = await saveTask("补充一次课程作业自动化测试记录");
+      setTaskList((current) =>
+        current
+          ? {
+              ...current,
+              total: current.total + 1,
+              tasks: [task, ...current.tasks],
+            }
+          : current,
+      );
+      setMode("tasks");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "任务保存失败");
+    } finally {
+      setTaskLoading(false);
+    }
+  }
+
   return (
     <main className="workspace">
       <aside className="sidebar">
@@ -168,6 +215,9 @@ export function Dashboard() {
           </button>
           <button className={mode === "growth" ? "active" : ""} onClick={() => setMode("growth")}>
             成长路径
+          </button>
+          <button className={mode === "tasks" ? "active" : ""} onClick={() => setMode("tasks")}>
+            任务复盘
           </button>
           <button className={mode === "kb" ? "active" : ""} onClick={() => setMode("kb")}>
             知识库管理
@@ -225,6 +275,8 @@ export function Dashboard() {
                   ? "学生作业分析报告"
                   : mode === "growth"
                     ? "学生成长路径"
+                    : mode === "tasks"
+                      ? "任务中心与定期复盘"
                     : mode === "kb"
                       ? "知识库资料管理"
                       : "学科知识库问答"}
@@ -282,6 +334,16 @@ export function Dashboard() {
             loading={knowledgeLoading}
             onQueryChange={setKnowledgeQuery}
             onSearch={handleKnowledgeSearch}
+          />
+        )}
+
+        {!loading && !error && mode === "tasks" && taskList && (
+          <TaskCenter
+            taskList={taskList}
+            review={review}
+            loading={taskLoading}
+            onSaveTask={handleSaveTask}
+            onGenerateReview={handleGenerateReview}
           />
         )}
       </section>
@@ -732,5 +794,86 @@ function KnowledgeAdmin({
         </article>
       </section>
     </>
+  );
+}
+
+function TaskCenter({
+  taskList,
+  review,
+  loading,
+  onSaveTask,
+  onGenerateReview,
+}: {
+  taskList: TaskListResponse;
+  review: ReviewResponse | null;
+  loading: boolean;
+  onSaveTask: () => void;
+  onGenerateReview: () => void;
+}) {
+  const completion = Math.round((taskList.completed / taskList.total) * 100);
+
+  return (
+    <>
+      <section className="task-hero">
+        <div>
+          <span className="section-label">任务中心</span>
+          <h2>把计划、报告建议和竞赛准备落到可执行任务</h2>
+          <p>当前完成 {taskList.completed} / {taskList.total}，系统会根据任务证据生成阶段复盘。</p>
+        </div>
+        <div className="task-actions">
+          <button onClick={onSaveTask} disabled={loading}>保存推荐任务</button>
+          <button onClick={onGenerateReview} disabled={loading}>生成本周复盘</button>
+        </div>
+      </section>
+
+      <section className="panel-grid">
+        <article className="panel wide">
+          <div className="panel-header">
+            <div>
+              <span className="section-label">任务进度</span>
+              <h2>本周学习与项目任务</h2>
+            </div>
+            <strong className="score-pill">{completion}</strong>
+          </div>
+          <div className="task-board">
+            {taskList.tasks.map((task) => (
+              <TaskCard key={task.task_id} task={task} />
+            ))}
+          </div>
+        </article>
+
+        <article className="panel">
+          <span className="section-label">复盘结果</span>
+          {review ? (
+            <div className="review-box">
+              <strong>{review.period}</strong>
+              <p>{review.summary}</p>
+              <small>{review.risk}</small>
+              <div className="review-next">
+                {review.next_tasks.map((task) => (
+                  <span key={task.task_id}>{task.title}</span>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="muted">点击“生成本周复盘”，系统会汇总已完成任务、风险和下一步任务。</p>
+          )}
+        </article>
+      </section>
+    </>
+  );
+}
+
+function TaskCard({ task }: { task: LearningTask }) {
+  return (
+    <article className={`task-card ${task.status}`}>
+      <div>
+        <strong>{task.title}</strong>
+        <span>{task.source} · {task.priority}</span>
+      </div>
+      <b>{task.progress}%</b>
+      <p>{task.evidence_required}</p>
+      <small>{task.due_date}</small>
+    </article>
   );
 }

@@ -14,15 +14,15 @@
 }
 ```
 
-## 2. 智能体对话
+## 2. 账号与智能体
 
-## 2.1 演示账号
+### 2.1 演示账号
 
-### `GET /auth/demo-accounts`
+#### `GET /auth/demo-accounts`
 
 公网 Demo 获取学生、教师、管理员三个演示账号。
 
-### `POST /auth/demo-session`
+#### `POST /auth/demo-session`
 
 请求：
 
@@ -34,9 +34,9 @@
 
 响应包含演示 token、账号角色、授权课程、授权班级和可访问模块。
 
-## 2.2 智能体对话
+### 2.2 智能体对话
 
-### `POST /agent/chat`
+#### `POST /agent/chat`
 
 用于学生或教师发起自然语言任务。
 
@@ -207,6 +207,33 @@
 ### `POST /plans/{plan_id}/tasks`
 
 保存计划中的任务。
+
+当前演示版本提供任务中心接口：
+
+### `GET /students/{student_id}/tasks`
+
+查询学生任务列表，包含来源、状态、优先级、截止日期、证据要求和进度。
+
+### `POST /tasks`
+
+保存用户确认后的推荐任务。
+
+### `POST /reviews/generate`
+
+生成阶段复盘。
+
+请求：
+
+```json
+{
+  "student_id": "student_001",
+  "period": "本周",
+  "completed_task_ids": ["task_demo_script"],
+  "notes": "已完成部署说明和演示脚本。"
+}
+```
+
+响应包含复盘摘要、风险提示和下一步任务。
 
 ## 7. 竞赛推荐
 

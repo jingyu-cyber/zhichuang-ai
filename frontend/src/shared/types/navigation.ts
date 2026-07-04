@@ -1,1 +1,1 @@
-export type ViewMode = "student" | "teacher" | "knowledge" | "growth" | "kb";
+export type ViewMode = "student" | "teacher" | "knowledge" | "growth" | "kb" | "tasks";
