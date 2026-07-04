@@ -1322,6 +1322,12 @@ h1 {
   line-height: 1.5;
 }
 
+.kb-action-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .kb-action-panel button {
   min-height: 38px;
   color: #fff;
@@ -1335,6 +1341,14 @@ h1 {
 .kb-action-panel button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.kb-action-panel button:nth-child(2) {
+  background: var(--blue);
+}
+
+.kb-action-panel button:nth-child(3) {
+  background: var(--ink);
 }
 
 .quick-questions {
@@ -1415,7 +1429,7 @@ h1 {
 
 .doc-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1.4fr) 120px 140px 80px minmax(180px, 1fr);
+  grid-template-columns: minmax(220px, 1.5fr) 120px 140px 80px minmax(240px, 1fr);
   gap: 12px;
   align-items: center;
   padding: 13px 0;
@@ -1429,6 +1443,33 @@ h1 {
 .doc-row span,
 .doc-row small {
   color: var(--muted);
+}
+
+.doc-row small {
+  line-height: 1.45;
+}
+
+.version-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.version-item {
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--blue);
+  border-radius: 6px;
+}
+
+.version-item p,
+.version-item small {
+  margin: 5px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .state-box {

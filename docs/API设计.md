@@ -530,11 +530,34 @@
   "path": "软件项目实践",
   "tags": ["复盘", "项目文档"],
   "content": "课程项目复盘需要记录目标、完成情况、阻塞问题、下周任务和证据链接。",
-  "source_url": "https://example.edu/templates/review"
+  "source_url": "https://example.edu/templates/review",
+  "maintainer": "平台管理员"
 }
 ```
 
 响应返回入库后的资料卡片、是否可检索和处理结果。演示版本会将新增资料加入当前服务会话中的知识库，随后可通过资料清单和检索接口验证。
+知识库维护接口需要管理员演示 token；学生或教师账号访问返回 `403`。
+
+### `PUT /knowledge/documents/{document_id}`
+
+编辑知识库资料标题、类型、路径、标签、正文、来源链接和维护人。响应返回最新资料卡片，`version` 自动递增并记录一次 `update` 版本。
+
+### `PATCH /knowledge/documents/{document_id}/status`
+
+更新资料状态。首版用于下线资料：
+
+```json
+{
+  "status": "已下线",
+  "maintainer": "平台管理员"
+}
+```
+
+下线资料仍出现在资料清单和版本记录中，但不再进入检索结果。
+
+### `GET /knowledge/documents/{document_id}/versions`
+
+查看知识库资料版本变化，返回版本号、动作、维护人、更新时间和变更摘要。
 
 ### `GET /knowledge/documents`
 
@@ -551,17 +574,17 @@
       "path": "软件项目实践",
       "tags": ["作业分析", "Rubric", "Web"],
       "chunk_count": 1,
-      "status": "已入库"
+      "status": "已入库",
+      "source_url": null,
+      "maintainer": "平台管理员",
+      "version": 1,
+      "updated_at": "2026-07-05T09:30:00+08:00"
     }
   ]
 }
 ```
 
 当前演示版本覆盖至少 5 门核心课程、10 条竞赛资料、10 个项目案例或学习资源，并额外包含 Rubric、组队规则和教师看板说明等支撑资料。
-
-### `POST /knowledge/documents/{document_id}/ingest`
-
-解析、切分并入向量库。
 
 ### `GET /knowledge/search`
 

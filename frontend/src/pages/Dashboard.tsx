@@ -21,8 +21,11 @@ import {
 import { fetchEvaluationDashboard } from "../shared/api/evaluations";
 import {
   createKnowledgeDocument,
+  fetchKnowledgeDocumentVersions,
   fetchKnowledgeDocuments,
+  offlineKnowledgeDocument,
   searchKnowledge,
+  updateKnowledgeDocument,
 } from "../shared/api/knowledge";
 import { fetchStudentTasks, generateReview, saveTask } from "../shared/api/tasks";
 import type { ChatMessage, ChatResponse } from "../shared/types/agent";
@@ -41,7 +44,11 @@ import type {
   TeamRecommendResponse,
   TeamRequestCard,
 } from "../shared/types/growth";
-import type { KnowledgeDocumentsResponse, KnowledgeSearchResponse } from "../shared/types/knowledge";
+import type {
+  KnowledgeDocumentVersionsResponse,
+  KnowledgeDocumentsResponse,
+  KnowledgeSearchResponse,
+} from "../shared/types/knowledge";
 import type { ViewMode } from "../shared/types/navigation";
 import type { LearningTask, ReviewResponse, TaskListResponse } from "../shared/types/tasks";
 
@@ -64,6 +71,8 @@ export function Dashboard() {
   const [teamStatusLoading, setTeamStatusLoading] = useState(false);
   const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDocumentsResponse | null>(null);
   const [knowledgeSearch, setKnowledgeSearch] = useState<KnowledgeSearchResponse | null>(null);
+  const [knowledgeVersions, setKnowledgeVersions] =
+    useState<KnowledgeDocumentVersionsResponse | null>(null);
   const [knowledgeQuery, setKnowledgeQuery] = useState("作业 Rubric");
   const [knowledgeLoading, setKnowledgeLoading] = useState(false);
   const [knowledgeCreateLoading, setKnowledgeCreateLoading] = useState(false);
@@ -283,12 +292,78 @@ export function Dashboard() {
         fetchKnowledgeDocuments(),
         searchKnowledge(payload.title),
       ]);
+      const created = documents.documents.find((document) => document.title === payload.title);
+      if (created) {
+        const versions = await fetchKnowledgeDocumentVersions(created.document_id);
+        setKnowledgeVersions(versions);
+      }
       setKnowledgeDocs(documents);
       setKnowledgeSearch(search);
       setKnowledgeQuery(payload.title);
       setMode("kb");
     } catch (err) {
       setError(err instanceof Error ? err.message : "知识库资料入库失败");
+    } finally {
+      setKnowledgeCreateLoading(false);
+    }
+  }
+
+  async function handleUpdateKnowledgeDocument() {
+    const editableDocument = knowledgeDocs?.documents.find((document) =>
+      document.document_id.startsWith("custom_doc_"),
+    );
+    if (!editableDocument) {
+      await handleCreateKnowledgeDocument();
+      return;
+    }
+    try {
+      setKnowledgeCreateLoading(true);
+      setError(null);
+      const title = "课程项目复盘模板 v2";
+      const response = await updateKnowledgeDocument(editableDocument.document_id, {
+        title,
+        tags: ["复盘", "项目文档", "版本管理"],
+        content: "课程项目复盘模板 v2 增加版本记录、维护人、最近更新时间和下线状态说明。",
+        maintainer: "平台管理员",
+      });
+      const [documents, search, versions] = await Promise.all([
+        fetchKnowledgeDocuments(),
+        searchKnowledge(title),
+        fetchKnowledgeDocumentVersions(response.document.document_id),
+      ]);
+      setKnowledgeDocs(documents);
+      setKnowledgeSearch(search);
+      setKnowledgeVersions(versions);
+      setKnowledgeQuery(title);
+      setMode("kb");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "知识库资料编辑失败");
+    } finally {
+      setKnowledgeCreateLoading(false);
+    }
+  }
+
+  async function handleOfflineKnowledgeDocument() {
+    const editableDocument = knowledgeDocs?.documents.find((document) =>
+      document.document_id.startsWith("custom_doc_"),
+    );
+    if (!editableDocument) {
+      await handleCreateKnowledgeDocument();
+      return;
+    }
+    try {
+      setKnowledgeCreateLoading(true);
+      setError(null);
+      const response = await offlineKnowledgeDocument(editableDocument.document_id);
+      const [documents, versions] = await Promise.all([
+        fetchKnowledgeDocuments(),
+        fetchKnowledgeDocumentVersions(response.document.document_id),
+      ]);
+      setKnowledgeDocs(documents);
+      setKnowledgeVersions(versions);
+      setMode("kb");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "知识库资料下线失败");
     } finally {
       setKnowledgeCreateLoading(false);
     }
@@ -532,12 +607,15 @@ export function Dashboard() {
           <KnowledgeAdmin
             documents={knowledgeDocs}
             search={knowledgeSearch}
+            versions={knowledgeVersions}
             query={knowledgeQuery}
             loading={knowledgeLoading}
             createLoading={knowledgeCreateLoading}
             onQueryChange={setKnowledgeQuery}
             onSearch={handleKnowledgeSearch}
             onCreateDocument={handleCreateKnowledgeDocument}
+            onUpdateDocument={handleUpdateKnowledgeDocument}
+            onOfflineDocument={handleOfflineKnowledgeDocument}
           />
         )}
 
@@ -1213,21 +1291,27 @@ function GrowthPath({
 function KnowledgeAdmin({
   documents,
   search,
+  versions,
   query,
   loading,
   createLoading,
   onQueryChange,
   onSearch,
   onCreateDocument,
+  onUpdateDocument,
+  onOfflineDocument,
 }: {
   documents: KnowledgeDocumentsResponse;
   search: KnowledgeSearchResponse | null;
+  versions: KnowledgeDocumentVersionsResponse | null;
   query: string;
   loading: boolean;
   createLoading: boolean;
   onQueryChange: (query: string) => void;
   onSearch: (query?: string) => void;
   onCreateDocument: () => void;
+  onUpdateDocument: () => void;
+  onOfflineDocument: () => void;
 }) {
   const paths = Array.from(new Set(documents.documents.map((document) => document.path)));
   const sourceCount = (sourceType: string) =>
@@ -1264,10 +1348,18 @@ function KnowledgeAdmin({
         <div className="kb-action-panel">
           <span className="section-label">资料维护</span>
           <strong>课程项目复盘模板</strong>
-          <small>入库后自动刷新清单并检索。</small>
-          <button onClick={onCreateDocument} disabled={createLoading}>
-            {createLoading ? "入库中" : "新增资料"}
-          </button>
+          <small>支持新增、编辑、下线和版本记录。</small>
+          <div className="kb-action-buttons">
+            <button onClick={onCreateDocument} disabled={createLoading}>
+              {createLoading ? "处理中" : "新增"}
+            </button>
+            <button onClick={onUpdateDocument} disabled={createLoading}>
+              编辑
+            </button>
+            <button onClick={onOfflineDocument} disabled={createLoading}>
+              下线
+            </button>
+          </div>
         </div>
         <div className="ask-box kb-search">
           <input
@@ -1302,7 +1394,10 @@ function KnowledgeAdmin({
                 <span>{document.path}</span>
                 <span>{document.source_type}</span>
                 <span>{document.status}</span>
-                <small>{document.tags.join(" / ")}</small>
+                <small>
+                  v{document.version} · {document.maintainer} · {document.updated_at} ·{" "}
+                  {document.tags.join(" / ")}
+                </small>
               </div>
             ))}
           </div>
@@ -1322,6 +1417,22 @@ function KnowledgeAdmin({
             ))}
             {!search && <p className="muted">输入关键词检索知识库。</p>}
           </div>
+          {versions && (
+            <div className="version-list">
+              <span className="section-label">版本记录</span>
+              {versions.versions.map((version) => (
+                <div className="version-item" key={`${versions.document_id}-${version.version}`}>
+                  <strong>
+                    v{version.version} · {version.action}
+                  </strong>
+                  <p>{version.summary}</p>
+                  <small>
+                    {version.maintainer} · {version.updated_at}
+                  </small>
+                </div>
+              ))}
+            </div>
+          )}
         </article>
       </section>
     </>

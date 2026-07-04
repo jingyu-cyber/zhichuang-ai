@@ -92,6 +92,9 @@ def main() -> int:
     student_session = client.post_json("/auth/demo-session", {"user_id": "student_001"})
     student_header = {"Authorization": f"Bearer {student_session['token']}"}
 
+    admin_session = client.post_json("/auth/demo-session", {"user_id": "admin_001"})
+    admin_header = {"Authorization": f"Bearer {admin_session['token']}"}
+
     dashboard = client.get_json(
         "/assignments/assignment_flask_mvp/dashboard",
         headers=teacher_header,
@@ -168,13 +171,42 @@ def main() -> int:
             "tags": ["复盘", "项目文档"],
             "content": "Smoke 课程项目复盘需要记录目标、完成情况、阻塞问题和下周任务。",
         },
+        headers=admin_header,
     )
     assert_true(created_doc["searchable"] is True, "created knowledge document is not searchable")
+    document_id = created_doc["document"]["document_id"]
     search_query = urllib.parse.quote("Smoke 课程项目复盘模板")
     search = client.get_json(f"/knowledge/search?q={search_query}")
     assert_true(
         any(item["title"] == "Smoke 课程项目复盘模板" for item in search["results"]),
         "created knowledge document not found by search",
+    )
+    updated_doc = client.request_json(
+        "PUT",
+        f"/knowledge/documents/{document_id}",
+        {
+            "title": "Smoke 课程项目复盘模板 v2",
+            "content": "Smoke 课程项目复盘模板 v2 增加维护人、版本和下线记录。",
+            "tags": ["复盘", "项目文档", "版本"],
+            "maintainer": "平台管理员",
+        },
+        headers=admin_header,
+    )
+    assert_true(updated_doc["document"]["version"] == 2, "knowledge document version not updated")
+    versions = client.get_json(f"/knowledge/documents/{document_id}/versions")
+    assert_true(len(versions["versions"]) >= 2, "knowledge document versions missing")
+    offline_doc = client.request_json(
+        "PATCH",
+        f"/knowledge/documents/{document_id}/status",
+        {"status": "已下线", "maintainer": "平台管理员"},
+        headers=admin_header,
+    )
+    assert_true(offline_doc["document"]["status"] == "已下线", "knowledge document offline failed")
+    client.expect_forbidden(
+        "POST",
+        "/knowledge/documents",
+        {"title": "学生维护资料", "content": "学生不能维护资料。"},
+        headers=student_header,
     )
 
     agent = client.post_json(
