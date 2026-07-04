@@ -1005,6 +1005,21 @@ h1 {
   gap: 8px;
 }
 
+.conversation-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.conversation-meta span {
+  padding: 7px 9px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+}
+
 .quick-questions button {
   padding: 8px 10px;
   color: var(--blue);

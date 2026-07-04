@@ -45,10 +45,12 @@
 ```json
 {
   "message": "帮我制定蓝桥杯算法训练计划",
-  "context": {
-    "role": "student",
-    "course_id": "course_001"
-  }
+  "scenario": "student",
+  "session_id": "session_student_001",
+  "history": [
+    {"role": "user", "content": "我想参加算法竞赛"},
+    {"role": "assistant", "content": "可以先按基础语法、数据结构和搜索专题推进。"}
+  ]
 }
 ```
 
@@ -56,7 +58,10 @@
 
 ```json
 {
+  "session_id": "session_student_001",
   "answer": "如果目标是算法竞赛准备，建议按训练路径拆成阶段任务...",
+  "context_summary": "学生视角 · 已结合前 1 轮用户追问。",
+  "suggested_next_questions": ["下一周我应该先补哪项能力？"],
   "citations": [
     {
       "title": "算法竞赛训练路径",
@@ -67,6 +72,8 @@
   "ai_generated": true
 }
 ```
+
+连续追问时前端会携带同一 `session_id` 和最近上下文，后端基于角色场景生成回答，避免教师诊断问题被误判为学生个人规划问题。
 
 ## 3. 作业代码分析
 

@@ -17,7 +17,7 @@ import {
 import { fetchEvaluationDashboard } from "../shared/api/evaluations";
 import { fetchKnowledgeDocuments, searchKnowledge } from "../shared/api/knowledge";
 import { fetchStudentTasks, generateReview, saveTask } from "../shared/api/tasks";
-import type { ChatResponse } from "../shared/types/agent";
+import type { ChatMessage, ChatResponse } from "../shared/types/agent";
 import type { ClassListResponse, CourseListResponse, StudentListResponse } from "../shared/types/academic";
 import type { AssignmentDashboard, AssignmentReport } from "../shared/types/assignments";
 import type { DemoAccount } from "../shared/types/auth";
@@ -65,6 +65,7 @@ export function Dashboard() {
   const [students, setStudents] = useState<StudentListResponse | null>(null);
   const [chatQuestion, setChatQuestion] = useState("如何准备算法竞赛？");
   const [chatResponse, setChatResponse] = useState<ChatResponse | null>(null);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -193,8 +194,13 @@ export function Dashboard() {
       setChatLoading(true);
       setError(null);
       setChatQuestion(question);
-      const response = await askAgent(question);
+      const response = await askAgent(question, "student", chatHistory);
       setChatResponse(response);
+      setChatHistory((current) => [
+        ...current,
+        { role: "user", content: question },
+        { role: "assistant", content: response.answer },
+      ]);
       setMode("knowledge");
     } catch (err) {
       setError(err instanceof Error ? err.message : "知识库问答加载失败");
@@ -402,6 +408,7 @@ export function Dashboard() {
             question={chatQuestion}
             response={chatResponse}
             loading={chatLoading}
+            history={chatHistory}
             onQuestionChange={setChatQuestion}
             onAsk={handleAskAgent}
           />
@@ -620,12 +627,14 @@ function KnowledgeAssistant({
   question,
   response,
   loading,
+  history,
   onQuestionChange,
   onAsk,
 }: {
   question: string;
   response: ChatResponse | null;
   loading: boolean;
+  history: ChatMessage[];
   onQuestionChange: (question: string) => void;
   onAsk: (question?: string) => void;
 }) {
@@ -653,8 +662,15 @@ function KnowledgeAssistant({
             {loading ? "检索中" : "提问"}
           </button>
         </div>
+        <div className="conversation-meta">
+          <span>{response?.context_summary ?? "当前为首轮问题。"}</span>
+          <span>已记录 {Math.floor(history.length / 2)} 轮上下文</span>
+        </div>
         <div className="quick-questions">
-          {examples.map((example) => (
+          {(response?.suggested_next_questions.length
+            ? response.suggested_next_questions
+            : examples
+          ).map((example) => (
             <button key={example} onClick={() => onAsk(example)}>
               {example}
             </button>
