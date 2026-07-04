@@ -368,7 +368,7 @@
 
 ```json
 {
-  "total": 6,
+  "total": 31,
   "documents": [
     {
       "document_id": "doc_001",
@@ -382,6 +382,8 @@
   ]
 }
 ```
+
+当前演示版本覆盖至少 5 门核心课程、10 条竞赛资料、10 个项目案例或学习资源，并额外包含 Rubric、组队规则和教师看板说明等支撑资料。
 
 ### `POST /knowledge/documents/{document_id}/ingest`
 

@@ -833,19 +833,19 @@ function GrowthPath({
           </div>
           <span className="muted">联系方式默认不公开</span>
         </div>
-          <div className="recommend-list">
-            {team.candidates.map((candidate) => (
-              <div className="recommend-card" key={candidate.student_id}>
-                <div>
-                  <strong>{candidate.name}</strong>
-                  <span>{candidate.role}</span>
-                </div>
-                <b>{candidate.match_score}</b>
-                <p>{candidate.complement}</p>
-                <small>{candidate.evidence.join(" / ")}</small>
+        <div className="recommend-list">
+          {team.candidates.map((candidate) => (
+            <div className="recommend-card" key={candidate.student_id}>
+              <div>
+                <strong>{candidate.name}</strong>
+                <span>{candidate.role}</span>
               </div>
-            ))}
-          </div>
+              <b>{candidate.match_score}</b>
+              <p>{candidate.complement}</p>
+              <small>{candidate.evidence.join(" / ")}</small>
+            </div>
+          ))}
+        </div>
       </section>
     </>
   );
@@ -867,6 +867,8 @@ function KnowledgeAdmin({
   onSearch: (query?: string) => void;
 }) {
   const paths = Array.from(new Set(documents.documents.map((document) => document.path)));
+  const sourceCount = (sourceType: string) =>
+    documents.documents.filter((document) => document.source_type === sourceType).length;
 
   return (
     <>
@@ -880,6 +882,21 @@ function KnowledgeAdmin({
           <span>重点路径</span>
           <strong>{paths.length}</strong>
           <small>{paths.join(" / ")}</small>
+        </article>
+        <article className="metric">
+          <span>课程资料</span>
+          <strong>{sourceCount("course_material")}</strong>
+          <small>核心课程</small>
+        </article>
+        <article className="metric">
+          <span>竞赛资料</span>
+          <strong>{sourceCount("competition_material")}</strong>
+          <small>竞赛与赛道</small>
+        </article>
+        <article className="metric">
+          <span>项目案例</span>
+          <strong>{sourceCount("project_case")}</strong>
+          <small>案例或资源</small>
         </article>
         <div className="ask-box kb-search">
           <input
