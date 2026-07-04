@@ -521,7 +521,20 @@
 
 上传知识库资料。
 
-当前演示版本提供资料清单查询：
+请求：
+
+```json
+{
+  "title": "课程项目复盘模板",
+  "source_type": "project_case",
+  "path": "软件项目实践",
+  "tags": ["复盘", "项目文档"],
+  "content": "课程项目复盘需要记录目标、完成情况、阻塞问题、下周任务和证据链接。",
+  "source_url": "https://example.edu/templates/review"
+}
+```
+
+响应返回入库后的资料卡片、是否可检索和处理结果。演示版本会将新增资料加入当前服务会话中的知识库，随后可通过资料清单和检索接口验证。
 
 ### `GET /knowledge/documents`
 

@@ -14,6 +14,21 @@ export type KnowledgeDocumentsResponse = {
   documents: KnowledgeDocument[];
 };
 
+export type KnowledgeDocumentCreate = {
+  title: string;
+  source_type: string;
+  path: string;
+  tags: string[];
+  content: string;
+  source_url?: string | null;
+};
+
+export type KnowledgeDocumentUpsertResponse = {
+  document: KnowledgeDocument;
+  searchable: boolean;
+  message: string;
+};
+
 export type KnowledgeSearchResult = {
   title: string;
   source_type: string;

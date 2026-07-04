@@ -1,6 +1,11 @@
 from fastapi import APIRouter, Query
 
-from app.schemas.knowledge import KnowledgeDocumentsResponse, KnowledgeSearchResponse
+from app.schemas.knowledge import (
+    KnowledgeDocumentCreate,
+    KnowledgeDocumentUpsertResponse,
+    KnowledgeDocumentsResponse,
+    KnowledgeSearchResponse,
+)
 from app.services.knowledge_service import KnowledgeService
 
 router = APIRouter()
@@ -9,6 +14,11 @@ router = APIRouter()
 @router.get("/documents", response_model=KnowledgeDocumentsResponse)
 def list_documents() -> KnowledgeDocumentsResponse:
     return KnowledgeService().list_documents()
+
+
+@router.post("/documents", response_model=KnowledgeDocumentUpsertResponse)
+def create_document(payload: KnowledgeDocumentCreate) -> KnowledgeDocumentUpsertResponse:
+    return KnowledgeService().create_document(payload)
 
 
 @router.get("/search", response_model=KnowledgeSearchResponse)

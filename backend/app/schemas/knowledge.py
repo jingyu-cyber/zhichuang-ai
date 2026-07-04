@@ -14,6 +14,21 @@ class KnowledgeDocument(BaseModel):
     updated_at: str
 
 
+class KnowledgeDocumentCreate(BaseModel):
+    title: str
+    source_type: str = "course_material"
+    path: str = "软件项目实践"
+    tags: list[str] = Field(default_factory=list)
+    content: str
+    source_url: str | None = None
+
+
+class KnowledgeDocumentUpsertResponse(BaseModel):
+    document: KnowledgeDocument
+    searchable: bool
+    message: str
+
+
 class KnowledgeSearchResult(BaseModel):
     title: str
     source_type: str

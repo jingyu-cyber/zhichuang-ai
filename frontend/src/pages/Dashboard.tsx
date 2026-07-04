@@ -19,7 +19,11 @@ import {
   upsertBasicProfile,
 } from "../shared/api/growth";
 import { fetchEvaluationDashboard } from "../shared/api/evaluations";
-import { fetchKnowledgeDocuments, searchKnowledge } from "../shared/api/knowledge";
+import {
+  createKnowledgeDocument,
+  fetchKnowledgeDocuments,
+  searchKnowledge,
+} from "../shared/api/knowledge";
 import { fetchStudentTasks, generateReview, saveTask } from "../shared/api/tasks";
 import type { ChatMessage, ChatResponse } from "../shared/types/agent";
 import type { ClassListResponse, CourseListResponse, StudentListResponse } from "../shared/types/academic";
@@ -62,6 +66,7 @@ export function Dashboard() {
   const [knowledgeSearch, setKnowledgeSearch] = useState<KnowledgeSearchResponse | null>(null);
   const [knowledgeQuery, setKnowledgeQuery] = useState("作业 Rubric");
   const [knowledgeLoading, setKnowledgeLoading] = useState(false);
+  const [knowledgeCreateLoading, setKnowledgeCreateLoading] = useState(false);
   const [accounts, setAccounts] = useState<DemoAccount[]>([]);
   const [currentAccount, setCurrentAccount] = useState<DemoAccount | null>(null);
   const [taskList, setTaskList] = useState<TaskListResponse | null>(null);
@@ -258,6 +263,34 @@ export function Dashboard() {
       setError(err instanceof Error ? err.message : "知识库检索失败");
     } finally {
       setKnowledgeLoading(false);
+    }
+  }
+
+  async function handleCreateKnowledgeDocument() {
+    try {
+      setKnowledgeCreateLoading(true);
+      setError(null);
+      const payload = {
+        title: "课程项目复盘模板",
+        source_type: "project_case",
+        path: "软件项目实践",
+        tags: ["复盘", "项目文档"],
+        content: "课程项目复盘需要记录目标、完成情况、阻塞问题、下周任务和证据链接。",
+        source_url: "https://example.edu/templates/review",
+      };
+      await createKnowledgeDocument(payload);
+      const [documents, search] = await Promise.all([
+        fetchKnowledgeDocuments(),
+        searchKnowledge(payload.title),
+      ]);
+      setKnowledgeDocs(documents);
+      setKnowledgeSearch(search);
+      setKnowledgeQuery(payload.title);
+      setMode("kb");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "知识库资料入库失败");
+    } finally {
+      setKnowledgeCreateLoading(false);
     }
   }
 
@@ -501,8 +534,10 @@ export function Dashboard() {
             search={knowledgeSearch}
             query={knowledgeQuery}
             loading={knowledgeLoading}
+            createLoading={knowledgeCreateLoading}
             onQueryChange={setKnowledgeQuery}
             onSearch={handleKnowledgeSearch}
+            onCreateDocument={handleCreateKnowledgeDocument}
           />
         )}
 
@@ -1180,15 +1215,19 @@ function KnowledgeAdmin({
   search,
   query,
   loading,
+  createLoading,
   onQueryChange,
   onSearch,
+  onCreateDocument,
 }: {
   documents: KnowledgeDocumentsResponse;
   search: KnowledgeSearchResponse | null;
   query: string;
   loading: boolean;
+  createLoading: boolean;
   onQueryChange: (query: string) => void;
   onSearch: (query?: string) => void;
+  onCreateDocument: () => void;
 }) {
   const paths = Array.from(new Set(documents.documents.map((document) => document.path)));
   const sourceCount = (sourceType: string) =>
@@ -1222,6 +1261,14 @@ function KnowledgeAdmin({
           <strong>{sourceCount("project_case")}</strong>
           <small>案例或资源</small>
         </article>
+        <div className="kb-action-panel">
+          <span className="section-label">资料维护</span>
+          <strong>课程项目复盘模板</strong>
+          <small>入库后自动刷新清单并检索。</small>
+          <button onClick={onCreateDocument} disabled={createLoading}>
+            {createLoading ? "入库中" : "新增资料"}
+          </button>
+        </div>
         <div className="ask-box kb-search">
           <input
             value={query}
