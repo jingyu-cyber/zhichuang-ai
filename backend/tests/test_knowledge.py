@@ -122,6 +122,44 @@ def test_knowledge_document_update_status_and_versions() -> None:
     )
 
 
+def test_knowledge_search_prioritizes_exact_custom_document() -> None:
+    client = TestClient(app)
+    admin_header = {"Authorization": "Bearer demo-token-admin_001"}
+    for index in range(6):
+        client.post(
+            "/api/knowledge/documents",
+            headers=admin_header,
+            json={
+                "title": f"Smoke 课程项目复盘模板历史资料 {index}",
+                "source_type": "project_case",
+                "path": "软件项目实践",
+                "tags": ["复盘", "项目文档"],
+                "content": "Smoke 课程项目复盘模板历史资料用于验证搜索候选很多时不应截断精确结果。",
+            },
+        )
+    target_response = client.post(
+        "/api/knowledge/documents",
+        headers=admin_header,
+        json={
+            "title": "Smoke 课程项目复盘模板",
+            "source_type": "project_case",
+            "path": "软件项目实践",
+            "tags": ["复盘", "项目文档"],
+            "content": "Smoke 课程项目复盘模板需要记录目标、完成情况、阻塞问题和下周任务。",
+        },
+    )
+    search_response = client.get(
+        "/api/knowledge/search",
+        params={"q": "Smoke 课程项目复盘模板"},
+    )
+
+    assert target_response.status_code == 200
+    assert any(
+        item["title"] == "Smoke 课程项目复盘模板"
+        for item in search_response.json()["results"]
+    )
+
+
 def test_only_admin_can_maintain_knowledge_documents() -> None:
     client = TestClient(app)
     student_response = client.post(

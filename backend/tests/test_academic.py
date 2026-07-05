@@ -147,6 +147,33 @@ def test_academic_import_persists_in_sqlite_session(tmp_path) -> None:
     )
 
 
+def test_academic_import_reuses_teacher_across_courses(tmp_path) -> None:
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'academic_multi_course.db'}",
+        connect_args={"check_same_thread": False},
+    )
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with SessionLocal() as session:
+        service = AcademicService(session)
+        response = service.import_academic_data(
+            payload=AcademicServiceImportFixture.multi_course_teacher_payload()
+        )
+        repeated = service.import_academic_data(
+            payload=AcademicServiceImportFixture.multi_course_teacher_payload()
+        )
+        teacher_memberships = session.scalars(
+            select(CourseMembership)
+            .where(CourseMembership.user_id == "teacher_multi_course")
+            .where(CourseMembership.role_in_course == "teacher")
+        ).all()
+
+    assert response.imported_courses == 2
+    assert response.imported_students == 1
+    assert repeated.imported_courses == 0
+    assert len(teacher_memberships) == 2
+
+
 def test_academic_import_rejects_unknown_course() -> None:
     client = TestClient(app)
     response = client.post(
@@ -206,6 +233,49 @@ class AcademicServiceImportFixture:
                     class_id="class_security_2024_01",
                     target_path="软件项目实践",
                     tags=["安全测试", "代码审计"],
+                )
+            ],
+        )
+
+    @staticmethod
+    def multi_course_teacher_payload():
+        from app.schemas.academic import (
+            AcademicImportClass,
+            AcademicImportCourse,
+            AcademicImportRequest,
+            AcademicImportStudent,
+        )
+
+        return AcademicImportRequest(
+            courses=[
+                AcademicImportCourse(
+                    course_id="course_multi_ai_2026",
+                    name="多课程 AI 应用开发",
+                    teacher_id="teacher_multi_course",
+                    teacher_name="多课程教师",
+                    teacher_no="TMULTI001",
+                ),
+                AcademicImportCourse(
+                    course_id="course_multi_web_2026",
+                    name="多课程 Web 实践",
+                    teacher_id="teacher_multi_course",
+                    teacher_name="多课程教师",
+                    teacher_no="TMULTI001",
+                ),
+            ],
+            classes=[
+                AcademicImportClass(
+                    class_id="class_multi_ai_2024_01",
+                    course_id="course_multi_ai_2026",
+                    name="多课程 1 班",
+                )
+            ],
+            students=[
+                AcademicImportStudent(
+                    student_id="student_multi_course",
+                    name="多课程学生",
+                    student_no="MULTI2026001",
+                    class_id="class_multi_ai_2024_01",
                 )
             ],
         )

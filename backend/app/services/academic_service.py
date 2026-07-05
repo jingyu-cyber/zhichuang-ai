@@ -209,6 +209,7 @@ class AcademicService:
                 teacher_no=course.teacher_no,
                 now=now,
             )
+            self.db.flush()
             record = self.db.get(Course, course.course_id)
             if record is None:
                 record = Course(id=course.course_id, created_at=now)
@@ -269,6 +270,7 @@ class AcademicService:
                 teacher_no=None,
                 now=now,
             )
+            self.db.flush()
             imported_students += 1
             profile = self.db.get(StudentAcademicProfile, user.id)
             if profile is None:

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.routes.growth import ensure_student_access
 from app.db.session import get_db
 from app.models.user import User
+from app.schemas.auth import DemoAccount
 from app.schemas.tasks import (
     AgentTaskActionResponse,
     AgentTaskCreateRequest,
@@ -18,6 +19,8 @@ from app.services.auth_service import AuthService
 from app.services.task_service import TaskService
 
 router = APIRouter()
+DEMO_CLASS_NAMES = {"class_cs_2024_01": "2024 级计算机科学与技术 1 班"}
+DEMO_COURSE_NAMES = {"course_web_2026": "Web 应用开发"}
 
 
 @router.get("/students/{student_id}/tasks", response_model=TaskListResponse)
@@ -67,7 +70,7 @@ def get_agent_task(
     db: Session = Depends(get_db),
 ) -> AgentTaskStatus:
     task = _get_agent_task_or_404(task_id, db)
-    _ensure_agent_task_owner_access(task.owner_id or "", authorization, db)
+    _ensure_agent_task_access(task, authorization, db)
     return task
 
 
@@ -78,7 +81,7 @@ def cancel_agent_task(
     db: Session = Depends(get_db),
 ) -> AgentTaskActionResponse:
     task = _get_agent_task_or_404(task_id, db)
-    _ensure_agent_task_owner_access(task.owner_id or "", authorization, db)
+    _ensure_agent_task_access(task, authorization, db)
     return TaskService(db).cancel_agent_task(task_id)
 
 
@@ -89,7 +92,7 @@ def resume_agent_task(
     db: Session = Depends(get_db),
 ) -> AgentTaskActionResponse:
     task = _get_agent_task_or_404(task_id, db)
-    _ensure_agent_task_owner_access(task.owner_id or "", authorization, db)
+    _ensure_agent_task_access(task, authorization, db)
     return TaskService(db).resume_agent_task(task_id)
 
 
@@ -123,4 +126,31 @@ def _ensure_agent_task_owner_access(
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="No access to this agent task",
+    )
+
+
+def _ensure_agent_task_access(
+    task: AgentTaskStatus,
+    authorization: str | None,
+    db: Session,
+) -> None:
+    account = AuthService(db).current_account(authorization)
+    if account.role == "admin":
+        return
+    if account.user_id == task.owner_id:
+        return
+    if account.role == "teacher" and _teacher_task_in_scope(account, task):
+        return
+    _ensure_agent_task_owner_access(task.owner_id or "", authorization, db)
+
+
+def _teacher_task_in_scope(account: DemoAccount, task: AgentTaskStatus) -> bool:
+    course_id = str(task.input.get("course_id") or "")
+    class_id = str(task.input.get("class_id") or "")
+    course_name = DEMO_COURSE_NAMES.get(course_id, course_id)
+    class_name = DEMO_CLASS_NAMES.get(class_id, class_id)
+    return (
+        bool(course_id or class_id)
+        and (course_id in account.authorized_courses or course_name in account.authorized_courses)
+        and (class_id in account.authorized_classes or class_name in account.authorized_classes)
     )

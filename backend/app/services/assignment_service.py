@@ -942,6 +942,8 @@ class AssignmentService:
         record.input_json = {
             "assignment_id": report.assignment_id,
             "assignment_title": report.assignment_title,
+            "course_id": report.course_id,
+            "class_id": report.class_id,
             "student_id": report.student_id,
             "repository_url": payload.repository_url,
             "file_count": len(files or []),

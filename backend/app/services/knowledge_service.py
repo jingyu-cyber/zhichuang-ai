@@ -226,19 +226,18 @@ class KnowledgeService:
             term_match = any(term in haystack for term in query_terms)
             if not exact_match and not term_match:
                 continue
+            title_match = normalized_query in record.title.lower()
             results.append(
                 KnowledgeSearchResult(
                     title=record.title,
                     source_type=record.source_type,
                     path=record.path or "软件项目实践",
                     snippet=(record.content or "")[:180],
-                    score=1.2 if exact_match else 0.9,
+                    score=1.4 if title_match else 1.2 if exact_match else 0.9,
                     tags=list(record.tags_json or []),
                 )
             )
-            if len(results) >= limit:
-                break
-        return results
+        return sorted(results, key=lambda result: result.score, reverse=True)[:limit]
 
     def _custom_records(self, include_offline: bool) -> list[KnowledgeDocumentRecord]:
         if self.db is None:

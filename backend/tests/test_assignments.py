@@ -74,6 +74,34 @@ def test_assignment_analysis_returns_report() -> None:
     ]
 
 
+def test_teacher_can_read_assignment_agent_task_for_authorized_class() -> None:
+    client = TestClient(app)
+    teacher_header = {"Authorization": "Bearer demo-token-teacher_001"}
+    response = client.post(
+        "/api/assignments/analyze",
+        json={
+            "assignment_id": "assignment_flask_mvp",
+            "assignment_title": "Flask Web 项目实践",
+            "course_id": "course_web_2026",
+            "class_id": "class_cs_2024_01",
+            "student_id": "student_temp_agent_task",
+            "description": "临时学生提交作业，用于验证教师可查看授权班级内分析任务状态。",
+            "files": [
+                {"path": "main.py", "content": "from fastapi import FastAPI\napp = FastAPI()"},
+                {"path": "README.md", "content": "临时学生作业说明"},
+            ],
+        },
+        headers=teacher_header,
+    )
+    payload = response.json()
+    task_response = client.get(f"/api/tasks/{payload['agent_task_id']}", headers=teacher_header)
+
+    assert response.status_code == 200
+    assert task_response.status_code == 200
+    assert task_response.json()["status"] == "succeeded"
+    assert task_response.json()["input"]["class_id"] == "class_cs_2024_01"
+
+
 def test_assignment_dashboard_returns_teacher_view() -> None:
     client = TestClient(app)
     response = client.get(
