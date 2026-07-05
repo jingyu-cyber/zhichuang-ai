@@ -85,6 +85,18 @@ type AssignmentSubmissionPayload = {
   repositoryUrl?: string;
 };
 
+const demoStudentId = "student_001";
+const demoStudentAccount: DemoAccount = {
+  user_id: demoStudentId,
+  name: "林一舟",
+  role: "student",
+  title: "学生演示账号",
+  default_view: "growth",
+  authorized_courses: ["Web 应用开发", "算法设计与分析"],
+  authorized_classes: ["2024 级计算机科学与技术 1 班"],
+  modules: ["学生报告", "成长路径", "知识库问答"],
+};
+
 export function Dashboard() {
   const [mode, setMode] = useState<ViewMode>("teacher");
   const [report, setReport] = useState<AssignmentReport | null>(null);
@@ -138,6 +150,49 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const activeStudentId =
+    currentAccount?.role === "student" ? currentAccount.user_id : demoStudentId;
+
+  async function loadStudentWorkspace(account: DemoAccount, token?: string) {
+    const studentId = account.user_id;
+    const [
+      profileData,
+      profileEvidenceData,
+      planData,
+      competitionCatalogData,
+      competitionData,
+      competitionPreparationData,
+      teamData,
+      teamRequestData,
+      teamStatusData,
+      taskData,
+    ] = await Promise.all([
+      upsertBasicProfile(studentId, token, {
+        studentName: account.name,
+        targetDirection: account.role === "student" ? "AI 应用开发 / 软件项目实践" : undefined,
+      }),
+      addProfileEvidence(studentId, token),
+      generateLearningPlan(studentId, token),
+      fetchCompetitionCatalog(),
+      recommendCompetitions(studentId, token),
+      generateCompetitionPreparationPlan(studentId, token),
+      recommendTeam(studentId, token),
+      createTeamRequest(studentId, token),
+      fetchTeamPoolStatus(studentId, token),
+      fetchStudentTasks(studentId, token),
+    ]);
+    setProfile(profileData);
+    setProfileEvidence(profileEvidenceData);
+    setPlan(planData);
+    setCompetitionCatalog(competitionCatalogData);
+    setCompetitions(competitionData);
+    setCompetitionPreparation(competitionPreparationData);
+    setTeam(teamData);
+    setTeamRequest(teamRequestData);
+    setTeamStatus(teamStatusData);
+    setTaskList(taskData);
+  }
+
   useEffect(() => {
     let mounted = true;
 
@@ -171,20 +226,22 @@ export function Dashboard() {
           analyzeDemoAssignment("demo-token-teacher_001"),
           fetchAssignmentDashboard("demo-token-teacher_001"),
           fetchAssignments("demo-token-teacher_001"),
-          upsertBasicProfile(),
-          addProfileEvidence(),
-          generateLearningPlan(),
+          upsertBasicProfile(demoStudentId, "demo-token-student_001", {
+            studentName: demoStudentAccount.name,
+          }),
+          addProfileEvidence(demoStudentId, "demo-token-student_001"),
+          generateLearningPlan(demoStudentId, "demo-token-student_001"),
           fetchCompetitionCatalog(),
-          recommendCompetitions(),
-          generateCompetitionPreparationPlan(),
-          recommendTeam(),
+          recommendCompetitions(demoStudentId, "demo-token-student_001"),
+          generateCompetitionPreparationPlan(demoStudentId, "demo-token-student_001"),
+          recommendTeam(demoStudentId, "demo-token-student_001"),
           screenTeacherCandidates(),
-          createTeamRequest(),
-          fetchTeamPoolStatus(),
+          createTeamRequest(demoStudentId, "demo-token-student_001"),
+          fetchTeamPoolStatus(demoStudentId, "demo-token-student_001"),
           fetchKnowledgeDocuments(),
           searchKnowledge("作业 Rubric"),
           fetchDemoAccounts(),
-          fetchStudentTasks(),
+          fetchStudentTasks(demoStudentId, "demo-token-student_001"),
           fetchEvaluationDashboard(),
           fetchCourses(),
           fetchClasses(),
@@ -314,6 +371,9 @@ export function Dashboard() {
       } else {
         setCandidateScreening(null);
       }
+      if (session.account.role === "student") {
+        await loadStudentWorkspace(session.account, session.token);
+      }
       if (session.account.role === "admin") {
         const nextLocalAccounts = await fetchLocalAccounts(session.token);
         setLocalAccounts(nextLocalAccounts.accounts);
@@ -343,6 +403,9 @@ export function Dashboard() {
         setCandidateScreening(nextCandidateScreening);
       } else {
         setCandidateScreening(null);
+      }
+      if (session.account.role === "student") {
+        await loadStudentWorkspace(session.account, session.token);
       }
       if (session.account.role === "admin") {
         const nextLocalAccounts = await fetchLocalAccounts(session.token);
@@ -468,7 +531,12 @@ export function Dashboard() {
     try {
       setPlanRevisionLoading(true);
       setError(null);
-      const revisedPlan = await reviseLearningPlan(plan.plan_id, feedback, plan.student_id);
+      const revisedPlan = await reviseLearningPlan(
+        plan.plan_id,
+        feedback,
+        plan.student_id,
+        currentToken,
+      );
       setPlan(revisedPlan);
       setMode("growth");
     } catch (err) {
@@ -486,9 +554,9 @@ export function Dashboard() {
     try {
       setTeamStatusLoading(true);
       setError(null);
-      const nextStatus = await updateTeamPoolStatus("student_001", enabled);
+      const nextStatus = await updateTeamPoolStatus(activeStudentId, enabled, currentToken);
       setTeamStatus(nextStatus);
-      const nextTeam = await recommendTeam("student_001");
+      const nextTeam = await recommendTeam(activeStudentId, currentToken);
       setTeam(nextTeam);
     } catch (err) {
       setError(err instanceof Error ? err.message : "组队授权状态更新失败");
@@ -597,7 +665,7 @@ export function Dashboard() {
     try {
       setTaskLoading(true);
       setError(null);
-      const response = await generateReview();
+      const response = await generateReview(activeStudentId, currentToken);
       setReview(response);
       setMode("tasks");
     } catch (err) {
@@ -611,7 +679,7 @@ export function Dashboard() {
     try {
       setTaskLoading(true);
       setError(null);
-      const task = await saveTask("补充一次课程作业自动化测试记录");
+      const task = await saveTask("补充一次课程作业自动化测试记录", activeStudentId, currentToken);
       setTaskList((current) =>
         current
           ? {

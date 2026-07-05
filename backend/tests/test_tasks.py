@@ -25,6 +25,33 @@ def test_tasks_and_review() -> None:
     assert review_response.json()["completed_count"] >= 1
 
 
+def test_student_tasks_are_scoped_to_self() -> None:
+    client = TestClient(app)
+    student_header = {"Authorization": "Bearer demo-token-student_001"}
+
+    own_response = client.get("/api/students/student_001/tasks", headers=student_header)
+    other_tasks_response = client.get("/api/students/student_002/tasks", headers=student_header)
+    other_save_response = client.post(
+        "/api/tasks",
+        json={
+            "student_id": "student_002",
+            "title": "越权保存任务",
+            "source": "test",
+        },
+        headers=student_header,
+    )
+    other_review_response = client.post(
+        "/api/reviews/generate",
+        json={"student_id": "student_002", "period": "本周"},
+        headers=student_header,
+    )
+
+    assert own_response.status_code == 200
+    assert other_tasks_response.status_code == 403
+    assert other_save_response.status_code == 403
+    assert other_review_response.status_code == 403
+
+
 def test_saved_task_persists_in_sqlite_session(tmp_path) -> None:
     engine = create_engine(
         f"sqlite:///{tmp_path / 'tasks.db'}",

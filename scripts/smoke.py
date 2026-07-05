@@ -306,7 +306,10 @@ def main() -> int:
     )
 
     profile = client.get_json("/students/student_001/profile")
+    own_profile = client.get_json("/students/student_001/profile", headers=student_header)
     assert_true(len(profile["dimensions"]) >= 4, "growth profile dimensions missing")
+    assert_true(own_profile["student_id"] == "student_001", "student token profile access failed")
+    client.expect_forbidden("GET", "/students/student_002/profile", headers=student_header)
     assert_true(
         any(
             item["source_type"] == "assignment_report"
@@ -318,6 +321,12 @@ def main() -> int:
 
     plan = client.post_json("/plans/generate", {"student_id": "student_001", "weeks": 4})
     assert_true(len(plan["tasks"]) == 4, "learning plan did not honor weeks")
+    client.expect_forbidden(
+        "POST",
+        "/plans/generate",
+        {"student_id": "student_002", "weeks": 4},
+        headers=student_header,
+    )
 
     competitions = client.post_json(
         "/competitions/recommend",
@@ -355,7 +364,15 @@ def main() -> int:
     )
 
     team_status = client.get_json("/students/student_001/team-status")
+    own_team_status = client.get_json("/students/student_001/team-status", headers=student_header)
     assert_true(team_status["contact_visible"] is False, "team contact visibility should be hidden")
+    assert_true(own_team_status["student_id"] == "student_001", "student token team status failed")
+    client.expect_forbidden(
+        "PATCH",
+        "/students/student_002/team-status",
+        {"team_status_enabled": False},
+        headers=student_header,
+    )
     team = client.post_json(
         "/teams/recommend",
         {"student_id": "student_001", "project_goal": "作业代码分析 Demo"},
@@ -372,6 +389,9 @@ def main() -> int:
 
     task = client.post_json("/tasks", {"title": "Smoke 测试任务"})
     assert_true(task["title"] == "Smoke 测试任务", "task save failed")
+    own_tasks = client.get_json("/students/student_001/tasks", headers=student_header)
+    assert_true(own_tasks["student_id"] == "student_001", "student token tasks access failed")
+    client.expect_forbidden("GET", "/students/student_002/tasks", headers=student_header)
     review = client.post_json(
         "/reviews/generate",
         {"student_id": "student_001", "period": "本周", "completed_task_ids": [task["task_id"]]},

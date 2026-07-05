@@ -65,6 +65,30 @@ def test_student_profile_returns_capability_dimensions() -> None:
     assert evidence_response.json()["source_type"] == "student_self_report"
 
 
+def test_student_growth_routes_are_scoped_to_self() -> None:
+    client = TestClient(app)
+    student_header = {"Authorization": "Bearer demo-token-student_001"}
+
+    own_response = client.get("/api/students/student_001/profile", headers=student_header)
+    other_profile_response = client.get("/api/students/student_002/profile", headers=student_header)
+    other_plan_response = client.post(
+        "/api/plans/generate",
+        json={"student_id": "student_002", "weeks": 4},
+        headers=student_header,
+    )
+    other_team_status_response = client.patch(
+        "/api/students/student_002/team-status",
+        json={"team_status_enabled": False},
+        headers=student_header,
+    )
+
+    assert own_response.status_code == 200
+    assert own_response.json()["student_id"] == "student_001"
+    assert other_profile_response.status_code == 403
+    assert other_plan_response.status_code == 403
+    assert other_team_status_response.status_code == 403
+
+
 def test_learning_plan_and_recommendations() -> None:
     client = TestClient(app)
     plan_response = client.post("/api/plans/generate", json={"student_id": "student_001", "weeks": 4})

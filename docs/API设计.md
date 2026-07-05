@@ -4,6 +4,8 @@
 
 鉴权约定：公网 Demo 使用 `POST /auth/demo-session` 返回的演示 token；本地学校数据可使用 `POST /auth/local-session` 基于 SQLite 用户生成会话 token。需要角色或授权范围控制的接口通过 `Authorization: Bearer <token>` 传入账号身份；未传 token 时，作业分析相关接口默认使用教师演示账号，便于本地快速演示。越权访问返回 `403`。
 
+学生端数据访问约定：`/students/{student_id}/profile`、学习计划、任务中心、组队状态和组队推荐等学生个人数据接口在传入 token 时只允许学生本人访问；教师只能访问授权班级内学生；管理员可访问全部本地账号数据。前端切换到本地学生账号后，会用该账号 token 重新加载本人画像、计划、任务和组队状态。
+
 ## 1. 健康检查
 
 ### `GET /health`
@@ -457,7 +459,7 @@ Authorization: Bearer demo-token-admin_001
 
 ### `GET /students/{student_id}/profile`
 
-教师在授权课程或班级范围内查看学生画像摘要。
+学生查看本人画像；教师在授权课程或班级范围内查看学生画像摘要；管理员可查看本地账号数据。越权访问返回 `403`。
 
 已填写的基础画像和补充证据从 SQLite 读取；未填写时返回演示冷启动画像，保证公开 Demo 可直接展示。
 
@@ -495,7 +497,7 @@ Authorization: Bearer demo-token-admin_001
 
 ### `POST /students/{student_id}/profile/evidence`
 
-学生补充自评或证据材料，用于后续画像更新。
+学生为本人补充自评或证据材料，用于后续画像更新；教师和管理员可在授权范围内补充教学证据。
 
 请求：
 
@@ -578,6 +580,8 @@ Authorization: Bearer demo-token-admin_001
 
 响应仍为学习计划结构，并返回 `revision_note` 说明根据反馈调整了任务顺序、周数和投入强度。修订结果会更新 SQLite `learning_plans` 中对应计划。
 
+学习计划接口同样遵循学生本人、授权教师、管理员的访问控制。
+
 ### `POST /tasks`
 
 保存计划中的任务。
@@ -595,6 +599,8 @@ Authorization: Bearer demo-token-admin_001
 ### `POST /reviews/generate`
 
 生成阶段复盘。复盘会读取当前持久化任务列表，排除已完成任务后给出下一步任务。
+
+任务中心接口同样遵循学生本人、授权教师、管理员的访问控制。
 
 请求：
 
@@ -643,6 +649,7 @@ Authorization: Bearer demo-token-admin_001
 - 引用来源。
 
 演示接口返回中国大学生计算机设计大赛、中国国际大学生创新大赛、蓝桥杯等推荐项。每个推荐项必须同时包含“适合原因”和“需要补足的能力”，避免只给出无法解释的匹配分。
+学生只能为本人生成推荐；教师和管理员按授权范围生成。
 
 ### `POST /competitions/preparation-plan`
 
@@ -755,6 +762,7 @@ Authorization: Bearer demo-token-admin_001
 
 推荐候选只包含主动开启组队状态的学生；未授权学生不会出现在结果中。演示接口返回前端交互、算法评测等互补角色。
 推荐结果写入 SQLite `team_recommendations`，用于后续复盘推荐依据和项目组队过程。
+组队相关接口同样遵循学生本人、授权教师、管理员的访问控制。
 
 ## 10. 知识库
 

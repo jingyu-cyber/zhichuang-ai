@@ -190,12 +190,28 @@ def test_local_token_can_authorize_assignment_access() -> None:
         "/api/assignments/assignment_flask_mvp/reports/student_001",
         headers=student_header,
     )
+    growth_response = client.get(
+        "/api/students/student_web_local/profile",
+        headers=student_header,
+    )
+    task_response = client.get(
+        "/api/students/student_web_local/tasks",
+        headers=student_header,
+    )
+    other_growth_response = client.get(
+        "/api/students/student_001/profile",
+        headers=student_header,
+    )
 
     assert dashboard_response.status_code == 200
     assert dashboard_response.json()["access_scope"] == "teacher:authorized_course_class"
     assert own_report_response.status_code == 200
     assert own_report_response.json()["access_scope"] == "student:self"
     assert other_report_response.status_code == 403
+    assert growth_response.status_code == 200
+    assert growth_response.json()["student_id"] == "student_web_local"
+    assert task_response.status_code == 200
+    assert other_growth_response.status_code == 403
 
 
 def test_unknown_local_session_returns_not_found() -> None:

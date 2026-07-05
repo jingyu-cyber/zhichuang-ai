@@ -30,31 +30,54 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function fetchGrowthProfile(studentId = "student_001"): Promise<GrowthProfile> {
-  return requestJson<GrowthProfile>(`/students/${studentId}/profile`);
+function authHeaders(token?: string): HeadersInit {
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-export function upsertBasicProfile(studentId = "student_001"): Promise<GrowthProfile> {
+type BasicProfileSeed = {
+  studentName?: string;
+  targetDirection?: string;
+};
+
+export function fetchGrowthProfile(
+  studentId = "student_001",
+  token?: string,
+): Promise<GrowthProfile> {
+  return requestJson<GrowthProfile>(`/students/${studentId}/profile`, {
+    headers: authHeaders(token),
+  });
+}
+
+export function upsertBasicProfile(
+  studentId = "student_001",
+  token?: string,
+  seed: BasicProfileSeed = {},
+): Promise<GrowthProfile> {
   return requestJson<GrowthProfile>(`/students/${studentId}/profile`, {
     method: "PUT",
+    headers: authHeaders(token),
     body: JSON.stringify({
-      student_name: "林一舟",
+      student_name: seed.studentName ?? "林一舟",
       grade: "大二",
       major: "计算机科学与技术",
       course_foundation: ["程序设计基础", "数据结构", "数据库系统"],
       skill_tags: ["Flask", "RAG", "GitHub", "README"],
       project_experiences: ["Flask Web 作业项目", "RAG 文档问答 Demo"],
       competition_experiences: ["蓝桥杯校内训练"],
-      target_direction: "AI 应用开发 / 软件项目实践",
+      target_direction: seed.targetDirection ?? "AI 应用开发 / 软件项目实践",
       weekly_hours: 8,
       github_url: "https://github.com/demo/zhichuang-agent",
     }),
   });
 }
 
-export function addProfileEvidence(studentId = "student_001"): Promise<ProfileEvidence> {
+export function addProfileEvidence(
+  studentId = "student_001",
+  token?: string,
+): Promise<ProfileEvidence> {
   return requestJson<ProfileEvidence>(`/students/${studentId}/profile/evidence`, {
     method: "POST",
+    headers: authHeaders(token),
     body: JSON.stringify({
       dimension: "工程实践",
       source_type: "student_self_report",
@@ -65,9 +88,13 @@ export function addProfileEvidence(studentId = "student_001"): Promise<ProfileEv
   });
 }
 
-export function generateLearningPlan(studentId = "student_001"): Promise<LearningPlan> {
+export function generateLearningPlan(
+  studentId = "student_001",
+  token?: string,
+): Promise<LearningPlan> {
   return requestJson<LearningPlan>("/plans/generate", {
     method: "POST",
+    headers: authHeaders(token),
     body: JSON.stringify({
       student_id: studentId,
       goal: "三个月内完成 AI 应用开发 Demo 并准备校级双创项目",
@@ -78,17 +105,22 @@ export function generateLearningPlan(studentId = "student_001"): Promise<Learnin
 
 export function fetchLearningPlans(
   studentId = "student_001",
+  token?: string,
 ): Promise<LearningPlanListResponse> {
-  return requestJson<LearningPlanListResponse>(`/students/${studentId}/plans`);
+  return requestJson<LearningPlanListResponse>(`/students/${studentId}/plans`, {
+    headers: authHeaders(token),
+  });
 }
 
 export function reviseLearningPlan(
   planId: string,
   feedback: string,
   studentId = "student_001",
+  token?: string,
 ): Promise<LearningPlan> {
   return requestJson<LearningPlan>(`/plans/${planId}/revise`, {
     method: "POST",
+    headers: authHeaders(token),
     body: JSON.stringify({
       student_id: studentId,
       feedback,
@@ -100,9 +132,11 @@ export function reviseLearningPlan(
 
 export function recommendCompetitions(
   studentId = "student_001",
+  token?: string,
 ): Promise<CompetitionRecommendResponse> {
   return requestJson<CompetitionRecommendResponse>("/competitions/recommend", {
     method: "POST",
+    headers: authHeaders(token),
     body: JSON.stringify({
       student_id: studentId,
       target: "AI 应用开发与软件项目实践",
@@ -117,9 +151,11 @@ export function fetchCompetitionCatalog(): Promise<CompetitionCatalogResponse> {
 
 export function generateCompetitionPreparationPlan(
   studentId = "student_001",
+  token?: string,
 ): Promise<CompetitionPreparationPlan> {
   return requestJson<CompetitionPreparationPlan>("/competitions/preparation-plan", {
     method: "POST",
+    headers: authHeaders(token),
     body: JSON.stringify({
       student_id: studentId,
       competition_name: "中国大学生计算机设计大赛",
@@ -147,9 +183,13 @@ export function screenTeacherCandidates(
   });
 }
 
-export function recommendTeam(studentId = "student_001"): Promise<TeamRecommendResponse> {
+export function recommendTeam(
+  studentId = "student_001",
+  token?: string,
+): Promise<TeamRecommendResponse> {
   return requestJson<TeamRecommendResponse>("/teams/recommend", {
     method: "POST",
+    headers: authHeaders(token),
     body: JSON.stringify({
       student_id: studentId,
       project_goal: "做一个课程作业代码分析与教师看板 Demo",
@@ -157,9 +197,13 @@ export function recommendTeam(studentId = "student_001"): Promise<TeamRecommendR
   });
 }
 
-export function createTeamRequest(studentId = "student_001"): Promise<TeamRequestCard> {
+export function createTeamRequest(
+  studentId = "student_001",
+  token?: string,
+): Promise<TeamRequestCard> {
   return requestJson<TeamRequestCard>("/teams/requests", {
     method: "POST",
+    headers: authHeaders(token),
     body: JSON.stringify({
       student_id: studentId,
       competition_name: "中国大学生计算机设计大赛",
@@ -173,16 +217,23 @@ export function createTeamRequest(studentId = "student_001"): Promise<TeamReques
   });
 }
 
-export function fetchTeamPoolStatus(studentId = "student_001"): Promise<TeamPoolStatus> {
-  return requestJson<TeamPoolStatus>(`/students/${studentId}/team-status`);
+export function fetchTeamPoolStatus(
+  studentId = "student_001",
+  token?: string,
+): Promise<TeamPoolStatus> {
+  return requestJson<TeamPoolStatus>(`/students/${studentId}/team-status`, {
+    headers: authHeaders(token),
+  });
 }
 
 export function updateTeamPoolStatus(
   studentId = "student_001",
   enabled: boolean,
+  token?: string,
 ): Promise<TeamPoolStatus> {
   return requestJson<TeamPoolStatus>(`/students/${studentId}/team-status`, {
     method: "PATCH",
+    headers: authHeaders(token),
     body: JSON.stringify({
       team_status_enabled: enabled,
       contact_visible: false,

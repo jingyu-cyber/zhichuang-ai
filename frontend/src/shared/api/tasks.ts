@@ -18,13 +18,27 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function fetchStudentTasks(studentId = "student_001"): Promise<TaskListResponse> {
-  return requestJson<TaskListResponse>(`/students/${studentId}/tasks`);
+function authHeaders(token?: string): HeadersInit {
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-export function saveTask(title: string, studentId = "student_001"): Promise<LearningTask> {
+export function fetchStudentTasks(
+  studentId = "student_001",
+  token?: string,
+): Promise<TaskListResponse> {
+  return requestJson<TaskListResponse>(`/students/${studentId}/tasks`, {
+    headers: authHeaders(token),
+  });
+}
+
+export function saveTask(
+  title: string,
+  studentId = "student_001",
+  token?: string,
+): Promise<LearningTask> {
   return requestJson<LearningTask>("/tasks", {
     method: "POST",
+    headers: authHeaders(token),
     body: JSON.stringify({
       student_id: studentId,
       title,
@@ -36,9 +50,13 @@ export function saveTask(title: string, studentId = "student_001"): Promise<Lear
   });
 }
 
-export function generateReview(studentId = "student_001"): Promise<ReviewResponse> {
+export function generateReview(
+  studentId = "student_001",
+  token?: string,
+): Promise<ReviewResponse> {
   return requestJson<ReviewResponse>("/reviews/generate", {
     method: "POST",
+    headers: authHeaders(token),
     body: JSON.stringify({
       student_id: studentId,
       period: "本周",
