@@ -17,6 +17,7 @@
 - `docs/知识库资料清单.md`：首批知识库资料需求
 - `docs/公网Demo部署.md`：公网 Demo 部署说明
 - `docs/演示脚本.md`：比赛和学校试用演示脚本
+- `docs/交付验收报告.md`：当前版本交付结论、需求证据和复验步骤
 - `backend/`：FastAPI 后端骨架
 - `frontend/`：React + Vite 前端骨架
 - `harmony/`：鸿蒙端 P1 客户端规划
