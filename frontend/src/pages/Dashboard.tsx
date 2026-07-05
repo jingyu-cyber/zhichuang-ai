@@ -916,7 +916,7 @@ export function Dashboard() {
               className={mode === "growth" ? "active" : ""}
               onClick={() => setMode("growth")}
             >
-              我的成长路径
+              成长路径
             </button>
           )}
           {canAccessModule("学生报告") && (
@@ -924,7 +924,7 @@ export function Dashboard() {
               className={mode === "student" ? "active" : ""}
               onClick={() => setMode("student")}
             >
-              我的作业报告
+              作业报告
             </button>
           )}
           {canAccessModule("任务复盘") && (
@@ -977,9 +977,9 @@ export function Dashboard() {
         </nav>
 
         <div className="side-note">
-          <span>当前学生</span>
+          <span>学生端概览</span>
           <strong>{currentAccount?.role === "student" ? currentAccount.name : demoStudentAccount.name}</strong>
-          <p>从课程作业、能力画像、竞赛准备和组队建议形成个人成长闭环。</p>
+          <p>从课程作业、能力画像、竞赛准备和组队建议形成学生成长闭环。</p>
         </div>
 
         {currentAccount && (
@@ -1041,11 +1041,11 @@ export function Dashboard() {
               {mode === "teacher"
                 ? "课程作业学情诊断"
                 : mode === "student"
-                  ? "我的作业分析报告"
+                  ? "作业分析报告"
                   : mode === "growth"
-                    ? "我的成长路径"
+                    ? "成长路径"
                     : mode === "tasks"
-                      ? "我的任务与复盘"
+                      ? "任务复盘"
                       : mode === "evaluations"
                         ? "测试评测与输出记录"
                         : mode === "academic"
@@ -1622,7 +1622,7 @@ function StudentReport({
         <section className="panel student-assignment-switcher">
           <div className="panel-header">
             <div>
-              <span className="section-label">我的作业</span>
+              <span className="section-label">课程作业</span>
               <h2>选择作业报告</h2>
             </div>
             <span className="muted">{loading ? "加载中" : `${assignments.length} 个可查看作业`}</span>
