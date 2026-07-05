@@ -7,7 +7,7 @@ import {
   fetchAssignmentDashboard,
   uploadAssignmentArchive,
 } from "../shared/api/assignments";
-import { createDemoSession, fetchDemoAccounts } from "../shared/api/auth";
+import { createDemoSession, createLocalSession, fetchDemoAccounts } from "../shared/api/auth";
 import {
   addProfileEvidence,
   createTeamRequest,
@@ -595,6 +595,28 @@ export function Dashboard() {
     }
   }
 
+  async function handleLocalTeacherSession() {
+    try {
+      setAcademicImportLoading(true);
+      setError(null);
+      const session = await createLocalSession("teacher_school_001");
+      setCurrentAccount(session.account);
+      setCurrentToken(session.token);
+      const [nextDashboard, nextCandidateScreening] = await Promise.all([
+        fetchAssignmentDashboard(session.token),
+        screenTeacherCandidates(session.token),
+      ]);
+      setDashboard(nextDashboard);
+      setCandidateScreening(nextCandidateScreening);
+      setAcademicImportResult(`${session.account.name} 已通过本地账号进入系统`);
+      setMode("teacher");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "本地教师账号登录失败，请先导入样例数据");
+    } finally {
+      setAcademicImportLoading(false);
+    }
+  }
+
   return (
     <main className="workspace">
       <aside className="sidebar">
@@ -809,6 +831,7 @@ export function Dashboard() {
             importLoading={academicImportLoading}
             importResult={academicImportResult}
             onImportSample={handleAcademicImportSample}
+            onLocalTeacherSession={handleLocalTeacherSession}
           />
         )}
       </section>
@@ -2076,6 +2099,7 @@ function AcademicDirectory({
   importLoading,
   importResult,
   onImportSample,
+  onLocalTeacherSession,
 }: {
   courses: CourseListResponse;
   classes: ClassListResponse;
@@ -2084,6 +2108,7 @@ function AcademicDirectory({
   importLoading: boolean;
   importResult: string | null;
   onImportSample: () => void;
+  onLocalTeacherSession: () => void;
 }) {
   return (
     <>
@@ -2137,6 +2162,11 @@ function AcademicDirectory({
                 <span>{importResult}</span>
               </div>
             )}
+          </div>
+          <div className="academic-import-actions">
+            <button onClick={onLocalTeacherSession} disabled={importLoading}>
+              以导入教师进入
+            </button>
           </div>
         </section>
       )}

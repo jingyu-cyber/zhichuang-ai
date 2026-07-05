@@ -106,8 +106,9 @@ def generate_competition_preparation_plan(
 def screen_teacher_candidates(
     payload: TeacherCandidateScreenRequest,
     authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
 ) -> TeacherCandidateScreenResponse:
-    account = AuthService().current_account(authorization)
+    account = AuthService(db).current_account(authorization)
     if account.role not in {"teacher", "admin"}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

@@ -43,7 +43,7 @@ def import_academic_data(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> AcademicImportResponse:
-    _ensure_admin(authorization)
+    _ensure_admin(authorization, db)
     try:
         return AcademicService(db).import_academic_data(payload)
     except ValueError as error:
@@ -57,8 +57,8 @@ def import_academic_data(
         ) from error
 
 
-def _ensure_admin(authorization: str | None) -> None:
-    account = AuthService().current_account(authorization)
+def _ensure_admin(authorization: str | None, db: Session) -> None:
+    account = AuthService(db).current_account(authorization)
     if account.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

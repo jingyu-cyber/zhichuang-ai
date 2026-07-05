@@ -22,6 +22,10 @@ class DemoSessionRequest(BaseModel):
     user_id: str
 
 
+class LocalSessionRequest(BaseModel):
+    user_id: str
+
+
 class DemoSessionResponse(BaseModel):
     token: str
     account: DemoAccount

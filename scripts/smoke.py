@@ -387,6 +387,15 @@ def main() -> int:
                 "teacher_name": "Smoke 教师",
                 "teacher_no": "TSMOKE001",
                 "description": "Smoke 导入课程，用于验证教务基础数据写入。",
+            },
+            {
+                "course_id": "course_web_2026",
+                "name": "Web 应用开发",
+                "term": "2025-2026 春季学期",
+                "teacher_id": "teacher_smoke_001",
+                "teacher_name": "Smoke 教师",
+                "teacher_no": "TSMOKE001",
+                "description": "围绕 Flask、前端页面、数据库访问和项目文档完成 Web 项目实践。",
             }
         ],
         "classes": [
@@ -425,6 +434,23 @@ def main() -> int:
     assert_true(
         any(student["student_id"] == "student_smoke_001" for student in imported_students["students"]),
         "imported student not found",
+    )
+    local_teacher_session = client.post_json(
+        "/auth/local-session",
+        {"user_id": "teacher_smoke_001"},
+    )
+    local_teacher_header = {"Authorization": f"Bearer {local_teacher_session['token']}"}
+    local_teacher_dashboard = client.get_json(
+        "/assignments/assignment_flask_mvp/dashboard",
+        headers=local_teacher_header,
+    )
+    assert_true(
+        local_teacher_session["token"] == "local-token-teacher_smoke_001",
+        "local teacher session token missing",
+    )
+    assert_true(
+        local_teacher_dashboard["access_scope"] == "teacher:authorized_course_class",
+        "local teacher cannot access dashboard",
     )
 
     web = client.get_text(web_base)

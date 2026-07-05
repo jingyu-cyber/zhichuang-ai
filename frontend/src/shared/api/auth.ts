@@ -28,3 +28,10 @@ export function createDemoSession(userId: string): Promise<DemoSessionResponse> 
     body: JSON.stringify({ user_id: userId }),
   });
 }
+
+export function createLocalSession(userId: string): Promise<DemoSessionResponse> {
+  return requestJson<DemoSessionResponse>("/auth/local-session", {
+    method: "POST",
+    body: JSON.stringify({ user_id: userId }),
+  });
+}

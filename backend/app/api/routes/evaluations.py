@@ -36,7 +36,7 @@ def create_evaluation_case(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> EvaluationUpsertResponse:
-    _ensure_admin(authorization)
+    _ensure_admin(authorization, db)
     return EvaluationService(db).create_case(payload)
 
 
@@ -53,12 +53,12 @@ def create_evaluation_record(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> EvaluationUpsertResponse:
-    _ensure_admin(authorization)
+    _ensure_admin(authorization, db)
     return EvaluationService(db).create_record(payload)
 
 
-def _ensure_admin(authorization: str | None) -> None:
-    account = AuthService().current_account(authorization)
+def _ensure_admin(authorization: str | None, db: Session) -> None:
+    account = AuthService(db).current_account(authorization)
     if account.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
+from app.db.base import Base
+from app.models.course import ClassGroup, Course, CourseMembership
+from app.models.user import User
 from app.schemas.auth import DemoAccount, DemoAccountsResponse, DemoSessionResponse
 
 
@@ -39,6 +44,11 @@ class AuthService:
         ),
     ]
 
+    def __init__(self, db: Session | None = None) -> None:
+        self.db = db
+        if self.db is not None:
+            Base.metadata.create_all(bind=self.db.get_bind())
+
     def list_demo_accounts(self) -> DemoAccountsResponse:
         return DemoAccountsResponse(accounts=self.accounts)
 
@@ -50,19 +60,36 @@ class AuthService:
             expires_in=60 * 60 * 8,
         )
 
+    def create_local_session(self, user_id: str) -> DemoSessionResponse:
+        account = self._local_account(user_id)
+        return DemoSessionResponse(
+            token=f"local-token-{account.user_id}",
+            account=account,
+            expires_in=60 * 60 * 8,
+        )
+
     def current_account(self, authorization: str | None) -> DemoAccount:
         if not authorization:
             return self._find_account("teacher_001")
 
         scheme, _, token = authorization.partition(" ")
-        if scheme.lower() != "bearer" or not token.startswith("demo-token-"):
+        if scheme.lower() != "bearer":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid demo token",
+                detail="Invalid auth token",
             )
 
-        user_id = token.removeprefix("demo-token-")
-        return self._find_account(user_id)
+        if token.startswith("demo-token-"):
+            user_id = token.removeprefix("demo-token-")
+            return self._find_account(user_id)
+        if token.startswith("local-token-"):
+            user_id = token.removeprefix("local-token-")
+            return self._local_account(user_id)
+
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid auth token",
+        )
 
     def _find_account(self, user_id: str) -> DemoAccount:
         for account in self.accounts:
@@ -72,3 +99,117 @@ class AuthService:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Demo account not found",
         )
+
+    def _local_account(self, user_id: str) -> DemoAccount:
+        if self.db is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Local account not found",
+            )
+        user = self.db.get(User, user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Local account not found",
+            )
+
+        authorized_courses = self._authorized_courses(user)
+        authorized_classes = self._authorized_classes(user)
+        return DemoAccount(
+            user_id=user.id,
+            name=user.name,
+            role=user.role,
+            title=self._local_title(user),
+            default_view=self._default_view(user.role),
+            authorized_courses=authorized_courses,
+            authorized_classes=authorized_classes,
+            modules=self._modules_for_role(user.role),
+        )
+
+    def _authorized_courses(self, user: User) -> list[str]:
+        if self.db is None:
+            return []
+        if user.role == "admin":
+            return ["全部课程"]
+        memberships = self.db.scalars(
+            select(CourseMembership)
+            .where(CourseMembership.user_id == user.id)
+            .order_by(CourseMembership.course_id.asc())
+        ).all()
+        values: list[str] = []
+        for membership in memberships:
+            course = self.db.get(Course, membership.course_id)
+            if course is None:
+                continue
+            values.extend([course.id, course.name])
+        return self._dedupe(values)
+
+    def _authorized_classes(self, user: User) -> list[str]:
+        if self.db is None:
+            return []
+        if user.role == "admin":
+            return ["全部班级"]
+        course_ids = [
+            membership.course_id
+            for membership in self.db.scalars(
+                select(CourseMembership)
+                .where(CourseMembership.user_id == user.id)
+                .where(CourseMembership.role_in_course == "teacher")
+            ).all()
+        ]
+        memberships = self.db.scalars(
+            select(CourseMembership)
+            .where(CourseMembership.user_id == user.id)
+            .where(CourseMembership.class_id.is_not(None))
+            .order_by(CourseMembership.class_id.asc())
+        ).all()
+        if user.role == "teacher" and course_ids:
+            memberships.extend(
+                self.db.scalars(
+                    select(CourseMembership)
+                    .where(CourseMembership.course_id.in_(course_ids))
+                    .where(CourseMembership.role_in_course == "class")
+                    .where(CourseMembership.class_id.is_not(None))
+                    .order_by(CourseMembership.class_id.asc())
+                ).all()
+            )
+        values: list[str] = []
+        for membership in memberships:
+            if membership.class_id is None:
+                continue
+            class_record = self.db.get(ClassGroup, membership.class_id)
+            if class_record is None:
+                continue
+            values.extend([class_record.id, class_record.name])
+        return self._dedupe(values)
+
+    def _local_title(self, user: User) -> str:
+        if user.role == "admin":
+            return "学校管理员账号"
+        if user.role == "teacher":
+            return f"教师账号{f' · {user.teacher_no}' if user.teacher_no else ''}"
+        return f"学生账号{f' · {user.student_no}' if user.student_no else ''}"
+
+    def _default_view(self, role: str) -> str:
+        if role == "admin":
+            return "academic"
+        if role == "teacher":
+            return "teacher"
+        return "growth"
+
+    def _modules_for_role(self, role: str) -> list[str]:
+        if role == "admin":
+            return ["课程班级", "知识库管理", "教师看板", "成长路径", "知识库问答"]
+        if role == "teacher":
+            return ["教师看板", "学生报告", "课程班级", "知识库问答"]
+        return ["学生报告", "成长路径", "知识库问答"]
+
+    def _dedupe(self, values: list[str]) -> list[str]:
+        seen: set[str] = set()
+        result: list[str] = []
+        for value in values:
+            if value in seen:
+                continue
+            seen.add(value)
+            result.append(value)
+        return result

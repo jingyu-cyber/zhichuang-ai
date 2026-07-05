@@ -2,7 +2,7 @@
 
 接口前缀：`/api`
 
-鉴权约定：公网 Demo 使用 `POST /auth/demo-session` 返回的演示 token。需要角色或授权范围控制的接口通过 `Authorization: Bearer <token>` 传入账号身份；未传 token 时，作业分析相关接口默认使用教师演示账号，便于本地快速演示。越权访问返回 `403`。
+鉴权约定：公网 Demo 使用 `POST /auth/demo-session` 返回的演示 token；本地学校数据可使用 `POST /auth/local-session` 基于 SQLite 用户生成会话 token。需要角色或授权范围控制的接口通过 `Authorization: Bearer <token>` 传入账号身份；未传 token 时，作业分析相关接口默认使用教师演示账号，便于本地快速演示。越权访问返回 `403`。
 
 ## 1. 健康检查
 
@@ -36,6 +36,20 @@
 
 响应包含演示 token、账号角色、授权课程、授权班级和可访问模块。
 示例 token 格式为 `demo-token-teacher_001`，仅用于 Demo 和本地开发。
+
+#### `POST /auth/local-session`
+
+基于已导入或已存在的 SQLite 用户生成本地学校账号会话。该接口用于首版学校试运行和演示导入数据验证；后续可替换为统一身份认证入口。
+
+请求：
+
+```json
+{
+  "user_id": "teacher_school_001"
+}
+```
+
+响应格式同 `POST /auth/demo-session`，token 示例为 `local-token-teacher_school_001`。教师账号的授权课程和班级会从 `course_memberships`、`courses`、`classes` 推导；学生账号会从自己的课程/班级成员关系推导；管理员账号保留管理模块。
 
 ### 2.2 智能体对话
 

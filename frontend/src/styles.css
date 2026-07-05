@@ -1021,6 +1021,30 @@ h1 {
   border-left-color: var(--green) !important;
 }
 
+.academic-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.academic-import-actions button {
+  min-height: 38px;
+  padding: 0 12px;
+  color: var(--blue);
+  background: rgba(23, 78, 166, 0.08);
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.academic-import-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .task-hero h2 {
   margin: 4px 0 8px;
   font-size: 26px;

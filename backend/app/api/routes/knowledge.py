@@ -28,7 +28,7 @@ def create_document(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> KnowledgeDocumentUpsertResponse:
-    _ensure_admin(authorization)
+    _ensure_admin(authorization, db)
     return KnowledgeService(db).create_document(payload)
 
 
@@ -39,7 +39,7 @@ def update_document(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> KnowledgeDocumentUpsertResponse:
-    _ensure_admin(authorization)
+    _ensure_admin(authorization, db)
     try:
         return KnowledgeService(db).update_document(document_id, payload)
     except ValueError as error:
@@ -53,7 +53,7 @@ def update_document_status(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> KnowledgeDocumentUpsertResponse:
-    _ensure_admin(authorization)
+    _ensure_admin(authorization, db)
     try:
         return KnowledgeService(db).update_document_status(document_id, payload)
     except ValueError as error:
@@ -80,8 +80,8 @@ def search_knowledge(
     return KnowledgeService(db).search(q, limit)
 
 
-def _ensure_admin(authorization: str | None) -> None:
-    account = AuthService().current_account(authorization)
+def _ensure_admin(authorization: str | None, db: Session) -> None:
+    account = AuthService(db).current_account(authorization)
     if account.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

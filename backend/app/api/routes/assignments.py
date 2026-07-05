@@ -20,7 +20,7 @@ def analyze_assignment(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> AssignmentAnalysisResponse:
-    account = AuthService().current_account(authorization)
+    account = AuthService(db).current_account(authorization)
     return AssignmentService(db).analyze(payload, account=account)
 
 
@@ -53,7 +53,7 @@ async def upload_assignment_archive(
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 
-    account = AuthService().current_account(authorization)
+    account = AuthService(db).current_account(authorization)
     payload = AssignmentAnalysisRequest(
         assignment_title=assignment_title,
         course_id=course_id,
@@ -74,7 +74,7 @@ def get_assignment_report(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> AssignmentAnalysisResponse:
-    account = AuthService().current_account(authorization)
+    account = AuthService(db).current_account(authorization)
     return AssignmentService(db).get_report(assignment_id, student_id, account=account)
 
 
@@ -84,5 +84,5 @@ def get_assignment_dashboard(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> AssignmentDashboardResponse:
-    account = AuthService().current_account(authorization)
+    account = AuthService(db).current_account(authorization)
     return AssignmentService(db).get_dashboard(assignment_id, account=account)
