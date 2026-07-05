@@ -94,6 +94,32 @@ def test_assignment_dashboard_returns_teacher_view() -> None:
         assert suggestion["expected_improvement"]
 
 
+def test_assignment_dashboard_export_returns_markdown() -> None:
+    client = TestClient(app)
+    teacher_header = {"Authorization": "Bearer demo-token-teacher_001"}
+    student_header = {"Authorization": "Bearer demo-token-student_001"}
+
+    response = client.get(
+        "/api/assignments/assignment_flask_mvp/export",
+        headers=teacher_header,
+    )
+    forbidden_response = client.get(
+        "/api/assignments/assignment_flask_mvp/export",
+        headers=student_header,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["assignment_id"] == "assignment_flask_mvp"
+    assert payload["filename"].endswith(".md")
+    assert payload["content_type"].startswith("text/markdown")
+    assert "# Flask Web 项目实践 学情诊断报告" in payload["markdown"]
+    assert "## 教学改进建议" in payload["markdown"]
+    assert "## 学生报告摘要" in payload["markdown"]
+    assert "AI" in payload["markdown"] or "系统" in payload["markdown"]
+    assert forbidden_response.status_code == 403
+
+
 def test_teacher_can_create_assignment_and_upload_report_to_it() -> None:
     client = TestClient(app)
     teacher_header = {"Authorization": "Bearer demo-token-teacher_001"}

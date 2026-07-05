@@ -7,6 +7,7 @@ from app.schemas.assignments import (
     AssignmentDashboardResponse,
     AssignmentAnalysisRequest,
     AssignmentAnalysisResponse,
+    AssignmentExportResponse,
     AssignmentItem,
     AssignmentListResponse,
 )
@@ -92,6 +93,16 @@ async def upload_assignment_archive(
         files=files,
     )
     return AssignmentService(db).analyze(payload, account=account)
+
+
+@router.get("/{assignment_id}/export", response_model=AssignmentExportResponse)
+def export_assignment_dashboard(
+    assignment_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> AssignmentExportResponse:
+    account = AuthService(db).current_account(authorization)
+    return AssignmentService(db).export_dashboard(assignment_id, account=account)
 
 
 @router.get("/{assignment_id}/reports/{student_id}", response_model=AssignmentAnalysisResponse)

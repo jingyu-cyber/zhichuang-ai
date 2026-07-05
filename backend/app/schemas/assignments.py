@@ -47,6 +47,15 @@ class AssignmentListResponse(BaseModel):
     assignments: list[AssignmentItem]
 
 
+class AssignmentExportResponse(BaseModel):
+    assignment_id: str
+    filename: str
+    content_type: str = "text/markdown; charset=utf-8"
+    markdown: str
+    generated_at: str
+    access_scope: str = "demo"
+
+
 class AssignmentScore(BaseModel):
     dimension: str
     score: int

@@ -6,6 +6,7 @@ import {
   analyzeRepositoryAssignment,
   analyzeDemoAssignment,
   createAssignment,
+  exportAssignmentDashboard,
   fetchAssignmentDashboard,
   fetchAssignmentDashboardById,
   fetchAssignmentReport,
@@ -103,6 +104,8 @@ export function Dashboard() {
   const [dashboard, setDashboard] = useState<AssignmentDashboard | null>(null);
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
   const [assignmentCreateLoading, setAssignmentCreateLoading] = useState(false);
+  const [assignmentExportLoading, setAssignmentExportLoading] = useState(false);
+  const [assignmentExportResult, setAssignmentExportResult] = useState<string | null>(null);
   const [studentReportLoading, setStudentReportLoading] = useState(false);
   const [archiveUploadLoading, setArchiveUploadLoading] = useState(false);
   const [archiveUploadResult, setArchiveUploadResult] = useState<string | null>(null);
@@ -642,6 +645,28 @@ export function Dashboard() {
     }
   }
 
+  async function handleExportAssignment() {
+    if (!dashboard) return;
+    try {
+      setAssignmentExportLoading(true);
+      setAssignmentExportResult(null);
+      setError(null);
+      const exported = await exportAssignmentDashboard(dashboard.assignment_id, currentToken);
+      const blob = new Blob([exported.markdown], { type: exported.content_type });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = exported.filename;
+      link.click();
+      URL.revokeObjectURL(url);
+      setAssignmentExportResult(`${exported.filename} 已生成`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "作业报告导出失败");
+    } finally {
+      setAssignmentExportLoading(false);
+    }
+  }
+
   async function handleSelectStudentReport(assignmentId: string) {
     if (!currentAccount) return;
     try {
@@ -993,11 +1018,14 @@ export function Dashboard() {
             dashboard={dashboard}
             assignments={assignments}
             assignmentCreateLoading={assignmentCreateLoading}
+            exportLoading={assignmentExportLoading}
+            exportResult={assignmentExportResult}
             candidateScreening={candidateScreening}
             uploadLoading={archiveUploadLoading}
             uploadResult={archiveUploadResult}
             onCreateAssignment={handleCreateAssignment}
             onSelectAssignment={handleSelectAssignment}
+            onExportAssignment={handleExportAssignment}
             onArchiveUpload={handleArchiveUpload}
           />
         )}
@@ -1081,21 +1109,27 @@ function TeacherDashboard({
   dashboard,
   assignments,
   assignmentCreateLoading,
+  exportLoading,
+  exportResult,
   candidateScreening,
   uploadLoading,
   uploadResult,
   onCreateAssignment,
   onSelectAssignment,
+  onExportAssignment,
   onArchiveUpload,
 }: {
   dashboard: AssignmentDashboard;
   assignments: AssignmentItem[];
   assignmentCreateLoading: boolean;
+  exportLoading: boolean;
+  exportResult: string | null;
   candidateScreening: TeacherCandidateScreenResponse | null;
   uploadLoading: boolean;
   uploadResult: string | null;
   onCreateAssignment: () => void;
   onSelectAssignment: (assignmentId: string) => void;
+  onExportAssignment: () => void;
   onArchiveUpload: (payload: AssignmentSubmissionPayload) => void;
 }) {
   return (
@@ -1111,6 +1145,16 @@ function TeacherDashboard({
       </section>
       <AccessScopeBadge value={dashboard.access_scope} />
       <AiGeneratedNotice text="本页班级诊断和讲评建议为 AI 生成，仅供参考；需结合课程要求和作业提交物核验。" />
+      <section className="panel export-panel">
+        <div>
+          <span className="section-label">诊断报告</span>
+          <h2>导出班级作业学情报告</h2>
+        </div>
+        <button onClick={onExportAssignment} disabled={exportLoading}>
+          {exportLoading ? "导出中" : "导出 Markdown"}
+        </button>
+        {exportResult && <strong>{exportResult}</strong>}
+      </section>
       <AssignmentManager
         assignments={assignments}
         currentAssignmentId={dashboard.assignment_id}

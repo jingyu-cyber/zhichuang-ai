@@ -103,6 +103,15 @@ export type AssignmentListResponse = {
   assignments: AssignmentItem[];
 };
 
+export type AssignmentExportResponse = {
+  assignment_id: string;
+  filename: string;
+  content_type: string;
+  markdown: string;
+  generated_at: string;
+  access_scope: string;
+};
+
 export type AssignmentDashboardMetric = {
   label: string;
   value: string;

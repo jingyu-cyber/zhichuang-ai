@@ -173,6 +173,23 @@ def main() -> int:
     assert_true(dashboard["class_profile"]["heatmap"], "class ability heatmap missing")
     assert_true(dashboard["class_profile"]["data_coverage"], "class data coverage missing")
     assert_true(dashboard["anomalies"], "assignment anomalies missing")
+    exported_dashboard = client.get_json(
+        "/assignments/assignment_flask_mvp/export",
+        headers=teacher_header,
+    )
+    assert_true(
+        exported_dashboard["filename"].endswith(".md"),
+        "assignment dashboard export filename invalid",
+    )
+    assert_true(
+        "教学改进建议" in exported_dashboard["markdown"],
+        "assignment dashboard export missing teaching suggestions",
+    )
+    client.expect_forbidden(
+        "GET",
+        "/assignments/assignment_flask_mvp/export",
+        headers=student_header,
+    )
 
     created_assignment = client.post_json(
         "/assignments",

@@ -1,5 +1,6 @@
 import type {
   AssignmentDashboard,
+  AssignmentExportResponse,
   AssignmentItem,
   AssignmentListResponse,
   AssignmentReport,
@@ -85,6 +86,15 @@ export function fetchAssignmentReport(
   token?: string,
 ): Promise<AssignmentReport> {
   return requestJson<AssignmentReport>(`/assignments/${assignmentId}/reports/${studentId}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export function exportAssignmentDashboard(
+  assignmentId: string,
+  token?: string,
+): Promise<AssignmentExportResponse> {
+  return requestJson<AssignmentExportResponse>(`/assignments/${assignmentId}/export`, {
     headers: authHeaders(token),
   });
 }

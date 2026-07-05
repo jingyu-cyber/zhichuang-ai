@@ -336,6 +336,25 @@ Authorization: Bearer demo-token-admin_001
 }
 ```
 
+### `GET /assignments/{assignment_id}/export`
+
+教师导出某次作业的班级学情诊断报告。接口复用看板权限，学生账号访问返回 `403`。
+
+响应为结构化 JSON，前端会将 `markdown` 字段保存为 `.md` 文件：
+
+```json
+{
+  "assignment_id": "assignment_flask_mvp",
+  "filename": "assignment_flask_mvp_learning_report.md",
+  "content_type": "text/markdown; charset=utf-8",
+  "generated_at": "2026-07-04T21:00:00+08:00",
+  "access_scope": "teacher:authorized_course_class",
+  "markdown": "# Flask Web 项目实践 学情诊断报告\n..."
+}
+```
+
+导出内容包含核心指标、能力维度均分、共性问题、异常作业提示、教学改进建议、学生报告摘要、班级画像摘要和数据覆盖率，并保留 AI 生成标识与核验建议。
+
 ## 4. 课程与班级
 
 ### `GET /courses`

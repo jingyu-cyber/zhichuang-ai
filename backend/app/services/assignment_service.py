@@ -23,6 +23,7 @@ from app.schemas.assignments import (
     AssignmentDashboardResponse,
     AssignmentAnalysisRequest,
     AssignmentAnalysisResponse,
+    AssignmentExportResponse,
     AssignmentFinding,
     AssignmentItem,
     AssignmentListResponse,
@@ -316,6 +317,99 @@ class AssignmentService:
             ],
             access_scope=self._access_scope(account),
         )
+
+    def export_dashboard(
+        self,
+        assignment_id: str,
+        account: DemoAccount | None = None,
+    ) -> AssignmentExportResponse:
+        dashboard = self.get_dashboard(assignment_id, account=account)
+        markdown = self._dashboard_markdown(dashboard)
+        return AssignmentExportResponse(
+            assignment_id=dashboard.assignment_id,
+            filename=f"{dashboard.assignment_id}_learning_report.md",
+            markdown=markdown,
+            generated_at=dashboard.generated_at,
+            access_scope=dashboard.access_scope,
+        )
+
+    def _dashboard_markdown(self, dashboard: AssignmentDashboardResponse) -> str:
+        lines = [
+            f"# {dashboard.assignment_title} 学情诊断报告",
+            "",
+            f"- 课程：{dashboard.course_name}",
+            f"- 班级：{dashboard.class_name}",
+            f"- 生成时间：{dashboard.generated_at}",
+            f"- 已分析提交：{dashboard.submitted_count}/{dashboard.total_students}",
+            f"- 班级平均分：{dashboard.average_score}",
+            "",
+            "> 本报告由系统基于作业提交物、代码结构证据和课程 Rubric 自动生成，仅供教学诊断和学习改进参考。",
+            "",
+            "## 核心指标",
+            "",
+            "| 指标 | 数值 | 趋势/说明 |",
+            "| --- | --- | --- |",
+        ]
+        lines.extend(
+            f"| {metric.label} | {metric.value} | {metric.trend or '-'} |"
+            for metric in dashboard.metrics
+        )
+        lines.extend(["", "## 能力维度均分", "", "| 维度 | 均分 | 证据摘要 |", "| --- | --- | --- |"])
+        lines.extend(
+            f"| {score.dimension} | {score.score} | {'；'.join(score.evidence) or score.summary} |"
+            for score in dashboard.dimension_averages
+        )
+        lines.extend(["", "## 共性问题", ""])
+        lines.extend(
+            f"- **{finding.title}**：{finding.detail} 建议：{finding.suggestion}"
+            for finding in dashboard.common_findings
+        )
+        lines.extend(["", "## 异常作业提示", ""])
+        lines.extend(
+            (
+                f"- **{anomaly.title}（{anomaly.severity}）**：{anomaly.evidence} "
+                f"涉及：{', '.join(anomaly.affected_students) if anomaly.affected_students else '无'}。"
+                f"建议：{anomaly.suggested_action}"
+            )
+            for anomaly in dashboard.anomalies
+        )
+        lines.extend(["", "## 教学改进建议", ""])
+        lines.extend(
+            (
+                f"- **{suggestion.knowledge_point}**：{suggestion.class_evidence} "
+                f"课堂活动：{suggestion.suggested_activity} "
+                f"课后任务：{suggestion.practice_task} "
+                f"预期改进：{suggestion.expected_improvement}"
+            )
+            for suggestion in dashboard.teaching_suggestions
+        )
+        lines.extend(["", "## 学生报告摘要", "", "| 学生 | 综合分 | 状态 | 摘要 |", "| --- | --- | --- | --- |"])
+        lines.extend(
+            (
+                f"| {report.student_name}（{report.student_id}） | "
+                f"{report.overall_score} | {report.status} | {report.summary} |"
+            )
+            for report in dashboard.reports
+        )
+        lines.extend(["", "## 班级画像摘要", "", dashboard.class_profile.summary, ""])
+        if dashboard.class_profile.common_weaknesses:
+            lines.append("### 共性短板")
+            lines.extend(f"- {weakness}" for weakness in dashboard.class_profile.common_weaknesses)
+            lines.append("")
+        lines.extend(
+            [
+                "### 数据覆盖",
+                "",
+                "| 项目 | 覆盖 | 比例 |",
+                "| --- | --- | --- |",
+            ]
+        )
+        lines.extend(
+            f"| {metric.label} | {metric.covered}/{metric.total} | {round(metric.ratio * 100)}% |"
+            for metric in dashboard.class_profile.data_coverage
+        )
+        lines.append("")
+        return "\n".join(lines)
 
     def _build_anomalies(
         self,
