@@ -82,7 +82,8 @@ class AssignmentService:
         account = account or self._demo_teacher_account()
         items = (
             [self._demo_assignment_item(account)]
-            if self._can_view_assignment(account, self.course["id"], self.class_group["id"])
+            if account.role == "student"
+            or self._can_view_assignment(account, self.course["id"], self.class_group["id"])
             else []
         )
         if self.db is not None:
@@ -94,6 +95,12 @@ class AssignmentService:
             ).all()
             for record in records:
                 if record.id == self.assignment["id"]:
+                    continue
+                if account.role == "student":
+                    if not self._has_student_report(record.id, account.user_id):
+                        continue
+                    class_id = record.class_id or self._class_id_for_assignment(record.id)
+                    items.append(self._assignment_item_from_record(record, class_id, account))
                     continue
                 class_id = record.class_id or self._class_id_for_assignment(record.id)
                 if not self._can_view_assignment(account, record.course_id, class_id):
@@ -1414,6 +1421,16 @@ class AssignmentService:
         return account.role == "admin" or (
             account.role == "teacher" and self._has_course_class_access(account, course_id, class_id)
         )
+
+    def _has_student_report(self, assignment_id: str, student_id: str) -> bool:
+        if self.db is None:
+            return False
+        report = self.db.scalars(
+            select(AssignmentReportRecord)
+            .where(AssignmentReportRecord.assignment_id == assignment_id)
+            .where(AssignmentReportRecord.student_id == student_id)
+        ).first()
+        return report is not None
 
     def _access_scope(self, account: DemoAccount) -> str:
         if account.role == "admin":

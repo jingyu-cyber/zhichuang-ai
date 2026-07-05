@@ -78,6 +78,16 @@ export function fetchAssignmentDashboardById(
   });
 }
 
+export function fetchAssignmentReport(
+  assignmentId: string,
+  studentId: string,
+  token?: string,
+): Promise<AssignmentReport> {
+  return requestJson<AssignmentReport>(`/assignments/${assignmentId}/reports/${studentId}`, {
+    headers: authHeaders(token),
+  });
+}
+
 export function createAssignment(token?: string): Promise<AssignmentItem> {
   return requestJson<AssignmentItem>("/assignments", {
     method: "POST",

@@ -366,6 +366,46 @@ def test_student_cannot_access_assignment_dashboard() -> None:
     assert response.status_code == 403
 
 
+def test_student_assignment_list_includes_accessible_reports_only() -> None:
+    client = TestClient(app)
+    teacher_header = {"Authorization": "Bearer demo-token-teacher_001"}
+    student_header = {"Authorization": "Bearer demo-token-student_001"}
+    visible_assignment_id = f"assignment_student_visible_{uuid4().hex[:8]}"
+    hidden_assignment_id = f"assignment_student_hidden_{uuid4().hex[:8]}"
+    client.post(
+        "/api/assignments/analyze",
+        json={
+            "assignment_id": visible_assignment_id,
+            "assignment_title": "学生可见作业",
+            "course_id": "course_web_2026",
+            "class_id": "class_cs_2024_01",
+            "student_id": "student_001",
+            "files": [{"path": "app.py", "content": "from flask import Flask\n"}],
+        },
+        headers=teacher_header,
+    )
+    client.post(
+        "/api/assignments/analyze",
+        json={
+            "assignment_id": hidden_assignment_id,
+            "assignment_title": "其他学生作业",
+            "course_id": "course_web_2026",
+            "class_id": "class_cs_2024_01",
+            "student_id": "student_002",
+            "files": [{"path": "app.py", "content": "from flask import Flask\n"}],
+        },
+        headers=teacher_header,
+    )
+
+    response = client.get("/api/assignments", headers=student_header)
+    assignment_ids = {item["assignment_id"] for item in response.json()["assignments"]}
+
+    assert response.status_code == 200
+    assert "assignment_flask_mvp" in assignment_ids
+    assert visible_assignment_id in assignment_ids
+    assert hidden_assignment_id not in assignment_ids
+
+
 def test_assignment_report_persists_in_sqlite_session(tmp_path) -> None:
     engine = create_engine(
         f"sqlite:///{tmp_path / 'assignments.db'}",

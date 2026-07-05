@@ -641,6 +641,11 @@ h1 {
   background: rgba(23, 78, 166, 0.06);
 }
 
+.assignment-list button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .assignment-list strong {
   color: var(--text);
 }

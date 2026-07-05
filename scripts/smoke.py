@@ -206,7 +206,12 @@ def main() -> int:
         "/assignments/assignment_flask_mvp/reports/student_001",
         headers=student_header,
     )
+    student_assignments = client.get_json("/assignments", headers=student_header)["assignments"]
     assert_true(report["student_id"] == "student_001", "student report access failed")
+    assert_true(
+        any(item["assignment_id"] == "assignment_flask_mvp" for item in student_assignments),
+        "student assignment list missing own report",
+    )
     assert_true(report["code_structure"]["file_count"] >= 1, "code structure summary missing")
     assert_true(report["evidence_snippets"], "code evidence snippets missing")
     assert_true(

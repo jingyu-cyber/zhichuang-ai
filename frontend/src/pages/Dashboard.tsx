@@ -7,6 +7,7 @@ import {
   createAssignment,
   fetchAssignmentDashboard,
   fetchAssignmentDashboardById,
+  fetchAssignmentReport,
   fetchAssignments,
   uploadAssignmentArchive,
 } from "../shared/api/assignments";
@@ -80,6 +81,7 @@ export function Dashboard() {
   const [dashboard, setDashboard] = useState<AssignmentDashboard | null>(null);
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
   const [assignmentCreateLoading, setAssignmentCreateLoading] = useState(false);
+  const [studentReportLoading, setStudentReportLoading] = useState(false);
   const [archiveUploadLoading, setArchiveUploadLoading] = useState(false);
   const [archiveUploadResult, setArchiveUploadResult] = useState<string | null>(null);
   const [profile, setProfile] = useState<GrowthProfile | null>(null);
@@ -288,15 +290,17 @@ export function Dashboard() {
       const session = await createDemoSession(userId);
       setCurrentAccount(session.account);
       setCurrentToken(session.token);
-      const nextReport = await analyzeDemoAssignment(session.token);
+      const [nextReport, nextAssignments] = await Promise.all([
+        analyzeDemoAssignment(session.token),
+        fetchAssignments(session.token),
+      ]);
       setReport(nextReport);
+      setAssignments(nextAssignments.assignments);
       if (session.account.role === "teacher" || session.account.role === "admin") {
         const nextDashboard = await fetchAssignmentDashboard(session.token);
         const nextCandidateScreening = await screenTeacherCandidates(session.token);
-        const nextAssignments = await fetchAssignments(session.token);
         setDashboard(nextDashboard);
         setCandidateScreening(nextCandidateScreening);
-        setAssignments(nextAssignments.assignments);
       } else {
         setCandidateScreening(null);
       }
@@ -316,15 +320,17 @@ export function Dashboard() {
       const session = await createLocalSession(userId);
       setCurrentAccount(session.account);
       setCurrentToken(session.token);
-      const nextReport = await analyzeDemoAssignment(session.token);
+      const [nextReport, nextAssignments] = await Promise.all([
+        analyzeDemoAssignment(session.token),
+        fetchAssignments(session.token),
+      ]);
       setReport(nextReport);
+      setAssignments(nextAssignments.assignments);
       if (session.account.role === "teacher" || session.account.role === "admin") {
         const nextDashboard = await fetchAssignmentDashboard(session.token);
         const nextCandidateScreening = await screenTeacherCandidates(session.token);
-        const nextAssignments = await fetchAssignments(session.token);
         setDashboard(nextDashboard);
         setCandidateScreening(nextCandidateScreening);
-        setAssignments(nextAssignments.assignments);
       } else {
         setCandidateScreening(null);
       }
@@ -550,6 +556,25 @@ export function Dashboard() {
       setMode("teacher");
     } catch (err) {
       setError(err instanceof Error ? err.message : "作业看板切换失败");
+    }
+  }
+
+  async function handleSelectStudentReport(assignmentId: string) {
+    if (!currentAccount) return;
+    try {
+      setStudentReportLoading(true);
+      setError(null);
+      const nextReport = await fetchAssignmentReport(
+        assignmentId,
+        currentAccount.user_id,
+        currentToken,
+      );
+      setReport(nextReport);
+      setMode("student");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "学生作业报告切换失败");
+    } finally {
+      setStudentReportLoading(false);
     }
   }
 
@@ -895,7 +920,13 @@ export function Dashboard() {
         )}
 
         {!loading && !error && mode === "student" && report && (
-          <StudentReport report={report} averageScore={averageScore} />
+          <StudentReport
+            report={report}
+            assignments={assignments}
+            loading={studentReportLoading}
+            averageScore={averageScore}
+            onSelectAssignment={handleSelectStudentReport}
+          />
         )}
 
         {!loading && !error && mode === "knowledge" && (
@@ -1351,13 +1382,47 @@ function AssignmentArchiveUploader({
 
 function StudentReport({
   report,
+  assignments,
+  loading,
   averageScore,
+  onSelectAssignment,
 }: {
   report: AssignmentReport;
+  assignments: AssignmentItem[];
+  loading: boolean;
   averageScore: number;
+  onSelectAssignment: (assignmentId: string) => void;
 }) {
   return (
     <>
+      {assignments.length > 0 && (
+        <section className="panel student-assignment-switcher">
+          <div className="panel-header">
+            <div>
+              <span className="section-label">我的作业</span>
+              <h2>选择作业报告</h2>
+            </div>
+            <span className="muted">{loading ? "加载中" : `${assignments.length} 个可查看作业`}</span>
+          </div>
+          <div className="assignment-list">
+            {assignments.map((assignment) => (
+              <button
+                key={assignment.assignment_id}
+                className={assignment.assignment_id === report.assignment_id ? "active" : ""}
+                onClick={() => onSelectAssignment(assignment.assignment_id)}
+                disabled={loading}
+              >
+                <strong>{assignment.title}</strong>
+                <span>
+                  {assignment.course_name} · {assignment.class_name}
+                </span>
+                <small>{assignment.submitted_count} 份已分析</small>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="report-hero">
         <div>
           <span className="section-label">{report.course_name}</span>
