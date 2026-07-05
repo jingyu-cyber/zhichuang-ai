@@ -72,7 +72,6 @@ class TaskService:
         self.db = db
         if self.db is not None:
             Base.metadata.create_all(bind=self.db.get_bind())
-            self._ensure_seed_tasks()
 
     def list_tasks(self, student_id: str) -> TaskListResponse:
         tasks = self._tasks_for_student(student_id)
@@ -234,23 +233,18 @@ class TaskService:
         )
 
     def _tasks_for_student(self, student_id: str) -> list[LearningTask]:
+        seed_tasks = [task for task in self.seed_tasks if task.student_id == student_id]
         if self.db is None:
-            return [task for task in self.seed_tasks if task.student_id == student_id]
+            return seed_tasks
 
         records = self.db.scalars(
             select(LearningTaskRecord)
             .where(LearningTaskRecord.student_id == student_id)
             .order_by(LearningTaskRecord.created_at.asc(), LearningTaskRecord.id.asc())
         ).all()
-        return [self._task_from_record(record) for record in records]
-
-    def _ensure_seed_tasks(self) -> None:
-        if self.db is None:
-            return
-        for task in self.seed_tasks:
-            if self.db.get(LearningTaskRecord, task.task_id) is None:
-                self.db.add(self._record_from_task(task))
-        self.db.commit()
+        stored_tasks = [self._task_from_record(record) for record in records]
+        seed_ids = {task.task_id for task in seed_tasks}
+        return [*seed_tasks, *[task for task in stored_tasks if task.task_id not in seed_ids]]
 
     def _manual_task_id(self, payload: SaveTaskRequest) -> str:
         raw = f"{payload.student_id}:{payload.title}:{payload.due_date}".encode("utf-8")

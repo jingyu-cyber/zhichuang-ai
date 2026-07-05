@@ -385,7 +385,7 @@ class AssignmentService:
             )
             for suggestion in dashboard.teaching_suggestions
         )
-        lines.extend(["", "## 学生报告摘要", "", "| 学生 | 综合分 | 状态 | 摘要 |", "| --- | --- | --- | --- |"])
+        lines.extend(["", "## 作业报告摘要", "", "| 学生 | 综合分 | 状态 | 摘要 |", "| --- | --- | --- | --- |"])
         lines.extend(
             (
                 f"| {report.student_name}（{report.student_id}） | "
@@ -951,7 +951,7 @@ class AssignmentService:
         record.state_json = {
             "current_node": "generate_report",
             "completed_nodes": [step.node for step in report.analysis_trace],
-            "next_action": "报告已生成，可查看学生报告和班级看板",
+            "next_action": "报告已生成，可查看作业报告和班级看板",
             "scores": {score.dimension: score.score for score in report.scores},
         }
         record.result_ref = report.report_id
@@ -1593,11 +1593,11 @@ class AssignmentService:
             user_id="teacher_001",
             name="周老师",
             role="teacher",
-            title="教师试用账号",
+            title="教师账号",
             default_view="teacher",
             authorized_courses=[self.course["name"]],
             authorized_classes=[self.class_group["name"]],
-            modules=["教师看板", "学生报告", "知识库问答"],
+            modules=["教师看板", "作业报告", "知识库问答"],
         )
 
     def _demo_files(self) -> list[CodeFile]:

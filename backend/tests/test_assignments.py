@@ -158,7 +158,7 @@ def test_assignment_dashboard_export_returns_markdown() -> None:
     assert payload["content_type"].startswith("text/markdown")
     assert "# Flask Web 项目实践 学情诊断报告" in payload["markdown"]
     assert "## 教学改进建议" in payload["markdown"]
-    assert "## 学生报告摘要" in payload["markdown"]
+    assert "## 作业报告摘要" in payload["markdown"]
     assert "AI" in payload["markdown"] or "系统" in payload["markdown"]
     assert forbidden_response.status_code == 403
 

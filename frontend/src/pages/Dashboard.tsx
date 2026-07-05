@@ -4,7 +4,6 @@ import { askAgent } from "../shared/api/agent";
 import { fetchClasses, fetchCourses, fetchStudents, importAcademicData } from "../shared/api/academic";
 import {
   analyzeRepositoryAssignment,
-  analyzeDemoAssignment,
   createAssignment,
   exportAssignmentDashboard,
   fetchAssignmentDashboard,
@@ -20,11 +19,11 @@ import {
   fetchLocalAccounts,
 } from "../shared/api/auth";
 import {
-  addProfileEvidence,
   createTeamRequest,
   fetchCompetitionCatalog,
   fetchTeamPoolStatus,
   fetchGrowthProfile,
+  fetchLearningPlans,
   generateCompetitionPreparationPlan,
   generateLearningPlan,
   recommendCompetitions,
@@ -32,7 +31,6 @@ import {
   reviseLearningPlan,
   screenTeacherCandidates,
   updateTeamPoolStatus,
-  upsertBasicProfile,
 } from "../shared/api/growth";
 import {
   createEvaluationCase,
@@ -98,7 +96,7 @@ const demoStudentAccount: DemoAccount = {
   default_view: "growth",
   authorized_courses: ["Web 应用开发", "算法设计与分析"],
   authorized_classes: ["2024 级计算机科学与技术 1 班"],
-  modules: ["成长路径", "学生报告", "任务复盘", "知识库问答"],
+  modules: ["成长路径", "作业报告", "任务复盘", "知识库问答"],
 };
 
 function roleLabel(role: string) {
@@ -136,7 +134,7 @@ function workspaceTitle(account: DemoAccount | null) {
 
 function workspaceDescription(account: DemoAccount | null) {
   if (account?.role === "teacher") {
-    return "查看课程作业学情、学生报告、班级能力画像和教学改进建议。";
+    return "查看课程作业学情、作业报告、班级能力画像和教学改进建议。";
   }
   if (account?.role === "admin") {
     return "维护课程班级、知识库资料、评测记录和学校账号接入。";
@@ -155,6 +153,10 @@ function evidenceLabels(items: ProfileEvidence[]) {
     if (labels.length >= 3) break;
   }
   return labels;
+}
+
+function reportStudentIdForAccount(account: DemoAccount | null) {
+  return account?.role === "student" ? account.user_id : demoStudentId;
 }
 
 export function Dashboard() {
@@ -221,38 +223,25 @@ export function Dashboard() {
     const studentId = account.user_id;
     const [
       profileData,
-      profileEvidenceData,
-      planData,
+      plansData,
       competitionCatalogData,
-      competitionData,
-      competitionPreparationData,
-      teamData,
-      teamRequestData,
       teamStatusData,
       taskData,
     ] = await Promise.all([
-      upsertBasicProfile(studentId, token, {
-        studentName: account.name,
-        targetDirection: account.role === "student" ? "AI 应用开发 / 软件项目实践" : undefined,
-      }),
-      addProfileEvidence(studentId, token),
-      generateLearningPlan(studentId, token),
+      fetchGrowthProfile(studentId, token),
+      fetchLearningPlans(studentId, token),
       fetchCompetitionCatalog(),
-      recommendCompetitions(studentId, token),
-      generateCompetitionPreparationPlan(studentId, token),
-      recommendTeam(studentId, token),
-      createTeamRequest(studentId, token),
       fetchTeamPoolStatus(studentId, token),
       fetchStudentTasks(studentId, token),
     ]);
     setProfile(profileData);
-    setProfileEvidence(profileEvidenceData);
-    setPlan(planData);
+    setProfileEvidence(null);
+    setPlan(plansData.plans[0] ?? null);
     setCompetitionCatalog(competitionCatalogData);
-    setCompetitions(competitionData);
-    setCompetitionPreparation(competitionPreparationData);
-    setTeam(teamData);
-    setTeamRequest(teamRequestData);
+    setCompetitions(null);
+    setCompetitionPreparation(null);
+    setTeam(null);
+    setTeamRequest(null);
     setTeamStatus(teamStatusData);
     setTaskList(taskData);
   }
@@ -269,14 +258,8 @@ export function Dashboard() {
           dashboardData,
           assignmentsData,
           profileData,
-          profileEvidenceData,
-          planData,
+          plansData,
           competitionCatalogData,
-          competitionData,
-          competitionPreparationData,
-          teamData,
-          candidateScreeningData,
-          teamRequestData,
           teamStatusData,
           knowledgeData,
           searchData,
@@ -287,20 +270,16 @@ export function Dashboard() {
           classesData,
           studentsData,
         ] = await Promise.all([
-          analyzeDemoAssignment("demo-token-student_001"),
+          fetchAssignmentReport(
+            "assignment_flask_mvp",
+            demoStudentId,
+            "demo-token-student_001",
+          ),
           fetchAssignmentDashboard("demo-token-teacher_001"),
           fetchAssignments("demo-token-student_001"),
-          upsertBasicProfile(demoStudentId, "demo-token-student_001", {
-            studentName: demoStudentAccount.name,
-          }),
-          addProfileEvidence(demoStudentId, "demo-token-student_001"),
-          generateLearningPlan(demoStudentId, "demo-token-student_001"),
+          fetchGrowthProfile(demoStudentId, "demo-token-student_001"),
+          fetchLearningPlans(demoStudentId, "demo-token-student_001"),
           fetchCompetitionCatalog(),
-          recommendCompetitions(demoStudentId, "demo-token-student_001"),
-          generateCompetitionPreparationPlan(demoStudentId, "demo-token-student_001"),
-          recommendTeam(demoStudentId, "demo-token-student_001"),
-          screenTeacherCandidates(),
-          createTeamRequest(demoStudentId, "demo-token-student_001"),
           fetchTeamPoolStatus(demoStudentId, "demo-token-student_001"),
           fetchKnowledgeDocuments(),
           searchKnowledge("作业 Rubric"),
@@ -317,14 +296,14 @@ export function Dashboard() {
           setDashboard(dashboardData);
           setAssignments(assignmentsData.assignments);
           setProfile(profileData);
-          setProfileEvidence(profileEvidenceData);
-          setPlan(planData);
+          setProfileEvidence(null);
+          setPlan(plansData.plans[0] ?? null);
           setCompetitionCatalog(competitionCatalogData);
-          setCompetitions(competitionData);
-          setCompetitionPreparation(competitionPreparationData);
-          setTeam(teamData);
-          setCandidateScreening(candidateScreeningData);
-          setTeamRequest(teamRequestData);
+          setCompetitions(null);
+          setCompetitionPreparation(null);
+          setTeam(null);
+          setCandidateScreening(null);
+          setTeamRequest(null);
           setTeamStatus(teamStatusData);
           setKnowledgeDocs(knowledgeData);
           setKnowledgeSearch(searchData);
@@ -370,13 +349,7 @@ export function Dashboard() {
     !error &&
     mode === "growth" &&
     profile &&
-    profileEvidence &&
-    plan &&
     competitionCatalog &&
-    competitions &&
-    competitionPreparation &&
-    team &&
-    teamRequest &&
     teamStatus
       ? {
           profile,
@@ -390,7 +363,11 @@ export function Dashboard() {
           teamStatus,
           planRevisionLoading,
           teamStatusLoading,
+          planCreateLoading: planRevisionLoading,
           onRevisePlan: handleRevisePlan,
+          onGeneratePlan: handleGeneratePlan,
+          onGenerateCompetition: handleGenerateCompetition,
+          onGenerateTeam: handleGenerateTeam,
           onUpdateTeamStatus: handleUpdateTeamStatus,
         }
       : null;
@@ -421,8 +398,9 @@ export function Dashboard() {
       const session = await createDemoSession(userId);
       setCurrentAccount(session.account);
       setCurrentToken(session.token);
+      const reportStudentId = reportStudentIdForAccount(session.account);
       const [nextReport, nextAssignments] = await Promise.all([
-        analyzeDemoAssignment(session.token),
+        fetchAssignmentReport("assignment_flask_mvp", reportStudentId, session.token),
         fetchAssignments(session.token),
       ]);
       setReport(nextReport);
@@ -454,8 +432,9 @@ export function Dashboard() {
       const session = await createLocalSession(userId);
       setCurrentAccount(session.account);
       setCurrentToken(session.token);
+      const reportStudentId = reportStudentIdForAccount(session.account);
       const [nextReport, nextAssignments] = await Promise.all([
-        analyzeDemoAssignment(session.token),
+        fetchAssignmentReport("assignment_flask_mvp", reportStudentId, session.token),
         fetchAssignments(session.token),
       ]);
       setReport(nextReport);
@@ -591,7 +570,10 @@ export function Dashboard() {
   }
 
   async function handleRevisePlan(feedback: string) {
-    if (!plan) return;
+    if (!plan) {
+      await handleGeneratePlan();
+      return;
+    }
     try {
       setPlanRevisionLoading(true);
       setError(null);
@@ -607,6 +589,56 @@ export function Dashboard() {
       setError(err instanceof Error ? err.message : "学习计划更新失败");
     } finally {
       setPlanRevisionLoading(false);
+    }
+  }
+
+  async function handleGeneratePlan() {
+    try {
+      setPlanRevisionLoading(true);
+      setError(null);
+      const generatedPlan = await generateLearningPlan(activeStudentId, currentToken);
+      setPlan(generatedPlan);
+      setMode("growth");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "学习计划生成失败");
+    } finally {
+      setPlanRevisionLoading(false);
+    }
+  }
+
+  async function handleGenerateCompetition() {
+    try {
+      setPlanRevisionLoading(true);
+      setError(null);
+      const [competitionData, preparationData] = await Promise.all([
+        recommendCompetitions(activeStudentId, currentToken),
+        generateCompetitionPreparationPlan(activeStudentId, currentToken),
+      ]);
+      setCompetitions(competitionData);
+      setCompetitionPreparation(preparationData);
+      setMode("growth");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "竞赛建议生成失败");
+    } finally {
+      setPlanRevisionLoading(false);
+    }
+  }
+
+  async function handleGenerateTeam() {
+    try {
+      setTeamStatusLoading(true);
+      setError(null);
+      const [teamData, requestData] = await Promise.all([
+        recommendTeam(activeStudentId, currentToken),
+        createTeamRequest(activeStudentId, currentToken),
+      ]);
+      setTeam(teamData);
+      setTeamRequest(requestData);
+      setMode("growth");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "组队建议生成失败");
+    } finally {
+      setTeamStatusLoading(false);
     }
   }
 
@@ -954,7 +986,7 @@ export function Dashboard() {
               成长路径
             </button>
           )}
-          {canAccessModule("学生报告") && (
+          {canAccessModule("作业报告") && (
             <button
               className={mode === "student" ? "active" : ""}
               onClick={() => setMode("student")}
@@ -1114,8 +1146,10 @@ export function Dashboard() {
               : mode === "academic" || mode === "evaluations"
                 ? "刷新数据"
                 : mode === "teacher"
-                  ? "重新分析"
-                  : "刷新路径"}
+                  ? "刷新学情"
+                  : mode === "student"
+                    ? "刷新报告"
+                    : "刷新路径"}
           </button>
         </header>
 
@@ -1469,7 +1503,7 @@ function TeacherDashboard({
       <section className="panel">
         <div className="panel-header">
           <div>
-            <span className="section-label">学生报告</span>
+            <span className="section-label">作业报告</span>
             <h2>提交情况与个人分析</h2>
           </div>
           <span className="muted">
@@ -2126,21 +2160,29 @@ function GrowthPath({
   teamStatus,
   planRevisionLoading,
   teamStatusLoading,
+  planCreateLoading,
   onRevisePlan,
+  onGeneratePlan,
+  onGenerateCompetition,
+  onGenerateTeam,
   onUpdateTeamStatus,
 }: {
   profile: GrowthProfile;
-  profileEvidence: ProfileEvidence;
-  plan: LearningPlan;
+  profileEvidence: ProfileEvidence | null;
+  plan: LearningPlan | null;
   competitionCatalog: CompetitionCatalogResponse;
-  competitions: CompetitionRecommendResponse;
-  competitionPreparation: CompetitionPreparationPlan;
-  team: TeamRecommendResponse;
-  teamRequest: TeamRequestCard;
+  competitions: CompetitionRecommendResponse | null;
+  competitionPreparation: CompetitionPreparationPlan | null;
+  team: TeamRecommendResponse | null;
+  teamRequest: TeamRequestCard | null;
   teamStatus: TeamPoolStatus;
   planRevisionLoading: boolean;
   teamStatusLoading: boolean;
+  planCreateLoading: boolean;
   onRevisePlan: (feedback: string) => void;
+  onGeneratePlan: () => void;
+  onGenerateCompetition: () => void;
+  onGenerateTeam: () => void;
   onUpdateTeamStatus: (enabled: boolean) => void;
 }) {
   return (
@@ -2151,7 +2193,11 @@ function GrowthPath({
           <h2>
             {profile.student_name} · {profile.target_path}
           </h2>
-          <p>{plan.overview}</p>
+          <p>
+            {plan
+              ? plan.overview
+              : "先查看已有画像和证据，需要时再生成学习计划、竞赛建议或组队推荐。"}
+          </p>
         </div>
         <div className="growth-actions">
           {profile.next_actions.map((action) => (
@@ -2159,7 +2205,7 @@ function GrowthPath({
           ))}
         </div>
       </section>
-      <InlineNotice label="路径说明" text="系统会根据画像、作业证据和目标方向更新建议，你可以随时按时间和方向调整。" />
+      <InlineNotice label="路径说明" text="页面打开时优先读取已有画像和记录；计划、竞赛和组队建议会在你点击后生成并保存。" />
 
       <section className="panel-grid">
         <article className="panel wide">
@@ -2205,12 +2251,22 @@ function GrowthPath({
               </div>
             </>
           )}
-          <span className="section-label">最近补充</span>
-          <div className="profile-evidence-card">
-            <strong>{profileEvidence.dimension}</strong>
-            <p>{profileEvidence.evidence_text}</p>
-            <small>{profileEvidence.source_title}</small>
-          </div>
+          {profileEvidence ? (
+            <>
+              <span className="section-label">最近补充</span>
+              <div className="profile-evidence-card">
+                <strong>{profileEvidence.dimension}</strong>
+                <p>{profileEvidence.evidence_text}</p>
+                <small>{profileEvidence.source_title}</small>
+              </div>
+            </>
+          ) : (
+            <ActionEmptyState
+              label="补充证据"
+              title="暂无本次会话新增证据"
+              text="作业报告、训练记录和项目材料会持续补充到画像中。"
+            />
+          )}
           <span className="section-label">风险提醒</span>
           <div className="risk-list">
             {profile.risks.map((risk) => (
@@ -2226,78 +2282,100 @@ function GrowthPath({
         </article>
       </section>
 
-      <section className="panel competition-prep-panel">
-        <div className="panel-header">
-          <div>
-            <span className="section-label">竞赛准备计划</span>
-            <h2>{competitionPreparation.competition_name}</h2>
+      {competitionPreparation ? (
+        <section className="panel competition-prep-panel">
+          <div className="panel-header">
+            <div>
+              <span className="section-label">竞赛准备计划</span>
+              <h2>{competitionPreparation.competition_name}</h2>
+            </div>
+            <span className="muted">{competitionPreparation.registration_time}</span>
           </div>
-          <span className="muted">{competitionPreparation.registration_time}</span>
-        </div>
-        <p className="competition-prep-overview">{competitionPreparation.overview}</p>
-        <div className="competition-prep-grid">
-          {competitionPreparation.milestones.map((milestone) => (
-            <article className="competition-prep-card" key={`${milestone.week}-${milestone.focus}`}>
-              <strong>W{milestone.week}</strong>
-              <h3>{milestone.focus}</h3>
-              <ul>
-                {milestone.tasks.map((task) => (
-                  <li key={task}>{task}</li>
-                ))}
-              </ul>
-              <p>{milestone.deliverable}</p>
-              <small>{milestone.official_basis}</small>
-            </article>
-          ))}
-        </div>
-        <div className="competition-citation-strip">
-          {competitionPreparation.citations.map((citation) => (
-            <small key={citation}>{citation}</small>
-          ))}
-        </div>
-        <p className="plan-revision-note">{competitionPreparation.risk}</p>
-      </section>
+          <p className="competition-prep-overview">{competitionPreparation.overview}</p>
+          <div className="competition-prep-grid">
+            {competitionPreparation.milestones.map((milestone) => (
+              <article className="competition-prep-card" key={`${milestone.week}-${milestone.focus}`}>
+                <strong>W{milestone.week}</strong>
+                <h3>{milestone.focus}</h3>
+                <ul>
+                  {milestone.tasks.map((task) => (
+                    <li key={task}>{task}</li>
+                  ))}
+                </ul>
+                <p>{milestone.deliverable}</p>
+                <small>{milestone.official_basis}</small>
+              </article>
+            ))}
+          </div>
+          <div className="competition-citation-strip">
+            {competitionPreparation.citations.map((citation) => (
+              <small key={citation}>{citation}</small>
+            ))}
+          </div>
+          <p className="plan-revision-note">{competitionPreparation.risk}</p>
+        </section>
+      ) : (
+        <ActionEmptyState
+          label="竞赛准备"
+          title="按需生成竞赛建议"
+          text="系统会结合画像、目标方向和竞赛清单生成推荐与准备计划。"
+          action="生成竞赛建议"
+          loading={planRevisionLoading}
+          onAction={onGenerateCompetition}
+        />
+      )}
 
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <span className="section-label">学习计划</span>
-            <h2>{plan.goal}</h2>
+      {plan ? (
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <span className="section-label">学习计划</span>
+              <h2>{plan.goal}</h2>
+            </div>
+            <span className="muted">{plan.weeks} 周</span>
           </div>
-          <span className="muted">{plan.weeks} 周</span>
-        </div>
-        <div className="plan-control-strip">
-          {plan.basis.map((item) => (
-            <small key={item}>{item}</small>
-          ))}
-        </div>
-        {plan.revision_note && <p className="plan-revision-note">{plan.revision_note}</p>}
-        <div className="plan-feedback-actions">
-          {["时间不足，需要压缩每周任务", "基础薄弱，需要先补基础", "想转方向到 AI 应用开发"].map(
-            (feedback) => (
-              <button
-                key={feedback}
-                onClick={() => onRevisePlan(feedback)}
-                disabled={planRevisionLoading}
-              >
-                {feedback}
-              </button>
-            ),
-          )}
-        </div>
-        <div className="timeline">
-          {plan.tasks.map((task) => (
-            <article className="timeline-item" key={`${task.week}-${task.title}`}>
-              <strong>W{task.week}</strong>
-              <div>
-                <h3>{task.title}</h3>
-                <p>{task.outcome}</p>
-                <small>{task.resources.join(" / ")}</small>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
+          <div className="plan-control-strip">
+            {plan.basis.map((item) => (
+              <small key={item}>{item}</small>
+            ))}
+          </div>
+          {plan.revision_note && <p className="plan-revision-note">{plan.revision_note}</p>}
+          <div className="plan-feedback-actions">
+            {["时间不足，需要压缩每周任务", "基础薄弱，需要先补基础", "想转方向到 AI 应用开发"].map(
+              (feedback) => (
+                <button
+                  key={feedback}
+                  onClick={() => onRevisePlan(feedback)}
+                  disabled={planRevisionLoading}
+                >
+                  {feedback}
+                </button>
+              ),
+            )}
+          </div>
+          <div className="timeline">
+            {plan.tasks.map((task) => (
+              <article className="timeline-item" key={`${task.week}-${task.title}`}>
+                <strong>W{task.week}</strong>
+                <div>
+                  <h3>{task.title}</h3>
+                  <p>{task.outcome}</p>
+                  <small>{task.resources.join(" / ")}</small>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : (
+        <ActionEmptyState
+          label="学习计划"
+          title="还没有保存的学习计划"
+          text="生成后会保存到当前学生账号，后续打开页面会直接读取。"
+          action="生成学习计划"
+          loading={planCreateLoading}
+          onAction={onGeneratePlan}
+        />
+      )}
 
       <section className="panel-grid">
         <article className="panel wide">
@@ -2324,8 +2402,9 @@ function GrowthPath({
 
         <article className="panel">
           <span className="section-label">竞赛推荐</span>
-          <div className="recommend-list">
-            {competitions.recommendations.map((item) => (
+          {competitions ? (
+            <div className="recommend-list">
+              {competitions.recommendations.map((item) => (
               <div className="recommend-card" key={item.name}>
                 <div>
                   <strong>{item.name}</strong>
@@ -2346,14 +2425,25 @@ function GrowthPath({
                   ))}
                 </div>
                 <small>{item.risk}</small>
-              </div>
-            ))}
-          </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <ActionEmptyState
+              label="待生成"
+              title="根据画像生成推荐"
+              text="推荐会同时说明适合原因和需要补足的能力。"
+              action="生成推荐"
+              loading={planRevisionLoading}
+              onAction={onGenerateCompetition}
+            />
+          )}
         </article>
 
         <article className="panel">
           <span className="section-label">组队需求</span>
-          <div className="team-request-card">
+          {teamRequest ? (
+            <div className="team-request-card">
             <div>
               <strong>{teamRequest.competition_name}</strong>
               <span>{teamRequest.status}</span>
@@ -2365,7 +2455,17 @@ function GrowthPath({
               ))}
             </div>
             <small>{teamRequest.weekly_hours} 小时/周 · {teamRequest.communication}</small>
-          </div>
+            </div>
+          ) : (
+            <ActionEmptyState
+              label="未发布"
+              title="创建组队需求卡片"
+              text="生成后可进入推荐池，并用于匹配技能互补的同学。"
+              action="创建组队需求"
+              loading={teamStatusLoading}
+              onAction={onGenerateTeam}
+            />
+          )}
           <div className="team-privacy">
             <strong>{teamStatus.team_status_enabled ? "已进入推荐池" : "未进入推荐池"}</strong>
             <span>{teamStatus.visibility_note}</span>
@@ -2387,8 +2487,9 @@ function GrowthPath({
           </div>
           <span className="muted">联系方式默认不公开</span>
         </div>
-        <div className="recommend-list">
-          {team.candidates.map((candidate) => (
+        {team ? (
+          <div className="recommend-list">
+            {team.candidates.map((candidate) => (
             <div className="recommend-card" key={candidate.student_id}>
               <div>
                 <strong>{candidate.name}</strong>
@@ -2407,11 +2508,50 @@ function GrowthPath({
                 ))}
               </div>
               <small>{candidate.evidence.join(" / ")}</small>
-            </div>
-          ))}
-        </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <ActionEmptyState
+            label="队友推荐"
+            title="尚未生成队友推荐"
+            text="推荐会基于技能互补、方向一致和项目经历匹配，联系方式默认不公开。"
+            action="生成队友推荐"
+            loading={teamStatusLoading}
+            onAction={onGenerateTeam}
+          />
+        )}
       </section>
     </>
+  );
+}
+
+function ActionEmptyState({
+  label,
+  title,
+  text,
+  action,
+  loading = false,
+  onAction,
+}: {
+  label: string;
+  title: string;
+  text: string;
+  action?: string;
+  loading?: boolean;
+  onAction?: () => void;
+}) {
+  return (
+    <div className="action-empty-state">
+      <span>{label}</span>
+      <strong>{title}</strong>
+      <p>{text}</p>
+      {action && onAction && (
+        <button onClick={onAction} disabled={loading}>
+          {loading ? "处理中" : action}
+        </button>
+      )}
+    </div>
   );
 }
 
