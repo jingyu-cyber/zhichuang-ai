@@ -435,6 +435,16 @@ def main() -> int:
         any(student["student_id"] == "student_smoke_001" for student in imported_students["students"]),
         "imported student not found",
     )
+    local_accounts = client.get_json("/auth/local-accounts", headers=admin_header)["accounts"]
+    assert_true(
+        any(account["user_id"] == "teacher_smoke_001" for account in local_accounts),
+        "local teacher account not listed",
+    )
+    assert_true(
+        any(account["user_id"] == "student_smoke_001" for account in local_accounts),
+        "local student account not listed",
+    )
+    client.expect_forbidden("GET", "/auth/local-accounts", headers=student_header)
     local_teacher_session = client.post_json(
         "/auth/local-session",
         {"user_id": "teacher_smoke_001"},

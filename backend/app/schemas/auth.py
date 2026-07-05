@@ -18,6 +18,10 @@ class DemoAccountsResponse(BaseModel):
     accounts: list[DemoAccount]
 
 
+class LocalAccountsResponse(BaseModel):
+    accounts: list[DemoAccount]
+
+
 class DemoSessionRequest(BaseModel):
     user_id: str
 

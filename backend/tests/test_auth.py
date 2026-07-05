@@ -79,6 +79,58 @@ def test_local_session_uses_imported_academic_users() -> None:
     assert "class_local_auth_2024_01" in student_session.json()["account"]["authorized_classes"]
 
 
+def test_admin_can_list_imported_local_accounts_and_students_cannot() -> None:
+    client = TestClient(app)
+    admin_header = {"Authorization": "Bearer demo-token-admin_001"}
+    student_header = {"Authorization": "Bearer demo-token-student_001"}
+    import_response = client.post(
+        "/api/academic/import",
+        json={
+            "courses": [
+                {
+                    "course_id": "course_local_directory_2026",
+                    "name": "本地账号目录课程",
+                    "teacher_id": "teacher_local_directory_001",
+                    "teacher_name": "目录教师",
+                    "teacher_no": "TDIRECTORY001",
+                }
+            ],
+            "classes": [
+                {
+                    "class_id": "class_local_directory_2024_01",
+                    "course_id": "course_local_directory_2026",
+                    "name": "2024 级本地账号目录 1 班",
+                }
+            ],
+            "students": [
+                {
+                    "student_id": "student_local_directory_001",
+                    "name": "目录学生",
+                    "student_no": "DIRECTORY2024001",
+                    "class_id": "class_local_directory_2024_01",
+                }
+            ],
+        },
+        headers=admin_header,
+    )
+
+    forbidden_response = client.get("/api/auth/local-accounts", headers=student_header)
+    response = client.get("/api/auth/local-accounts", headers=admin_header)
+    accounts = response.json()["accounts"]
+
+    assert import_response.status_code == 200
+    assert forbidden_response.status_code == 403
+    assert response.status_code == 200
+    assert any(account["user_id"] == "teacher_local_directory_001" for account in accounts)
+    assert any(account["user_id"] == "student_local_directory_001" for account in accounts)
+    teacher_account = next(
+        account for account in accounts if account["user_id"] == "teacher_local_directory_001"
+    )
+    assert teacher_account["role"] == "teacher"
+    assert "course_local_directory_2026" in teacher_account["authorized_courses"]
+    assert "class_local_directory_2024_01" in teacher_account["authorized_classes"]
+
+
 def test_local_token_can_authorize_assignment_access() -> None:
     client = TestClient(app)
     admin_header = {"Authorization": "Bearer demo-token-admin_001"}

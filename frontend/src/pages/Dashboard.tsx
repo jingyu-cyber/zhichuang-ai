@@ -7,7 +7,12 @@ import {
   fetchAssignmentDashboard,
   uploadAssignmentArchive,
 } from "../shared/api/assignments";
-import { createDemoSession, createLocalSession, fetchDemoAccounts } from "../shared/api/auth";
+import {
+  createDemoSession,
+  createLocalSession,
+  fetchDemoAccounts,
+  fetchLocalAccounts,
+} from "../shared/api/auth";
 import {
   addProfileEvidence,
   createTeamRequest,
@@ -91,6 +96,7 @@ export function Dashboard() {
   const [knowledgeLoading, setKnowledgeLoading] = useState(false);
   const [knowledgeCreateLoading, setKnowledgeCreateLoading] = useState(false);
   const [accounts, setAccounts] = useState<DemoAccount[]>([]);
+  const [localAccounts, setLocalAccounts] = useState<DemoAccount[]>([]);
   const [currentAccount, setCurrentAccount] = useState<DemoAccount | null>(null);
   const [currentToken, setCurrentToken] = useState("demo-token-teacher_001");
   const [taskList, setTaskList] = useState<TaskListResponse | null>(null);
@@ -178,6 +184,7 @@ export function Dashboard() {
           setKnowledgeDocs(knowledgeData);
           setKnowledgeSearch(searchData);
           setAccounts(accountsData.accounts);
+          setLocalAccounts([]);
           setCurrentAccount(
             accountsData.accounts.find((account) => account.role === "teacher") ??
               accountsData.accounts[0],
@@ -279,9 +286,39 @@ export function Dashboard() {
       } else {
         setCandidateScreening(null);
       }
+      if (session.account.role === "admin") {
+        const nextLocalAccounts = await fetchLocalAccounts(session.token);
+        setLocalAccounts(nextLocalAccounts.accounts);
+      }
       setMode(session.account.default_view);
     } catch (err) {
       setError(err instanceof Error ? err.message : "演示账号切换失败");
+    }
+  }
+
+  async function handleLocalAccountChange(userId: string) {
+    try {
+      setError(null);
+      const session = await createLocalSession(userId);
+      setCurrentAccount(session.account);
+      setCurrentToken(session.token);
+      const nextReport = await analyzeDemoAssignment(session.token);
+      setReport(nextReport);
+      if (session.account.role === "teacher" || session.account.role === "admin") {
+        const nextDashboard = await fetchAssignmentDashboard(session.token);
+        const nextCandidateScreening = await screenTeacherCandidates(session.token);
+        setDashboard(nextDashboard);
+        setCandidateScreening(nextCandidateScreening);
+      } else {
+        setCandidateScreening(null);
+      }
+      if (session.account.role === "admin") {
+        const nextLocalAccounts = await fetchLocalAccounts(session.token);
+        setLocalAccounts(nextLocalAccounts.accounts);
+      }
+      setMode(session.account.default_view);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "学校账号切换失败");
     }
   }
 
@@ -581,9 +618,11 @@ export function Dashboard() {
         fetchClasses(courseId),
         fetchStudents(classId),
       ]);
+      const nextLocalAccounts = await fetchLocalAccounts(currentToken);
       setCourses(nextCourses);
       setClasses(nextClasses);
       setStudents(nextStudents);
+      setLocalAccounts(nextLocalAccounts.accounts);
       setAcademicImportResult(
         `${response.imported_courses} 门课程 / ${response.imported_classes} 个班级 / ${response.imported_students} 名学生已处理`,
       );
@@ -699,15 +738,43 @@ export function Dashboard() {
             <label htmlFor="demo-account">演示账号</label>
             <select
               id="demo-account"
-              value={currentAccount.user_id}
-              onChange={(event) => handleAccountChange(event.target.value)}
+              value={currentToken.startsWith("demo-token-") ? currentAccount.user_id : ""}
+              onChange={(event) => {
+                if (event.target.value) {
+                  handleAccountChange(event.target.value);
+                }
+              }}
             >
+              <option value="">当前为学校账号</option>
               {accounts.map((account) => (
                 <option key={account.user_id} value={account.user_id}>
                   {account.name} · {account.title}
                 </option>
               ))}
             </select>
+            {localAccounts.length > 0 && (
+              <>
+                <label htmlFor="local-account">学校账号</label>
+                <select
+                  id="local-account"
+                  value={
+                    currentToken.startsWith("local-token-") ? currentAccount.user_id : ""
+                  }
+                  onChange={(event) => {
+                    if (event.target.value) {
+                      handleLocalAccountChange(event.target.value);
+                    }
+                  }}
+                >
+                  <option value="">选择已导入账号</option>
+                  {localAccounts.map((account) => (
+                    <option key={account.user_id} value={account.user_id}>
+                      {account.name} · {account.title}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
             <div className="account-scope">
               <strong>{currentAccount.role.toUpperCase()}</strong>
               <span>{currentAccount.authorized_courses.join(" / ")}</span>

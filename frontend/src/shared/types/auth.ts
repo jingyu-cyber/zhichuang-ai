@@ -15,6 +15,10 @@ export type DemoAccountsResponse = {
   accounts: DemoAccount[];
 };
 
+export type LocalAccountsResponse = {
+  accounts: DemoAccount[];
+};
+
 export type DemoSessionResponse = {
   token: string;
   account: DemoAccount;

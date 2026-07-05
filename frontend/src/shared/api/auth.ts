@@ -1,4 +1,4 @@
-import type { DemoAccountsResponse, DemoSessionResponse } from "../types/auth";
+import type { DemoAccountsResponse, DemoSessionResponse, LocalAccountsResponse } from "../types/auth";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
 
@@ -20,6 +20,14 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function fetchDemoAccounts(): Promise<DemoAccountsResponse> {
   return requestJson<DemoAccountsResponse>("/auth/demo-accounts");
+}
+
+export function fetchLocalAccounts(token: string): Promise<LocalAccountsResponse> {
+  return requestJson<LocalAccountsResponse>("/auth/local-accounts", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
 }
 
 export function createDemoSession(userId: string): Promise<DemoSessionResponse> {

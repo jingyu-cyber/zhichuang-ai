@@ -8,6 +8,7 @@ from app.db.base import Base
 from app.models.course import ClassGroup, Course, CourseMembership
 from app.models.user import User
 from app.schemas.auth import DemoAccount, DemoAccountsResponse, DemoSessionResponse
+from app.schemas.auth import LocalAccountsResponse
 
 
 class AuthService:
@@ -51,6 +52,14 @@ class AuthService:
 
     def list_demo_accounts(self) -> DemoAccountsResponse:
         return DemoAccountsResponse(accounts=self.accounts)
+
+    def list_local_accounts(self) -> LocalAccountsResponse:
+        if self.db is None:
+            return LocalAccountsResponse(accounts=[])
+        users = self.db.scalars(
+            select(User).order_by(User.role.asc(), User.name.asc(), User.id.asc())
+        ).all()
+        return LocalAccountsResponse(accounts=[self._local_account(user.id) for user in users])
 
     def create_demo_session(self, user_id: str) -> DemoSessionResponse:
         account = self._find_account(user_id)
