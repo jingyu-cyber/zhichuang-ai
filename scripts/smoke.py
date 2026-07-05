@@ -414,6 +414,26 @@ def main() -> int:
         {"student_id": "student_001", "period": "本周", "completed_task_ids": [task["task_id"]]},
     )
     assert_true(review["next_tasks"], "task review next actions missing")
+    agent_task = client.post_json(
+        "/agent-tasks",
+        {
+            "task_type": "assignment_analysis",
+            "owner_id": "student_001",
+            "input": {"assignment_id": "assignment_flask_mvp"},
+        },
+        headers=student_header,
+    )
+    agent_task_status = client.get_json(f"/tasks/{agent_task['task_id']}", headers=student_header)
+    cancelled_agent_task = client.post_json(
+        f"/tasks/{agent_task['task_id']}/cancel",
+        {},
+        headers=student_header,
+    )
+    assert_true(agent_task_status["status"] == "pending", "agent task status missing")
+    assert_true(
+        cancelled_agent_task["task"]["status"] == "cancelled",
+        "agent task cancel failed",
+    )
 
     documents = client.get_json("/knowledge/documents")
     assert_true(documents["total"] >= 25, "knowledge documents below seed expectation")

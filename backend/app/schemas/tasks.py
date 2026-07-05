@@ -47,3 +47,27 @@ class ReviewResponse(BaseModel):
     risk: str
     next_tasks: list[LearningTask]
     ai_generated: bool = True
+
+
+class AgentTaskCreateRequest(BaseModel):
+    task_type: str = "assignment_analysis"
+    owner_id: str = "student_001"
+    input: dict = Field(default_factory=dict)
+
+
+class AgentTaskStatus(BaseModel):
+    task_id: str
+    task_type: str
+    status: str
+    owner_id: str | None = None
+    input: dict = Field(default_factory=dict)
+    state: dict = Field(default_factory=dict)
+    result_ref: str | None = None
+    error_message: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class AgentTaskActionResponse(BaseModel):
+    task: AgentTaskStatus
+    message: str

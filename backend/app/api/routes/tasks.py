@@ -1,15 +1,20 @@
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.routes.growth import ensure_student_access
 from app.db.session import get_db
+from app.models.user import User
 from app.schemas.tasks import (
+    AgentTaskActionResponse,
+    AgentTaskCreateRequest,
+    AgentTaskStatus,
     LearningTask,
     ReviewRequest,
     ReviewResponse,
     SaveTaskRequest,
     TaskListResponse,
 )
+from app.services.auth_service import AuthService
 from app.services.task_service import TaskService
 
 router = APIRouter()
@@ -43,3 +48,79 @@ def generate_review(
 ) -> ReviewResponse:
     ensure_student_access(payload.student_id, authorization, db)
     return TaskService(db).review(payload)
+
+
+@router.post("/agent-tasks", response_model=AgentTaskStatus)
+def create_agent_task(
+    payload: AgentTaskCreateRequest,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> AgentTaskStatus:
+    _ensure_agent_task_owner_access(payload.owner_id, authorization, db)
+    return TaskService(db).create_agent_task(payload)
+
+
+@router.get("/tasks/{task_id}", response_model=AgentTaskStatus)
+def get_agent_task(
+    task_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> AgentTaskStatus:
+    task = _get_agent_task_or_404(task_id, db)
+    _ensure_agent_task_owner_access(task.owner_id or "", authorization, db)
+    return task
+
+
+@router.post("/tasks/{task_id}/cancel", response_model=AgentTaskActionResponse)
+def cancel_agent_task(
+    task_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> AgentTaskActionResponse:
+    task = _get_agent_task_or_404(task_id, db)
+    _ensure_agent_task_owner_access(task.owner_id or "", authorization, db)
+    return TaskService(db).cancel_agent_task(task_id)
+
+
+@router.post("/tasks/{task_id}/resume", response_model=AgentTaskActionResponse)
+def resume_agent_task(
+    task_id: str,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> AgentTaskActionResponse:
+    task = _get_agent_task_or_404(task_id, db)
+    _ensure_agent_task_owner_access(task.owner_id or "", authorization, db)
+    return TaskService(db).resume_agent_task(task_id)
+
+
+def _get_agent_task_or_404(task_id: str, db: Session) -> AgentTaskStatus:
+    try:
+        return TaskService(db).get_agent_task(task_id)
+    except LookupError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent task not found",
+        ) from error
+
+
+def _ensure_agent_task_owner_access(
+    owner_id: str,
+    authorization: str | None,
+    db: Session,
+) -> None:
+    account = AuthService(db).current_account(authorization)
+    if account.role == "admin":
+        return
+    if account.user_id == owner_id:
+        return
+    owner = db.get(User, owner_id)
+    if owner is not None and owner.role == "student":
+        ensure_student_access(owner_id, authorization, db)
+        return
+    if owner_id.startswith("student_"):
+        ensure_student_access(owner_id, authorization, db)
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="No access to this agent task",
+    )

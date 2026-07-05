@@ -7,8 +7,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.base import Base
-from app.models.task import LearningTaskRecord
+from app.models.task import AgentTask, LearningTaskRecord
 from app.schemas.tasks import (
+    AgentTaskActionResponse,
+    AgentTaskCreateRequest,
+    AgentTaskStatus,
     LearningTask,
     ReviewRequest,
     ReviewResponse,
@@ -134,6 +137,102 @@ class TaskService:
             next_tasks=next_tasks[:3],
         )
 
+    def create_agent_task(self, payload: AgentTaskCreateRequest) -> AgentTaskStatus:
+        if self.db is None:
+            now = datetime.utcnow()
+            return AgentTaskStatus(
+                task_id=self._agent_task_id(payload),
+                task_type=payload.task_type,
+                status="pending",
+                owner_id=payload.owner_id,
+                input=payload.input,
+                state={
+                    "current_node": "queued",
+                    "completed_nodes": [],
+                    "next_action": "等待任务调度",
+                },
+                created_at=now.isoformat(),
+                updated_at=now.isoformat(),
+            )
+
+        task_id = self._agent_task_id(payload)
+        existing = self.db.get(AgentTask, task_id)
+        now = datetime.utcnow()
+        if existing is None:
+            existing = AgentTask(
+                id=task_id,
+                task_type=payload.task_type,
+                status="pending",
+                owner_id=payload.owner_id,
+                input_json=payload.input,
+                state_json={
+                    "current_node": "queued",
+                    "completed_nodes": [],
+                    "next_action": "等待任务调度",
+                },
+                created_at=now,
+                updated_at=now,
+            )
+            self.db.add(existing)
+        else:
+            existing.task_type = payload.task_type
+            existing.owner_id = payload.owner_id
+            existing.input_json = payload.input
+            existing.status = "pending"
+            existing.state_json = {
+                "current_node": "queued",
+                "completed_nodes": [],
+                "next_action": "等待任务调度",
+            }
+            existing.result_ref = None
+            existing.error_message = None
+            existing.updated_at = now
+        self.db.commit()
+        return self._agent_task_from_record(existing)
+
+    def get_agent_task(self, task_id: str) -> AgentTaskStatus:
+        record = self._agent_task_record(task_id)
+        return self._agent_task_from_record(record)
+
+    def cancel_agent_task(self, task_id: str) -> AgentTaskActionResponse:
+        record = self._agent_task_record(task_id)
+        if record.status in {"succeeded", "cancelled"}:
+            return AgentTaskActionResponse(
+                task=self._agent_task_from_record(record),
+                message="任务已结束，无需重复取消。",
+            )
+        record.status = "cancelled"
+        record.state_json = {
+            **(record.state_json or {}),
+            "next_action": "任务已取消",
+        }
+        record.updated_at = datetime.utcnow()
+        self.db.commit()
+        return AgentTaskActionResponse(
+            task=self._agent_task_from_record(record),
+            message="任务已取消。",
+        )
+
+    def resume_agent_task(self, task_id: str) -> AgentTaskActionResponse:
+        record = self._agent_task_record(task_id)
+        if record.status not in {"waiting_user", "failed"}:
+            return AgentTaskActionResponse(
+                task=self._agent_task_from_record(record),
+                message="当前状态不需要恢复。",
+            )
+        record.status = "pending"
+        record.error_message = None
+        record.state_json = {
+            **(record.state_json or {}),
+            "next_action": "已恢复，等待任务调度",
+        }
+        record.updated_at = datetime.utcnow()
+        self.db.commit()
+        return AgentTaskActionResponse(
+            task=self._agent_task_from_record(record),
+            message="任务已恢复。",
+        )
+
     def _tasks_for_student(self, student_id: str) -> list[LearningTask]:
         if self.db is None:
             return [task for task in self.seed_tasks if task.student_id == student_id]
@@ -156,6 +255,18 @@ class TaskService:
     def _manual_task_id(self, payload: SaveTaskRequest) -> str:
         raw = f"{payload.student_id}:{payload.title}:{payload.due_date}".encode("utf-8")
         return f"task_manual_{sha1(raw).hexdigest()[:10]}"
+
+    def _agent_task_id(self, payload: AgentTaskCreateRequest) -> str:
+        raw = f"{payload.owner_id}:{payload.task_type}:{payload.input}".encode("utf-8")
+        return f"agent_task_{sha1(raw).hexdigest()[:10]}"
+
+    def _agent_task_record(self, task_id: str) -> AgentTask:
+        if self.db is None:
+            raise ValueError("Database session is required")
+        record = self.db.get(AgentTask, task_id)
+        if record is None:
+            raise LookupError("Agent task not found")
+        return record
 
     def _record_from_task(self, task: LearningTask) -> LearningTaskRecord:
         now = datetime.utcnow()
@@ -184,4 +295,18 @@ class TaskService:
             due_date=record.due_date,
             evidence_required=record.evidence_required,
             progress=record.progress,
+        )
+
+    def _agent_task_from_record(self, record: AgentTask) -> AgentTaskStatus:
+        return AgentTaskStatus(
+            task_id=record.id,
+            task_type=record.task_type,
+            status=record.status,
+            owner_id=record.owner_id,
+            input=dict(record.input_json or {}),
+            state=dict(record.state_json or {}),
+            result_ref=record.result_ref,
+            error_message=record.error_message,
+            created_at=record.created_at.isoformat(),
+            updated_at=record.updated_at.isoformat(),
         )

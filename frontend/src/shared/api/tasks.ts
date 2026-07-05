@@ -1,4 +1,11 @@
-import type { LearningTask, ReviewResponse, TaskListResponse } from "../types/tasks";
+import type {
+  AgentTaskActionResponse,
+  AgentTaskCreateRequest,
+  AgentTaskStatus,
+  LearningTask,
+  ReviewResponse,
+  TaskListResponse,
+} from "../types/tasks";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
 
@@ -63,5 +70,42 @@ export function generateReview(
       completed_task_ids: ["task_demo_script"],
       notes: "已完成部署说明和演示脚本，继续补测试和算法复盘。",
     }),
+  });
+}
+
+export function createAgentTask(
+  payload: AgentTaskCreateRequest,
+  token?: string,
+): Promise<AgentTaskStatus> {
+  return requestJson<AgentTaskStatus>("/agent-tasks", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export function fetchAgentTask(taskId: string, token?: string): Promise<AgentTaskStatus> {
+  return requestJson<AgentTaskStatus>(`/tasks/${taskId}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export function cancelAgentTask(
+  taskId: string,
+  token?: string,
+): Promise<AgentTaskActionResponse> {
+  return requestJson<AgentTaskActionResponse>(`/tasks/${taskId}/cancel`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+}
+
+export function resumeAgentTask(
+  taskId: string,
+  token?: string,
+): Promise<AgentTaskActionResponse> {
+  return requestJson<AgentTaskActionResponse>(`/tasks/${taskId}/resume`, {
+    method: "POST",
+    headers: authHeaders(token),
   });
 }

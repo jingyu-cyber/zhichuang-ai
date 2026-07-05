@@ -27,3 +27,27 @@ export type ReviewResponse = {
   next_tasks: LearningTask[];
   ai_generated: boolean;
 };
+
+export type AgentTaskCreateRequest = {
+  task_type: string;
+  owner_id: string;
+  input?: Record<string, unknown>;
+};
+
+export type AgentTaskStatus = {
+  task_id: string;
+  task_type: string;
+  status: string;
+  owner_id?: string | null;
+  input: Record<string, unknown>;
+  state: Record<string, unknown>;
+  result_ref?: string | null;
+  error_message?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AgentTaskActionResponse = {
+  task: AgentTaskStatus;
+  message: string;
+};

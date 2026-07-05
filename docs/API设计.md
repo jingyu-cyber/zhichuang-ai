@@ -1013,14 +1013,51 @@ X-School-Identity-Secret: <shared-secret>
 
 ## 12. 任务状态
 
+### `POST /agent-tasks`
+
+创建长任务状态记录，用于代码分析、学习计划生成、竞赛推荐等多阶段 Agent 工作流。接口会保存任务类型、发起人、输入快照和初始图状态，后续可查询、取消或恢复。
+
+请求：
+
+```json
+{
+  "task_type": "assignment_analysis",
+  "owner_id": "student_001",
+  "input": {
+    "assignment_id": "assignment_flask_mvp"
+  }
+}
+```
+
+响应：
+
+```json
+{
+  "task_id": "agent_task_abc123",
+  "task_type": "assignment_analysis",
+  "status": "pending",
+  "owner_id": "student_001",
+  "input": {"assignment_id": "assignment_flask_mvp"},
+  "state": {
+    "current_node": "queued",
+    "completed_nodes": [],
+    "next_action": "等待任务调度"
+  },
+  "result_ref": null,
+  "error_message": null,
+  "created_at": "2026-07-05T12:00:00",
+  "updated_at": "2026-07-05T12:00:00"
+}
+```
+
 ### `GET /tasks/{task_id}`
 
-查询长任务状态。
+查询长任务状态。学生只能查询本人任务；教师可查询本人任务或授权班级学生任务；管理员可查询全部任务。
 
 ### `POST /tasks/{task_id}/cancel`
 
-取消任务。
+取消任务。已成功或已取消的任务不会重复变更状态。
 
 ### `POST /tasks/{task_id}/resume`
 
-恢复等待用户输入或失败后可重试的任务。
+恢复等待用户输入或失败后可重试的任务。接口会把 `waiting_user` 或 `failed` 状态恢复为 `pending`，保留已有图状态并更新下一步动作。
