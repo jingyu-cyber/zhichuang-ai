@@ -174,6 +174,28 @@ def main() -> int:
     assert_true(dashboard["class_profile"]["data_coverage"], "class data coverage missing")
     assert_true(dashboard["anomalies"], "assignment anomalies missing")
 
+    created_assignment = client.post_json(
+        "/assignments",
+        {
+            "assignment_id": "assignment_smoke_agent_rag",
+            "title": "Smoke 智能体 RAG 应用实践",
+            "course_id": "course_web_2026",
+            "class_id": "class_cs_2024_01",
+            "description": "Smoke 发布课程作业，用于验证教师端作业列表与看板切换。",
+            "rubric_id": "rubric_smoke_agent_rag",
+        },
+        headers=teacher_header,
+    )
+    assignment_list = client.get_json("/assignments", headers=teacher_header)["assignments"]
+    assert_true(
+        created_assignment["assignment_id"] == "assignment_smoke_agent_rag",
+        "assignment create failed",
+    )
+    assert_true(
+        any(item["assignment_id"] == "assignment_smoke_agent_rag" for item in assignment_list),
+        "created assignment not listed",
+    )
+
     client.expect_forbidden(
         "GET",
         "/assignments/assignment_flask_mvp/dashboard",
@@ -191,6 +213,7 @@ def main() -> int:
     uploaded_report = client.post_multipart(
         "/assignments/upload-archive",
         {
+            "assignment_id": "assignment_smoke_agent_rag",
             "assignment_title": "Smoke Zip 作业",
             "course_id": "course_web_2026",
             "class_id": "class_cs_2024_01",
@@ -214,8 +237,20 @@ def main() -> int:
     )
     assert_true(uploaded_report["student_id"] == "student_smoke_zip_001", "zip upload failed")
     assert_true(
+        uploaded_report["assignment_id"] == "assignment_smoke_agent_rag",
+        "zip upload did not attach to assignment",
+    )
+    assert_true(
         "FastAPI" in uploaded_report["code_structure"]["detected_frameworks"],
         "zip upload did not analyze code files",
+    )
+    created_dashboard = client.get_json(
+        "/assignments/assignment_smoke_agent_rag/dashboard",
+        headers=teacher_header,
+    )
+    assert_true(
+        any(report["student_id"] == "student_smoke_zip_001" for report in created_dashboard["reports"]),
+        "created assignment dashboard missing uploaded report",
     )
 
     profile = client.get_json("/students/student_001/profile")

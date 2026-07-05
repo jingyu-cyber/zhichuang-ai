@@ -547,6 +547,57 @@ h1 {
   margin-top: 16px;
 }
 
+.assignment-manager .panel-header button {
+  min-height: 40px;
+  padding: 0 14px;
+  color: #fff;
+  background: var(--blue);
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.assignment-manager .panel-header button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.assignment-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.assignment-list button {
+  display: grid;
+  gap: 6px;
+  min-height: 104px;
+  padding: 14px;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.assignment-list button.active {
+  border-left-color: var(--blue);
+  background: rgba(23, 78, 166, 0.06);
+}
+
+.assignment-list strong {
+  color: var(--text);
+}
+
+.assignment-list span,
+.assignment-list small {
+  color: var(--muted);
+}
+
 .upload-panel {
   margin-top: 16px;
 }
@@ -1954,6 +2005,7 @@ h1 {
   .summary-strip,
   .kb-overview,
   .panel-grid,
+  .assignment-list,
   .upload-form,
   .class-profile-layout,
   .growth-hero,

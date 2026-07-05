@@ -1,4 +1,5 @@
 from io import BytesIO
+from uuid import uuid4
 from zipfile import ZipFile
 
 from fastapi.testclient import TestClient
@@ -81,6 +82,132 @@ def test_assignment_dashboard_returns_teacher_view() -> None:
         assert suggestion["suggested_activity"]
         assert suggestion["practice_task"]
         assert suggestion["expected_improvement"]
+
+
+def test_teacher_can_create_assignment_and_upload_report_to_it() -> None:
+    client = TestClient(app)
+    teacher_header = {"Authorization": "Bearer demo-token-teacher_001"}
+    assignment_id = f"assignment_test_agent_rag_{uuid4().hex[:8]}"
+
+    create_response = client.post(
+        "/api/assignments",
+        json={
+            "assignment_id": assignment_id,
+            "title": "智能体 RAG 应用实践测试",
+            "course_id": "course_web_2026",
+            "class_id": "class_cs_2024_01",
+            "description": "围绕 RAG 检索、引用展示、对话上下文和测试完成课程项目。",
+            "rubric_id": "rubric_agent_rag",
+        },
+        headers=teacher_header,
+    )
+    upload_response = client.post(
+        "/api/assignments/analyze",
+        json={
+            "assignment_id": assignment_id,
+            "assignment_title": "智能体 RAG 应用实践测试",
+            "course_id": "course_web_2026",
+            "class_id": "class_cs_2024_01",
+            "student_id": "student_agent_rag_001",
+            "description": "学生提交了 FastAPI 接口、RAG 检索逻辑、测试和 README。",
+            "files": [
+                {
+                    "path": "main.py",
+                    "content": "from fastapi import FastAPI\napp = FastAPI()\n",
+                },
+                {"path": "rag.py", "content": "def retrieve(query): return []\n"},
+                {"path": "tests/test_rag.py", "content": "def test_retrieve(): assert True\n"},
+                {"path": "README.md", "content": "智能体 RAG 应用实践说明\n"},
+            ],
+        },
+        headers=teacher_header,
+    )
+    list_response = client.get("/api/assignments", headers=teacher_header)
+    dashboard_response = client.get(
+        f"/api/assignments/{assignment_id}/dashboard",
+        headers=teacher_header,
+    )
+
+    assert create_response.status_code == 200
+    assert create_response.json()["assignment_id"] == assignment_id
+    assert create_response.json()["submitted_count"] == 0
+    assert upload_response.status_code == 200
+    assert upload_response.json()["assignment_id"] == assignment_id
+    assert any(
+        item["assignment_id"] == assignment_id and item["submitted_count"] == 1
+        for item in list_response.json()["assignments"]
+    )
+    assert dashboard_response.status_code == 200
+    assert dashboard_response.json()["assignment_id"] == assignment_id
+    assert dashboard_response.json()["assignment_title"] == "智能体 RAG 应用实践测试"
+    assert any(
+        report["student_id"] == "student_agent_rag_001"
+        for report in dashboard_response.json()["reports"]
+    )
+
+
+def test_student_cannot_create_assignment() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/api/assignments",
+        json={
+            "title": "学生尝试发布作业",
+            "course_id": "course_web_2026",
+            "class_id": "class_cs_2024_01",
+        },
+        headers={"Authorization": "Bearer demo-token-student_001"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_local_teacher_assignment_list_respects_course_scope() -> None:
+    client = TestClient(app)
+    admin_header = {"Authorization": "Bearer demo-token-admin_001"}
+    client.post(
+        "/api/academic/import",
+        json={
+            "courses": [
+                {
+                    "course_id": "course_scope_only_2026",
+                    "name": "权限范围课程",
+                    "teacher_id": "teacher_scope_only",
+                    "teacher_name": "权限教师",
+                }
+            ],
+            "classes": [
+                {
+                    "class_id": "class_scope_only_2024_01",
+                    "course_id": "course_scope_only_2026",
+                    "name": "2024 级权限范围 1 班",
+                }
+            ],
+        },
+        headers=admin_header,
+    )
+    teacher_session = client.post(
+        "/api/auth/local-session",
+        json={"user_id": "teacher_scope_only"},
+    )
+    teacher_header = {"Authorization": f"Bearer {teacher_session.json()['token']}"}
+    create_response = client.post(
+        "/api/assignments",
+        json={
+            "assignment_id": f"assignment_scope_only_{uuid4().hex[:8]}",
+            "title": "权限范围内作业",
+            "course_id": "course_scope_only_2026",
+            "class_id": "class_scope_only_2024_01",
+        },
+        headers=teacher_header,
+    )
+    response = client.get("/api/assignments", headers=teacher_header)
+    assignment_ids = {item["assignment_id"] for item in response.json()["assignments"]}
+
+    assert create_response.status_code == 200
+    assert create_response.json()["course_name"] == "权限范围课程"
+    assert create_response.json()["class_name"] == "2024 级权限范围 1 班"
+    assert create_response.json()["assignment_id"] in assignment_ids
+    assert "assignment_flask_mvp" not in assignment_ids
 
 
 def test_assignment_analysis_flags_missing_tests_from_uploaded_files() -> None:

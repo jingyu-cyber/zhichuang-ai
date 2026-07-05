@@ -1,5 +1,7 @@
 import type {
   AssignmentDashboard,
+  AssignmentItem,
+  AssignmentListResponse,
   AssignmentReport,
   AssignmentUploadArchivePayload,
 } from "../types/assignments";
@@ -61,11 +63,42 @@ export function fetchAssignmentDashboard(token?: string): Promise<AssignmentDash
   });
 }
 
+export function fetchAssignments(token?: string): Promise<AssignmentListResponse> {
+  return requestJson<AssignmentListResponse>("/assignments", {
+    headers: authHeaders(token),
+  });
+}
+
+export function fetchAssignmentDashboardById(
+  assignmentId: string,
+  token?: string,
+): Promise<AssignmentDashboard> {
+  return requestJson<AssignmentDashboard>(`/assignments/${assignmentId}/dashboard`, {
+    headers: authHeaders(token),
+  });
+}
+
+export function createAssignment(token?: string): Promise<AssignmentItem> {
+  return requestJson<AssignmentItem>("/assignments", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      assignment_id: "assignment_agent_rag_2026",
+      title: "智能体 RAG 应用实践",
+      course_id: "course_web_2026",
+      class_id: "class_cs_2024_01",
+      description: "围绕 RAG 检索、引用展示、对话上下文和工程测试完成一次综合实践。",
+      rubric_id: "rubric_agent_rag",
+    }),
+  });
+}
+
 export async function uploadAssignmentArchive(
   payload: AssignmentUploadArchivePayload,
   token?: string,
 ): Promise<AssignmentReport> {
   const form = new FormData();
+  if (payload.assignmentId) form.append("assignment_id", payload.assignmentId);
   form.append("assignment_title", payload.assignmentTitle);
   form.append("archive", payload.archive);
   if (payload.courseId) form.append("course_id", payload.courseId);

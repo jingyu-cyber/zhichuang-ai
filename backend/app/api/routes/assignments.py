@@ -3,15 +3,37 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.schemas.assignments import (
+    AssignmentCreateRequest,
     AssignmentDashboardResponse,
     AssignmentAnalysisRequest,
     AssignmentAnalysisResponse,
+    AssignmentItem,
+    AssignmentListResponse,
 )
 from app.services.assignment_service import AssignmentService
 from app.services.auth_service import AuthService
 from app.services.submission_archive_service import SubmissionArchiveService
 
 router = APIRouter()
+
+
+@router.get("", response_model=AssignmentListResponse)
+def list_assignments(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> AssignmentListResponse:
+    account = AuthService(db).current_account(authorization)
+    return AssignmentService(db).list_assignments(account=account)
+
+
+@router.post("", response_model=AssignmentItem)
+def create_assignment(
+    payload: AssignmentCreateRequest,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> AssignmentItem:
+    account = AuthService(db).current_account(authorization)
+    return AssignmentService(db).create_assignment(payload, account=account)
 
 
 @router.post("/analyze", response_model=AssignmentAnalysisResponse)
@@ -26,6 +48,7 @@ def analyze_assignment(
 
 @router.post("/upload-archive", response_model=AssignmentAnalysisResponse)
 async def upload_assignment_archive(
+    assignment_id: str | None = Form(default=None),
     assignment_title: str = Form(...),
     course_id: str | None = Form(default=None),
     class_id: str | None = Form(default=None),
@@ -55,6 +78,7 @@ async def upload_assignment_archive(
 
     account = AuthService(db).current_account(authorization)
     payload = AssignmentAnalysisRequest(
+        assignment_id=assignment_id,
         assignment_title=assignment_title,
         course_id=course_id,
         class_id=class_id,

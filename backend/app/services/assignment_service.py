@@ -5,22 +5,26 @@ from datetime import datetime
 from hashlib import sha1
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import inspect, select, text
 from sqlalchemy.orm import Session
 
 from app.db.base import Base
 from app.models.assignment import Assignment as AssignmentRecord
 from app.models.assignment import AssignmentReport as AssignmentReportRecord
 from app.models.assignment import Submission as SubmissionRecord
+from app.models.course import ClassGroup, Course
 from app.schemas.auth import DemoAccount
 from app.schemas.assignments import (
     AbilityHeatmapCell,
     AssignmentAnomaly,
+    AssignmentCreateRequest,
     AssignmentDashboardMetric,
     AssignmentDashboardResponse,
     AssignmentAnalysisRequest,
     AssignmentAnalysisResponse,
     AssignmentFinding,
+    AssignmentItem,
+    AssignmentListResponse,
     AssignmentReportSummary,
     AssignmentScore,
     CapabilityEvidence,
@@ -69,6 +73,74 @@ class AssignmentService:
         self.db = db
         if self.db is not None:
             Base.metadata.create_all(bind=self.db.get_bind())
+            self._ensure_assignment_schema()
+
+    def list_assignments(self, account: DemoAccount | None = None) -> AssignmentListResponse:
+        account = account or self._demo_teacher_account()
+        items = (
+            [self._demo_assignment_item(account)]
+            if self._can_view_assignment(account, self.course["id"], self.class_group["id"])
+            else []
+        )
+        if self.db is not None:
+            records = self.db.scalars(
+                select(AssignmentRecord).order_by(
+                    AssignmentRecord.created_at.desc(),
+                    AssignmentRecord.id.asc(),
+                )
+            ).all()
+            for record in records:
+                if record.id == self.assignment["id"]:
+                    continue
+                class_id = record.class_id or self._class_id_for_assignment(record.id)
+                if not self._can_view_assignment(account, record.course_id, class_id):
+                    continue
+                items.append(self._assignment_item_from_record(record, class_id, account))
+        return AssignmentListResponse(assignments=items)
+
+    def create_assignment(
+        self,
+        payload: AssignmentCreateRequest,
+        account: DemoAccount | None = None,
+    ) -> AssignmentItem:
+        account = account or self._demo_teacher_account()
+        self._ensure_dashboard_access(account, payload.course_id, payload.class_id)
+        if self.db is None:
+            return AssignmentItem(
+                assignment_id=payload.assignment_id or self._assignment_id_from_title(payload.title),
+                title=payload.title,
+                course_id=payload.course_id,
+                course_name=self._course_name(payload.course_id),
+                class_id=payload.class_id,
+                class_name=self._class_name(payload.class_id),
+                description=payload.description or "",
+                rubric_id=payload.rubric_id,
+                created_at=datetime.utcnow().isoformat(),
+                submitted_count=0,
+                access_scope=self._access_scope(account),
+            )
+        now = datetime.utcnow()
+        assignment_id = payload.assignment_id or self._assignment_id_from_title(payload.title)
+        record = self.db.get(AssignmentRecord, assignment_id)
+        if record is None:
+            record = AssignmentRecord(
+                id=assignment_id,
+                course_id=payload.course_id,
+                class_id=payload.class_id,
+                title=payload.title,
+                description=payload.description,
+                rubric_id=payload.rubric_id,
+                created_at=now,
+            )
+            self.db.add(record)
+        else:
+            record.course_id = payload.course_id
+            record.class_id = payload.class_id
+            record.title = payload.title
+            record.description = payload.description
+            record.rubric_id = payload.rubric_id
+        self.db.commit()
+        return self._assignment_item_from_record(record, payload.class_id, account)
 
     def analyze(
         self,
@@ -77,10 +149,12 @@ class AssignmentService:
     ) -> AssignmentAnalysisResponse:
         account = account or self._demo_teacher_account()
         student_id = payload.student_id or "student_001"
+        assignment_id = payload.assignment_id or self.assignment["id"]
         course_id = payload.course_id or self.course["id"]
         class_id = payload.class_id or self.class_group["id"]
         self._ensure_report_access(account, course_id, class_id, student_id)
         report = self._build_report(
+            assignment_id=assignment_id,
             student_id=student_id,
             assignment_title=payload.assignment_title,
             course_id=course_id,
@@ -100,17 +174,23 @@ class AssignmentService:
         account: DemoAccount | None = None,
     ) -> AssignmentAnalysisResponse:
         account = account or self._demo_teacher_account()
-        title = self.assignment["title"] if assignment_id == self.assignment["id"] else assignment_id
-        self._ensure_report_access(account, self.course["id"], self.class_group["id"], student_id)
+        assignment_meta = self._assignment_meta(assignment_id)
+        self._ensure_report_access(
+            account,
+            assignment_meta["course_id"],
+            assignment_meta["class_id"],
+            student_id,
+        )
         stored_report = self._stored_report(assignment_id, student_id)
         if stored_report is not None:
             stored_report.access_scope = self._access_scope(account)
             return stored_report
         return self._build_report(
+            assignment_id=assignment_id,
             student_id=student_id,
-            assignment_title=title,
-            course_id=self.course["id"],
-            class_id=self.class_group["id"],
+            assignment_title=assignment_meta["title"],
+            course_id=assignment_meta["course_id"],
+            class_id=assignment_meta["class_id"],
             repository_url="https://example.edu/demo/flask-project",
             description="示例作业包含 Flask 路由、SQLite 数据访问、README 和基础测试。",
             files=self._demo_files(),
@@ -123,12 +203,23 @@ class AssignmentService:
         account: DemoAccount | None = None,
     ) -> AssignmentDashboardResponse:
         account = account or self._demo_teacher_account()
-        self._ensure_dashboard_access(account, self.course["id"], self.class_group["id"])
-        reports = [
-            self.get_report(assignment_id, student_id, account=account)
-            for student_id in self.students
-        ]
+        assignment_meta = self._assignment_meta(assignment_id)
+        self._ensure_dashboard_access(
+            account,
+            assignment_meta["course_id"],
+            assignment_meta["class_id"],
+        )
+        reports = (
+            [
+                self.get_report(assignment_id, student_id, account=account)
+                for student_id in self.students
+            ]
+            if assignment_id == self.assignment["id"]
+            else []
+        )
         reports.extend(self._stored_reports_for_dashboard(assignment_id, account))
+        if not reports:
+            return self._empty_dashboard_response(assignment_id, assignment_meta, account)
         dimension_names = [score.dimension for score in reports[0].scores]
         dimension_averages = []
         for dimension in dimension_names:
@@ -172,11 +263,11 @@ class AssignmentService:
         average_score = round(sum(self._overall_score(report) for report in reports) / len(reports))
         return AssignmentDashboardResponse(
             assignment_id=assignment_id,
-            assignment_title=self.assignment["title"],
-            course_id=self.course["id"],
-            course_name=self.course["name"],
-            class_id=self.class_group["id"],
-            class_name=self.class_group["name"],
+            assignment_title=assignment_meta["title"],
+            course_id=assignment_meta["course_id"],
+            course_name=assignment_meta["course_name"],
+            class_id=assignment_meta["class_id"],
+            class_name=assignment_meta["class_name"],
             generated_at=self.generated_at,
             submitted_count=len(reports),
             total_students=max(32, len(reports)),
@@ -346,6 +437,7 @@ class AssignmentService:
 
     def _build_report(
         self,
+        assignment_id: str,
         student_id: str,
         assignment_title: str,
         course_id: str,
@@ -448,13 +540,13 @@ class AssignmentService:
         improvement_tasks = self._build_improvement_tasks(structure)
 
         return AssignmentAnalysisResponse(
-            report_id=f"report_{self.assignment['id']}_{student_id}",
-            assignment_id=self.assignment["id"],
+            report_id=f"report_{assignment_id}_{student_id}",
+            assignment_id=assignment_id,
             assignment_title=assignment_title,
             course_id=course_id,
-            course_name=self.course["name"],
+            course_name=self._course_name(course_id),
             class_id=class_id,
-            class_name=self.class_group["name"],
+            class_name=self._class_name(class_id),
             student_id=student_id,
             student_name=student_name,
             generated_at=self.generated_at,
@@ -505,6 +597,83 @@ class AssignmentService:
             access_scope=access_scope,
         )
 
+    def _empty_dashboard_response(
+        self,
+        assignment_id: str,
+        assignment_meta: dict[str, str],
+        account: DemoAccount,
+    ) -> AssignmentDashboardResponse:
+        dimensions = ["功能完成度", "代码结构", "工程规范", "测试意识", "文档表达"]
+        dimension_averages = [
+            AssignmentScore(
+                dimension=dimension,
+                score=0,
+                summary="当前作业尚无已分析提交。",
+                evidence=["等待学生提交后生成维度证据。"],
+            )
+            for dimension in dimensions
+        ]
+        common_findings = [
+            AssignmentFinding(
+                severity="low",
+                title="等待学生提交",
+                detail="当前作业还没有可分析的提交物。",
+                suggestion="发布作业后提醒学生提交 zip 包或仓库链接，系统会自动生成报告。",
+            )
+        ]
+        return AssignmentDashboardResponse(
+            assignment_id=assignment_id,
+            assignment_title=assignment_meta["title"],
+            course_id=assignment_meta["course_id"],
+            course_name=assignment_meta["course_name"],
+            class_id=assignment_meta["class_id"],
+            class_name=assignment_meta["class_name"],
+            generated_at=self.generated_at,
+            submitted_count=0,
+            total_students=32,
+            average_score=0,
+            metrics=[
+                AssignmentDashboardMetric(label="已提交", value="0 / 32", trend="等待提交"),
+                AssignmentDashboardMetric(label="平均分", value="0", trend="暂无评分"),
+                AssignmentDashboardMetric(label="共性问题", value="0", trend="暂无提交"),
+                AssignmentDashboardMetric(label="讲评重点", value="0", trend="暂无证据"),
+            ],
+            dimension_averages=dimension_averages,
+            common_findings=common_findings,
+            anomalies=[
+                AssignmentAnomaly(
+                    severity="low",
+                    title="暂无作业提交",
+                    affected_students=[],
+                    evidence="当前作业尚无已分析提交。",
+                    suggested_action="等待学生提交后再查看异常作业和讲评建议。",
+                )
+            ],
+            teaching_suggestions=[
+                TeachingSuggestion(
+                    knowledge_point="提交规范说明",
+                    class_evidence="当前作业尚无已分析提交。",
+                    suggested_activity="课前明确 zip 包结构、README、测试文件和运行说明要求。",
+                    practice_task="要求学生提交代码、测试、README 和必要配置文件。",
+                    expected_improvement="提高后续作业分析的数据覆盖率和报告可解释性。",
+                )
+            ],
+            class_profile=ClassAbilityProfile(
+                heatmap=[],
+                direction_distribution=[],
+                data_coverage=[
+                    DataCoverageMetric(label="作业提交覆盖", covered=0, total=32, ratio=0),
+                    DataCoverageMetric(label="代码结构证据", covered=0, total=0, ratio=0),
+                    DataCoverageMetric(label="测试证据", covered=0, total=0, ratio=0),
+                    DataCoverageMetric(label="文档证据", covered=0, total=0, ratio=0),
+                ],
+                common_weaknesses=["当前作业尚无提交，暂不能形成班级共性短板。"],
+                summary="当前作业尚无已分析提交。",
+            ),
+            reports=[],
+            access_scope=self._access_scope(account),
+        )
+
     def _save_report(
         self,
         report: AssignmentAnalysisResponse,
@@ -518,6 +687,7 @@ class AssignmentService:
             assignment = AssignmentRecord(
                 id=report.assignment_id,
                 course_id=report.course_id,
+                class_id=report.class_id,
                 title=report.assignment_title,
                 description=payload.description,
                 rubric_id=payload.rubric_id,
@@ -525,6 +695,8 @@ class AssignmentService:
             )
             self.db.add(assignment)
         else:
+            assignment.course_id = report.course_id
+            assignment.class_id = report.class_id
             assignment.title = report.assignment_title
             assignment.description = payload.description
             assignment.rubric_id = payload.rubric_id
@@ -638,6 +810,126 @@ class AssignmentService:
             "findings": [finding.model_dump(mode="json") for finding in report.findings],
             "improvement_tasks": report.improvement_tasks,
         }
+
+    def _demo_assignment_item(self, account: DemoAccount) -> AssignmentItem:
+        return AssignmentItem(
+            assignment_id=self.assignment["id"],
+            title=self.assignment["title"],
+            course_id=self.course["id"],
+            course_name=self.course["name"],
+            class_id=self.class_group["id"],
+            class_name=self.class_group["name"],
+            description="围绕 Flask 路由、页面、SQLite 数据访问和测试完成 Web 项目实践。",
+            rubric_id=None,
+            created_at=self.generated_at,
+            submitted_count=(
+                len(self.students)
+                + len(self._stored_reports_for_dashboard(self.assignment["id"], account))
+            ),
+            access_scope=self._access_scope(account),
+        )
+
+    def _assignment_item_from_record(
+        self,
+        record: AssignmentRecord,
+        class_id: str,
+        account: DemoAccount,
+    ) -> AssignmentItem:
+        return AssignmentItem(
+            assignment_id=record.id,
+            title=record.title,
+            course_id=record.course_id,
+            course_name=self._course_name(record.course_id),
+            class_id=class_id,
+            class_name=self._class_name(class_id),
+            description=record.description or "",
+            rubric_id=record.rubric_id,
+            created_at=record.created_at.isoformat(),
+            submitted_count=self._submitted_count(record.id),
+            access_scope=self._access_scope(account),
+        )
+
+    def _assignment_meta(self, assignment_id: str) -> dict[str, str]:
+        if assignment_id == self.assignment["id"] or self.db is None:
+            return {
+                "title": self.assignment["title"],
+                "course_id": self.course["id"],
+                "course_name": self.course["name"],
+                "class_id": self.class_group["id"],
+                "class_name": self.class_group["name"],
+            }
+        record = self.db.get(AssignmentRecord, assignment_id)
+        if record is None:
+            return {
+                "title": assignment_id,
+                "course_id": self.course["id"],
+                "course_name": self.course["name"],
+                "class_id": self.class_group["id"],
+                "class_name": self.class_group["name"],
+            }
+        class_id = record.class_id or self._class_id_for_assignment(record.id)
+        return {
+            "title": record.title,
+            "course_id": record.course_id,
+            "course_name": self._course_name(record.course_id),
+            "class_id": class_id,
+            "class_name": self._class_name(class_id),
+        }
+
+    def _class_id_for_assignment(self, assignment_id: str) -> str:
+        if self.db is None:
+            return self.class_group["id"]
+        report = self.db.scalars(
+            select(AssignmentReportRecord)
+            .where(AssignmentReportRecord.assignment_id == assignment_id)
+            .order_by(AssignmentReportRecord.created_at.desc())
+        ).first()
+        if report is None:
+            return self.class_group["id"]
+        payload = dict(report.evidence_json or {})
+        return str(payload.get("class_id") or self.class_group["id"])
+
+    def _course_name(self, course_id: str) -> str:
+        if self.db is not None:
+            record = self.db.get(Course, course_id)
+            if record is not None:
+                return record.name
+        if course_id == self.course["id"]:
+            return self.course["name"]
+        return course_id
+
+    def _class_name(self, class_id: str) -> str:
+        if self.db is not None:
+            record = self.db.get(ClassGroup, class_id)
+            if record is not None:
+                return record.name
+        if class_id == self.class_group["id"]:
+            return self.class_group["name"]
+        return class_id
+
+    def _submitted_count(self, assignment_id: str) -> int:
+        if self.db is None:
+            return 0
+        records = self.db.scalars(
+            select(AssignmentReportRecord).where(AssignmentReportRecord.assignment_id == assignment_id)
+        ).all()
+        return len({record.student_id for record in records})
+
+    def _ensure_assignment_schema(self) -> None:
+        if self.db is None:
+            return
+        bind = self.db.get_bind()
+        inspector = inspect(bind)
+        if not inspector.has_table("assignments"):
+            return
+        columns = {column["name"] for column in inspector.get_columns("assignments")}
+        if "class_id" not in columns:
+            self.db.execute(text("ALTER TABLE assignments ADD COLUMN class_id VARCHAR(64)"))
+            self.db.commit()
+
+    def _assignment_id_from_title(self, title: str) -> str:
+        digest = sha1(title.encode("utf-8")).hexdigest()[:10]
+        return f"assignment_{digest}"
 
     def _overall_score(self, report: AssignmentAnalysisResponse) -> int:
         return round(sum(score.score for score in report.scores) / len(report.scores))
@@ -987,6 +1279,16 @@ class AssignmentService:
             or class_id in account.authorized_classes
         )
         return course_allowed and class_allowed
+
+    def _can_view_assignment(
+        self,
+        account: DemoAccount,
+        course_id: str,
+        class_id: str,
+    ) -> bool:
+        return account.role == "admin" or (
+            account.role == "teacher" and self._has_course_class_access(account, course_id, class_id)
+        )
 
     def _access_scope(self, account: DemoAccount) -> str:
         if account.role == "admin":

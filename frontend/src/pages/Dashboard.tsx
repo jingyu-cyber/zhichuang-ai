@@ -4,7 +4,10 @@ import { askAgent } from "../shared/api/agent";
 import { fetchClasses, fetchCourses, fetchStudents, importAcademicData } from "../shared/api/academic";
 import {
   analyzeDemoAssignment,
+  createAssignment,
   fetchAssignmentDashboard,
+  fetchAssignmentDashboardById,
+  fetchAssignments,
   uploadAssignmentArchive,
 } from "../shared/api/assignments";
 import {
@@ -44,7 +47,11 @@ import {
 import { fetchStudentTasks, generateReview, saveTask } from "../shared/api/tasks";
 import type { ChatMessage, ChatResponse } from "../shared/types/agent";
 import type { ClassListResponse, CourseListResponse, StudentListResponse } from "../shared/types/academic";
-import type { AssignmentDashboard, AssignmentReport } from "../shared/types/assignments";
+import type {
+  AssignmentDashboard,
+  AssignmentItem,
+  AssignmentReport,
+} from "../shared/types/assignments";
 import type { DemoAccount } from "../shared/types/auth";
 import type { EvaluationDashboardResponse } from "../shared/types/evaluations";
 import type {
@@ -71,6 +78,8 @@ export function Dashboard() {
   const [mode, setMode] = useState<ViewMode>("teacher");
   const [report, setReport] = useState<AssignmentReport | null>(null);
   const [dashboard, setDashboard] = useState<AssignmentDashboard | null>(null);
+  const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
+  const [assignmentCreateLoading, setAssignmentCreateLoading] = useState(false);
   const [archiveUploadLoading, setArchiveUploadLoading] = useState(false);
   const [archiveUploadResult, setArchiveUploadResult] = useState<string | null>(null);
   const [profile, setProfile] = useState<GrowthProfile | null>(null);
@@ -127,6 +136,7 @@ export function Dashboard() {
         const [
           reportData,
           dashboardData,
+          assignmentsData,
           profileData,
           profileEvidenceData,
           planData,
@@ -148,6 +158,7 @@ export function Dashboard() {
         ] = await Promise.all([
           analyzeDemoAssignment("demo-token-teacher_001"),
           fetchAssignmentDashboard("demo-token-teacher_001"),
+          fetchAssignments("demo-token-teacher_001"),
           upsertBasicProfile(),
           addProfileEvidence(),
           generateLearningPlan(),
@@ -171,6 +182,7 @@ export function Dashboard() {
         if (mounted) {
           setReport(reportData);
           setDashboard(dashboardData);
+          setAssignments(assignmentsData.assignments);
           setProfile(profileData);
           setProfileEvidence(profileEvidenceData);
           setPlan(planData);
@@ -281,8 +293,10 @@ export function Dashboard() {
       if (session.account.role === "teacher" || session.account.role === "admin") {
         const nextDashboard = await fetchAssignmentDashboard(session.token);
         const nextCandidateScreening = await screenTeacherCandidates(session.token);
+        const nextAssignments = await fetchAssignments(session.token);
         setDashboard(nextDashboard);
         setCandidateScreening(nextCandidateScreening);
+        setAssignments(nextAssignments.assignments);
       } else {
         setCandidateScreening(null);
       }
@@ -307,8 +321,10 @@ export function Dashboard() {
       if (session.account.role === "teacher" || session.account.role === "admin") {
         const nextDashboard = await fetchAssignmentDashboard(session.token);
         const nextCandidateScreening = await screenTeacherCandidates(session.token);
+        const nextAssignments = await fetchAssignments(session.token);
         setDashboard(nextDashboard);
         setCandidateScreening(nextCandidateScreening);
+        setAssignments(nextAssignments.assignments);
       } else {
         setCandidateScreening(null);
       }
@@ -466,6 +482,7 @@ export function Dashboard() {
   }
 
   async function handleArchiveUpload(payload: {
+    assignmentId: string;
     assignmentTitle: string;
     studentId: string;
     description: string;
@@ -478,6 +495,7 @@ export function Dashboard() {
       const uploadedReport = await uploadAssignmentArchive(
         {
           assignmentTitle: payload.assignmentTitle,
+          assignmentId: payload.assignmentId,
           studentId: payload.studentId,
           courseId: dashboard?.course_id ?? "course_web_2026",
           classId: dashboard?.class_id ?? "class_cs_2024_01",
@@ -486,9 +504,14 @@ export function Dashboard() {
         },
         currentToken,
       );
-      const nextDashboard = await fetchAssignmentDashboard(currentToken);
+      const nextDashboard = await fetchAssignmentDashboardById(
+        uploadedReport.assignment_id,
+        currentToken,
+      );
+      const nextAssignments = await fetchAssignments(currentToken);
       setReport(uploadedReport);
       setDashboard(nextDashboard);
+      setAssignments(nextAssignments.assignments);
       setArchiveUploadResult(
         `${uploadedReport.student_name} 的 ${uploadedReport.code_structure.file_count} 个文件已分析`,
       );
@@ -497,6 +520,36 @@ export function Dashboard() {
       setError(err instanceof Error ? err.message : "作业压缩包上传失败");
     } finally {
       setArchiveUploadLoading(false);
+    }
+  }
+
+  async function handleCreateAssignment() {
+    try {
+      setAssignmentCreateLoading(true);
+      setError(null);
+      const created = await createAssignment(currentToken);
+      const [nextAssignments, nextDashboard] = await Promise.all([
+        fetchAssignments(currentToken),
+        fetchAssignmentDashboardById(created.assignment_id, currentToken),
+      ]);
+      setAssignments(nextAssignments.assignments);
+      setDashboard(nextDashboard);
+      setMode("teacher");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "课程作业发布失败");
+    } finally {
+      setAssignmentCreateLoading(false);
+    }
+  }
+
+  async function handleSelectAssignment(assignmentId: string) {
+    try {
+      setError(null);
+      const nextDashboard = await fetchAssignmentDashboardById(assignmentId, currentToken);
+      setDashboard(nextDashboard);
+      setMode("teacher");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "作业看板切换失败");
     }
   }
 
@@ -830,9 +883,13 @@ export function Dashboard() {
         {!loading && !error && mode === "teacher" && dashboard && (
           <TeacherDashboard
             dashboard={dashboard}
+            assignments={assignments}
+            assignmentCreateLoading={assignmentCreateLoading}
             candidateScreening={candidateScreening}
             uploadLoading={archiveUploadLoading}
             uploadResult={archiveUploadResult}
+            onCreateAssignment={handleCreateAssignment}
+            onSelectAssignment={handleSelectAssignment}
             onArchiveUpload={handleArchiveUpload}
           />
         )}
@@ -908,16 +965,25 @@ export function Dashboard() {
 
 function TeacherDashboard({
   dashboard,
+  assignments,
+  assignmentCreateLoading,
   candidateScreening,
   uploadLoading,
   uploadResult,
+  onCreateAssignment,
+  onSelectAssignment,
   onArchiveUpload,
 }: {
   dashboard: AssignmentDashboard;
+  assignments: AssignmentItem[];
+  assignmentCreateLoading: boolean;
   candidateScreening: TeacherCandidateScreenResponse | null;
   uploadLoading: boolean;
   uploadResult: string | null;
+  onCreateAssignment: () => void;
+  onSelectAssignment: (assignmentId: string) => void;
   onArchiveUpload: (payload: {
+    assignmentId: string;
     assignmentTitle: string;
     studentId: string;
     description: string;
@@ -937,6 +1003,13 @@ function TeacherDashboard({
       </section>
       <AccessScopeBadge value={dashboard.access_scope} />
       <AiGeneratedNotice text="本页班级诊断和讲评建议为 AI 生成，仅供参考；需结合课程要求和作业提交物核验。" />
+      <AssignmentManager
+        assignments={assignments}
+        currentAssignmentId={dashboard.assignment_id}
+        loading={assignmentCreateLoading}
+        onCreateAssignment={onCreateAssignment}
+        onSelectAssignment={onSelectAssignment}
+      />
       <AssignmentArchiveUploader
         dashboard={dashboard}
         loading={uploadLoading}
@@ -1144,6 +1217,49 @@ function TeacherDashboard({
   );
 }
 
+function AssignmentManager({
+  assignments,
+  currentAssignmentId,
+  loading,
+  onCreateAssignment,
+  onSelectAssignment,
+}: {
+  assignments: AssignmentItem[];
+  currentAssignmentId: string;
+  loading: boolean;
+  onCreateAssignment: () => void;
+  onSelectAssignment: (assignmentId: string) => void;
+}) {
+  return (
+    <section className="panel assignment-manager">
+      <div className="panel-header">
+        <div>
+          <span className="section-label">课程作业</span>
+          <h2>发布作业并切换学情看板</h2>
+        </div>
+        <button onClick={onCreateAssignment} disabled={loading}>
+          {loading ? "发布中" : "发布样例作业"}
+        </button>
+      </div>
+      <div className="assignment-list">
+        {assignments.map((assignment) => (
+          <button
+            key={assignment.assignment_id}
+            className={assignment.assignment_id === currentAssignmentId ? "active" : ""}
+            onClick={() => onSelectAssignment(assignment.assignment_id)}
+          >
+            <strong>{assignment.title}</strong>
+            <span>
+              {assignment.course_name} · {assignment.class_name}
+            </span>
+            <small>{assignment.submitted_count} 份已分析</small>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function AssignmentArchiveUploader({
   dashboard,
   loading,
@@ -1154,6 +1270,7 @@ function AssignmentArchiveUploader({
   loading: boolean;
   result: string | null;
   onUpload: (payload: {
+    assignmentId: string;
     assignmentTitle: string;
     studentId: string;
     description: string;
@@ -1164,6 +1281,10 @@ function AssignmentArchiveUploader({
   const [studentId, setStudentId] = useState("student_006");
   const [description, setDescription] = useState("学生提交 zip 作业包，系统提取代码、测试、文档和配置文件生成分析报告。");
   const [archive, setArchive] = useState<File | null>(null);
+
+  useEffect(() => {
+    setAssignmentTitle(dashboard.assignment_title);
+  }, [dashboard.assignment_title]);
 
   return (
     <section className="panel upload-panel">
@@ -1205,7 +1326,13 @@ function AssignmentArchiveUploader({
         <button
           onClick={() => {
             if (!archive) return;
-            onUpload({ assignmentTitle, studentId, description, archive });
+            onUpload({
+              assignmentId: dashboard.assignment_id,
+              assignmentTitle,
+              studentId,
+              description,
+              archive,
+            });
           }}
           disabled={loading || !archive || !studentId.trim() || !assignmentTitle.trim()}
         >

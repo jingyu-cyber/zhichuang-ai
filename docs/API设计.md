@@ -111,6 +111,29 @@ Authorization: Bearer demo-token-admin_001
 
 ## 3. 作业代码分析
 
+### `GET /assignments`
+
+查看当前账号可访问的课程作业列表。教师仅返回授权课程/班级内作业，管理员返回可管理范围内作业。
+
+### `POST /assignments`
+
+教师或管理员发布课程作业，写入 SQLite `assignments`，用于后续学生提交、报告生成和班级看板切换。
+
+请求：
+
+```json
+{
+  "assignment_id": "assignment_agent_rag_2026",
+  "title": "智能体 RAG 应用实践",
+  "course_id": "course_web_2026",
+  "class_id": "class_cs_2024_01",
+  "description": "围绕 RAG 检索、引用展示、对话上下文和工程测试完成一次综合实践。",
+  "rubric_id": "rubric_agent_rag"
+}
+```
+
+学生账号发布作业返回 `403`。
+
 ### `POST /assignments/analyze`
 
 提交课程作业代码文件、仓库链接或说明，系统生成一份基于提交物证据的作业分析报告。首版支持直接传入文件路径和文本内容；如需上传学生作业压缩包，使用 `POST /assignments/upload-archive`。
@@ -120,6 +143,7 @@ Authorization: Bearer demo-token-admin_001
 
 ```json
 {
+  "assignment_id": "assignment_flask_mvp",
   "assignment_title": "Flask Web 项目实践",
   "course_id": "course_web_001",
   "student_id": "student_001",
@@ -199,6 +223,7 @@ Authorization: Bearer demo-token-admin_001
 字段：
 
 - `assignment_title`：作业标题，必填。
+- `assignment_id`：作业 ID，可选；传入后报告会挂到指定作业。
 - `archive`：zip 压缩包，必填。
 - `course_id`、`class_id`、`student_id`、`rubric_id`、`repository_url`、`description`：可选，含义同 `POST /assignments/analyze`。
 

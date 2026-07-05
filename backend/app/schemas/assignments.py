@@ -9,6 +9,7 @@ class CodeFile(BaseModel):
 
 
 class AssignmentAnalysisRequest(BaseModel):
+    assignment_id: str | None = None
     assignment_title: str
     course_id: str | None = None
     class_id: str | None = None
@@ -17,6 +18,33 @@ class AssignmentAnalysisRequest(BaseModel):
     repository_url: str | None = None
     description: str | None = None
     files: list[CodeFile] = Field(default_factory=list)
+
+
+class AssignmentCreateRequest(BaseModel):
+    assignment_id: str | None = None
+    title: str
+    course_id: str = "course_web_2026"
+    class_id: str = "class_cs_2024_01"
+    description: str | None = None
+    rubric_id: str | None = None
+
+
+class AssignmentItem(BaseModel):
+    assignment_id: str
+    title: str
+    course_id: str
+    course_name: str
+    class_id: str
+    class_name: str
+    description: str
+    rubric_id: str | None = None
+    created_at: str
+    submitted_count: int = 0
+    access_scope: str = "demo"
+
+
+class AssignmentListResponse(BaseModel):
+    assignments: list[AssignmentItem]
 
 
 class AssignmentScore(BaseModel):

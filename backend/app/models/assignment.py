@@ -13,6 +13,7 @@ class Assignment(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     course_id: Mapped[str] = mapped_column(ForeignKey("courses.id"), index=True)
+    class_id: Mapped[str | None] = mapped_column(ForeignKey("classes.id"), index=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     rubric_id: Mapped[str | None] = mapped_column(String(64), index=True)

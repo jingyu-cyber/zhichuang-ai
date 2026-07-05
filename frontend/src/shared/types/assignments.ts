@@ -76,6 +76,24 @@ export type AssignmentReportSummary = {
   summary: string;
 };
 
+export type AssignmentItem = {
+  assignment_id: string;
+  title: string;
+  course_id: string;
+  course_name: string;
+  class_id: string;
+  class_name: string;
+  description: string;
+  rubric_id?: string | null;
+  created_at: string;
+  submitted_count: number;
+  access_scope: string;
+};
+
+export type AssignmentListResponse = {
+  assignments: AssignmentItem[];
+};
+
 export type AssignmentDashboardMetric = {
   label: string;
   value: string;
@@ -150,6 +168,7 @@ export type AssignmentDashboard = {
 };
 
 export type AssignmentUploadArchivePayload = {
+  assignmentId?: string;
   assignmentTitle: string;
   archive: File;
   courseId?: string;
