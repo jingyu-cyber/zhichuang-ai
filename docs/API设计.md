@@ -2,9 +2,9 @@
 
 接口前缀：`/api`
 
-鉴权约定：公网 Demo 使用 `POST /auth/demo-session` 返回的演示 token；本地学校数据可使用 `POST /auth/local-session` 基于 SQLite 用户生成会话 token；学校统一身份系统可通过受信任网关调用 `POST /auth/school-session`，用学号、工号、邮箱或用户 ID 映射到已导入账号。需要角色或授权范围控制的接口通过 `Authorization: Bearer <token>` 传入账号身份；未传 token 时，作业分析相关接口默认使用教师演示账号，便于本地快速演示。越权访问返回 `403`。
+鉴权约定：公网 Demo 使用 `POST /auth/demo-session` 返回的演示 token；本地学校数据可使用 `POST /auth/local-session` 基于 SQLite 用户生成会话 token；学校统一身份系统可通过受信任网关调用 `POST /auth/school-session`，用学号、工号、邮箱或用户 ID 映射到已导入账号。需要角色或授权范围控制的接口通过 `Authorization: Bearer <token>` 传入账号身份；未传 token 时，项目分析相关接口默认使用教师演示账号，便于本地快速演示。越权访问返回 `403`。
 
-学生端数据访问约定：`/students/{student_id}/profile`、学习计划、任务中心、组队状态和组队推荐等学生个人数据接口在传入 token 时只允许学生本人访问；教师只能访问授权班级内学生；管理员可访问全部本地账号数据。前端切换到本地学生账号后，会用该账号 token 重新加载本人画像、计划、任务和组队状态。
+学生端数据访问约定：`/students/{student_id}/profile`、学习计划、计划执行事项、组队状态和组队推荐等学生个人数据接口在传入 token 时只允许学生本人访问；教师只能访问授权班级内学生；管理员可访问全部本地账号数据。前端切换到本地学生账号后，会用该账号 token 重新加载本人画像、计划、执行事项和组队状态。
 
 ## 1. 健康检查
 
@@ -86,7 +86,7 @@ X-School-Identity-Secret: <shared-secret>
 }
 ```
 
-响应格式同 `POST /auth/demo-session`，token 示例为 `school-token-teacher_school_001`。后续访问教师看板、学生报告、成长路径、任务中心等接口时，继续复用课程、班级和学生本人权限边界。
+响应格式同 `POST /auth/demo-session`，token 示例为 `school-token-teacher_school_001`。后续访问教师看板、项目报告、成长规划、计划执行等接口时，继续复用课程、班级和学生本人权限边界。
 
 ### 2.2 智能体对话
 
@@ -134,15 +134,15 @@ X-School-Identity-Secret: <shared-secret>
 连续追问时前端会携带同一 `session_id` 和最近上下文，后端基于角色场景生成回答，避免教师诊断问题被误判为学生个人规划问题。
 当知识库没有找到足够依据时，`is_uncertain` 为 `true`、`retrieval_status` 为 `no_match`，回答会明确提示“不确定”，且 `citations` 返回空数组。
 
-## 3. 作业代码分析
+## 3. 项目代码分析
 
 ### `GET /assignments`
 
-查看当前账号可访问的课程作业列表。教师仅返回授权课程/班级内作业，管理员返回可管理范围内作业，学生返回自己可查看报告的作业。
+查看当前账号可访问的课程项目列表。教师仅返回授权课程/班级内项目，管理员返回可管理范围内项目，学生返回自己可查看报告的项目。
 
 ### `POST /assignments`
 
-教师或管理员发布课程作业，写入 SQLite `assignments`，用于后续学生提交、报告生成和班级看板切换。
+教师或管理员发布课程项目，写入 SQLite `assignments`，用于后续学生提交、报告生成和班级看板切换。
 
 请求：
 
@@ -157,12 +157,12 @@ X-School-Identity-Secret: <shared-secret>
 }
 ```
 
-学生账号发布作业返回 `403`。
+学生账号发布项目返回 `403`。
 
 ### `POST /assignments/analyze`
 
-提交课程作业代码文件、公开 Git 仓库链接或说明，系统生成一份基于提交物证据的作业分析报告。首版支持直接传入文件路径和文本内容；当 `files` 为空且提供 `repository_url` 时，后端会拉取公开 HTTP/HTTPS Git 仓库并提取可分析文本文件；如需上传学生作业压缩包，使用 `POST /assignments/upload-archive`。
-生成结果会写入 SQLite `assignment_reports`，并关联 `assignments`、`submissions`，用于后续学生报告查看和教师看板汇总。
+提交课程项目代码文件、公开 Git 仓库链接或说明，系统生成一份基于提交物证据的项目分析报告。首版支持直接传入文件路径和文本内容；当 `files` 为空且提供 `repository_url` 时，后端会拉取公开 HTTP/HTTPS Git 仓库并提取可分析文本文件；如需上传学生项目压缩包，使用 `POST /assignments/upload-archive`。
+生成结果会写入 SQLite `assignment_reports`，并关联 `assignments`、`submissions`，用于后续项目报告查看和教师看板汇总。
 同时会写入 `agent_tasks` 长任务状态，响应中的 `agent_task_id` 可用于查询本次代码分析的多阶段执行状态和报告引用。
 报告中的能力证据会同步写入 `capability_evidence`，因此学生画像刷新后可看到来源为 `assignment_report` 的证据项。
 
@@ -269,14 +269,14 @@ X-School-Identity-Secret: <shared-secret>
 
 ### `POST /assignments/upload-archive`
 
-上传学生作业 zip 压缩包并生成作业分析报告。接口会读取可分析的文本代码文件，跳过依赖目录、二进制文件和过大的文件，然后复用作业分析流程生成报告并写入 SQLite。
+上传学生项目 zip 压缩包并生成项目分析报告。接口会读取可分析的文本代码文件，跳过依赖目录、二进制文件和过大的文件，然后复用项目分析流程生成报告并写入 SQLite。
 
 请求类型：`multipart/form-data`
 
 字段：
 
-- `assignment_title`：作业标题，必填。
-- `assignment_id`：作业 ID，可选；传入后报告会挂到指定作业。
+- `assignment_title`：项目标题，必填。
+- `assignment_id`：项目 ID，可选；传入后报告会挂到指定项目。
 - `archive`：zip 压缩包，必填。
 - `course_id`、`class_id`、`student_id`、`rubric_id`、`repository_url`、`description`：可选，含义同 `POST /assignments/analyze`。
 
@@ -288,28 +288,28 @@ X-School-Identity-Secret: <shared-secret>
 - 最多分析 80 个文本文件。
 - 跳过 `node_modules`、`.git`、`.venv`、`venv`、`__MACOSX` 等目录。
 
-响应同 `POST /assignments/analyze`。教师可为授权班级学生上传，学生只能上传并查看自己的作业报告，管理员可维护演示范围内数据。
+响应同 `POST /assignments/analyze`。教师可为授权班级学生上传，学生只能上传并查看自己的项目报告，管理员可维护演示范围内数据。
 
 ### `GET /assignments/{assignment_id}/reports/{student_id}`
 
-查看某个学生的作业分析报告。
-学生只能查看自己的报告；教师只能查看授权课程和班级下的学生报告；管理员可查看演示范围内报告。
-若该学生已通过 `POST /assignments/analyze` 生成报告，接口优先读取持久化报告；否则返回演示作业报告。
+查看某个学生的项目分析报告。
+学生只能查看自己的报告；教师只能查看授权课程和班级下的项目报告；管理员可查看演示范围内报告。
+若该学生已通过 `POST /assignments/analyze` 生成报告，接口优先读取持久化报告；否则返回演示项目报告。
 
 ### `GET /assignments/{assignment_id}/dashboard`
 
-教师查看某次作业的班级分析看板。
+教师查看某次项目的班级分析看板。
 学生账号访问班级看板会返回 `403`。
-看板会合并演示样例报告和当前数据库中已分析的学生报告，形成班级维度统计。
+看板会合并演示样例报告和当前数据库中已分析的项目报告，形成班级维度统计。
 
 响应包含：
 
 - 提交统计。
 - 维度分布。
 - 共性问题。
-- 异常作业提示。
+- 异常项目提示。
 - 班级能力画像：能力热力图、方向分布、数据覆盖率、共性短板。
-- 学生报告列表。
+- 项目报告列表。
 - 讲评建议。
 
 当前演示接口返回字段：
@@ -346,7 +346,7 @@ X-School-Identity-Secret: <shared-secret>
     "direction_distribution": [{"direction": "AI 应用开发", "count": 1, "ratio": 0.2}],
     "data_coverage": [{"label": "测试证据", "covered": 5, "total": 5, "ratio": 1.0}],
     "common_weaknesses": ["测试意识均分 71，需要重点跟进"],
-    "summary": "已基于 5 份作业报告生成班级能力分布。"
+    "summary": "已基于 5 份项目报告生成班级能力分布。"
   },
   "teaching_suggestions": [
     {
@@ -363,7 +363,7 @@ X-School-Identity-Secret: <shared-secret>
 
 ### `GET /assignments/{assignment_id}/export`
 
-教师导出某次作业的班级学情诊断报告。接口复用看板权限，学生账号访问返回 `403`。
+教师导出某次项目的班级学情诊断报告。接口复用看板权限，学生账号访问返回 `403`。
 
 响应为结构化 JSON，前端会将 `markdown` 字段保存为 `.md` 文件：
 
@@ -378,7 +378,7 @@ X-School-Identity-Secret: <shared-secret>
 }
 ```
 
-导出内容包含核心指标、能力维度均分、共性问题、异常作业提示、教学改进建议、学生报告摘要、班级画像摘要和数据覆盖率，并保留 AI 生成标识与核验建议。
+导出内容包含核心指标、能力维度均分、共性问题、异常项目提示、教学改进建议、项目报告摘要、班级画像摘要和数据覆盖率，并保留 AI 生成标识与核验建议。
 
 ## 4. 课程与班级
 
@@ -511,7 +511,7 @@ X-School-Identity-Secret: <shared-secret>
 
 - 维度分数。
 - 证据列表。
-- 最近作业表现。
+- 最近项目表现。
 - 推荐提升方向。
 
 每个能力维度包含结构化 `evidence_items`，记录来源类型、来源标题、证据摘要和置信度。
@@ -529,7 +529,7 @@ X-School-Identity-Secret: <shared-secret>
   "major": "计算机科学与技术",
   "course_foundation": ["程序设计基础", "数据结构", "数据库系统"],
   "skill_tags": ["Flask", "RAG", "GitHub"],
-  "project_experiences": ["Flask Web 作业项目"],
+  "project_experiences": ["Flask Web 课程项目"],
   "competition_experiences": ["蓝桥杯校内训练"],
   "target_direction": "AI 应用开发 / 软件项目实践",
   "weekly_hours": 8,
@@ -550,14 +550,14 @@ X-School-Identity-Secret: <shared-secret>
   "dimension": "工程实践",
   "source_type": "student_self_report",
   "source_title": "学生补充自评",
-  "evidence_text": "补充了 Flask 作业测试截图和 README 运行说明。",
+  "evidence_text": "补充了 Flask 项目测试截图和 README 运行说明。",
   "confidence": 0.42
 }
 ```
 
 响应返回稳定 `evidence_id`。证据写入 SQLite `capability_evidence`，后续 `GET /students/{student_id}/profile` 会按能力维度合并展示。
 
-响应返回已记录的证据项。学生自评证据可用于冷启动或补充说明，置信度低于作业报告、竞赛证书、教师评价等可验证证据。
+响应返回已记录的证据项。学生自评证据可用于冷启动或补充说明，置信度低于项目报告、竞赛证书、教师评价等可验证证据。
 
 演示接口返回字段：
 
@@ -628,23 +628,23 @@ X-School-Identity-Secret: <shared-secret>
 
 ### `POST /tasks`
 
-保存计划中的任务。
+保存计划中的执行事项。
 
-当前演示版本提供任务中心接口：
+当前版本提供计划执行接口，用于支撑成长规划中的事项保存和阶段反馈：
 
 ### `GET /students/{student_id}/tasks`
 
-查询学生任务列表，包含来源、状态、优先级、截止日期、证据要求和进度。任务中心使用 SQLite 持久化，首次访问会写入演示基础任务。
+查询学生执行事项列表，包含来源、状态、优先级、截止日期、证据要求和进度。计划执行事项使用 SQLite 持久化，首次访问会写入基础事项。
 
 ### `POST /tasks`
 
-保存用户确认后的推荐任务，写入 `learning_tasks` 表，后续刷新页面或重新创建服务实例后仍可读取。
+保存用户确认后的推荐事项，写入 `learning_tasks` 表，后续刷新页面或重新创建服务实例后仍可读取。
 
 ### `POST /reviews/generate`
 
-生成阶段复盘。复盘会读取当前持久化任务列表，排除已完成任务后给出下一步任务。
+生成阶段反馈。阶段反馈会读取当前持久化事项列表，排除已完成事项后给出下一步建议。
 
-任务中心接口同样遵循学生本人、授权教师、管理员的访问控制。
+计划执行接口同样遵循学生本人、授权教师、管理员的访问控制。
 
 请求：
 
@@ -657,7 +657,7 @@ X-School-Identity-Secret: <shared-secret>
 }
 ```
 
-响应包含复盘摘要、风险提示和下一步任务。
+响应包含阶段反馈摘要、风险提示和下一步事项。
 
 ## 7. 竞赛推荐
 
@@ -747,7 +747,7 @@ X-School-Identity-Secret: <shared-secret>
 - 能力匹配说明。
 - 推荐理由。
 - 缺口提醒。
-- 画像和作业证据。
+- 画像和项目证据。
 
 结果仅作为教学和竞赛指导参考，不作为审核结论。
 
@@ -862,10 +862,10 @@ X-School-Identity-Secret: <shared-secret>
   "documents": [
     {
       "document_id": "doc_001",
-      "title": "Web 应用开发课程作业 Rubric",
+      "title": "Web 应用开发课程项目 Rubric",
       "source_type": "rubric",
       "path": "软件项目实践",
-      "tags": ["作业分析", "Rubric", "Web"],
+      "tags": ["项目分析", "Rubric", "Web"],
       "chunk_count": 1,
       "status": "已入库",
       "source_url": null,
@@ -896,14 +896,14 @@ X-School-Identity-Secret: <shared-secret>
 
 ```json
 {
-  "query": "作业 Rubric",
+  "query": "项目 Rubric",
   "total": 1,
   "results": [
     {
-      "title": "Web 应用开发课程作业 Rubric",
+      "title": "Web 应用开发课程项目 Rubric",
       "source_type": "rubric",
       "path": "软件项目实践",
-      "snippet": "课程作业评分参考功能完成度、代码结构、工程规范、测试意识和文档表达。",
+      "snippet": "课程项目评分参考功能完成度、代码结构、工程规范、测试意识和文档表达。",
       "score": 0.5
     }
   ]
