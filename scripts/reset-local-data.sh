@@ -19,14 +19,14 @@ PRAGMA foreign_keys = OFF;
 CREATE TEMP TABLE test_assignments AS
 SELECT id FROM assignments
 WHERE title IN (
-  '学生可见作业',
-  '其他学生作业',
-  '仓库链接作业',
+  '学生可见项目',
+  '其他学生项目',
+  '仓库链接项目',
   '智能体 RAG 应用实践测试',
-  'Smoke Zip 作业',
-  'Smoke 仓库链接作业',
-  'FastAPI Zip 作业',
-  '权限范围内作业'
+  'Smoke Zip 项目',
+  'Smoke 仓库链接项目',
+  'FastAPI Zip 项目',
+  '权限范围内项目'
 )
 OR id LIKE 'assignment_student_visible_%'
 OR id LIKE 'assignment_student_hidden_%'
@@ -42,24 +42,24 @@ WHERE result_ref IN (SELECT id FROM assignment_reports WHERE assignment_id IN (S
 
 DELETE FROM capability_evidence
 WHERE source_title IN (
-  '学生可见作业',
-  '其他学生作业',
-  '仓库链接作业',
+  '学生可见项目',
+  '其他学生项目',
+  '仓库链接项目',
   '智能体 RAG 应用实践测试',
-  'Smoke Zip 作业',
-  'Smoke 仓库链接作业',
-  'FastAPI Zip 作业',
-  '权限范围内作业'
+  'Smoke Zip 项目',
+  'Smoke 仓库链接项目',
+  'FastAPI Zip 项目',
+  '权限范围内项目'
 )
 OR source_id IN (
-  '学生可见作业',
-  '其他学生作业',
-  '仓库链接作业',
+  '学生可见项目',
+  '其他学生项目',
+  '仓库链接项目',
   '智能体 RAG 应用实践测试',
-  'Smoke Zip 作业',
-  'Smoke 仓库链接作业',
-  'FastAPI Zip 作业',
-  '权限范围内作业'
+  'Smoke Zip 项目',
+  'Smoke 仓库链接项目',
+  'FastAPI Zip 项目',
+  '权限范围内项目'
 );
 
 DELETE FROM assignment_reports WHERE assignment_id IN (SELECT id FROM test_assignments);

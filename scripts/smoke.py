@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -162,6 +163,24 @@ def load_school_identity_secret() -> str:
     return "dev-school-identity-secret"
 
 
+def collect_frontend_text(client: SmokeClient, web: str) -> str:
+    assets = [web]
+    for match in re.findall(r'''(?:src|href)=["']([^"']+)["']''', web):
+        if not (match.endswith(".js") or match.endswith(".css") or match.startswith("/src/")):
+            continue
+        asset_url = urllib.parse.urljoin(client.web_base.rstrip("/") + "/", match)
+        try:
+            assets.append(client.get_text(asset_url))
+        except Exception:
+            continue
+
+    frontend_source = Path(__file__).resolve().parents[1] / "frontend" / "src" / "pages" / "Dashboard.tsx"
+    if frontend_source.exists():
+        assets.append(frontend_source.read_text(encoding="utf-8"))
+
+    return "\n".join(assets)
+
+
 def main() -> int:
     api_base = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000/api"
     web_base = sys.argv[2] if len(sys.argv) > 2 else "http://localhost:5173"
@@ -219,7 +238,7 @@ def main() -> int:
             "title": "Smoke 智能体 RAG 应用实践",
             "course_id": "course_web_2026",
             "class_id": "class_cs_2024_01",
-            "description": "Smoke 发布课程作业，用于验证教师端作业列表与看板切换。",
+            "description": "Smoke 发布课程项目，用于验证教师端项目列表与看板切换。",
             "rubric_id": "rubric_smoke_agent_rag",
         },
         headers=teacher_header,
@@ -268,7 +287,7 @@ def main() -> int:
         "/assignments/upload-archive",
         {
             "assignment_id": "assignment_smoke_agent_rag",
-            "assignment_title": "Smoke Zip 作业",
+            "assignment_title": "Smoke Zip 项目",
             "course_id": "course_web_2026",
             "class_id": "class_cs_2024_01",
             "student_id": "student_smoke_zip_001",
@@ -281,7 +300,7 @@ def main() -> int:
                     {
                         "main.py": "from fastapi import FastAPI\napp = FastAPI()\n",
                         "tests/test_main.py": "def test_home(): assert True\n",
-                        "README.md": "Smoke zip 作业说明\n",
+                        "README.md": "Smoke zip 项目说明\n",
                     }
                 ),
                 "application/zip",
@@ -314,7 +333,7 @@ def main() -> int:
         "/assignments/analyze",
         {
             "assignment_id": "assignment_smoke_agent_rag",
-            "assignment_title": "Smoke 仓库链接作业",
+            "assignment_title": "Smoke 仓库链接项目",
             "course_id": "course_web_2026",
             "class_id": "class_cs_2024_01",
             "student_id": "student_smoke_repo_001",
@@ -326,7 +345,7 @@ def main() -> int:
                     "content": "from fastapi import FastAPI\napp = FastAPI()\n@app.get('/items')\ndef items(): return []\n",
                 },
                 {"path": "tests/test_main.py", "content": "def test_items(): assert True\n"},
-                {"path": "README.md", "content": "Smoke 仓库链接作业说明\n"},
+                {"path": "README.md", "content": "Smoke 仓库链接项目说明\n"},
             ],
         },
         headers=teacher_header,
@@ -425,7 +444,7 @@ def main() -> int:
     )
     team = client.post_json(
         "/teams/recommend",
-        {"student_id": "student_001", "project_goal": "作业代码分析 Demo"},
+        {"student_id": "student_001", "project_goal": "项目代码分析 Demo"},
     )
     assert_true(team["candidates"], "team recommendations missing")
     assert_true(
@@ -695,6 +714,115 @@ def main() -> int:
 
     web = client.get_text(web_base)
     assert_true("<html" in web.lower() or "root" in web.lower(), "web entry did not return HTML")
+    frontend_text = collect_frontend_text(client, web)
+    for marker in [
+        "项目库",
+        "搜索项目",
+        "新建项目",
+        "提交材料",
+        "查看报告",
+        "处理高优先级问题",
+        "绑定场景",
+        "项目中心",
+        "项目入库",
+        "项目入库草稿",
+        "课程作业",
+        "个人作品",
+        "生成分析报告",
+        "清空草稿",
+        "文件需重新选择",
+        "项目提交准备",
+        "单个文本文件不超过 200KB",
+        "文本总量不超过 1MB",
+        "发展工作台",
+        "当前模块",
+        "系统通知",
+        "操作确认",
+        "当前账号",
+        "会话有效期",
+        "会话已恢复",
+        "正在恢复上次登录状态",
+        "学校入口",
+        "统一身份入口",
+        "学校账号进入",
+        "已接入学校账号",
+        "权限边界",
+        "账号角色筛选",
+        "当前会话",
+        "引用状态",
+        "检索范围",
+        "回答依据检查",
+        "资料命中",
+        "引用数量",
+        "回答状态",
+        "常用检索场景",
+        "清空对话",
+        "自定义调整意见",
+        "提交调整",
+        "教师诊断总览",
+        "风险学生",
+        "提交率",
+        "目录数据总览",
+        "授权边界",
+        "方向覆盖",
+        "标签覆盖",
+        "导入字段预检",
+        "数据接入步骤",
+        "填写基础数据",
+        "提交数据接入",
+        "核对授权范围",
+        "正在分析项目资产",
+        "项目名称",
+        "课程 ID",
+        "班级 ID",
+        "Rubric ID",
+        "标记完成",
+        "恢复执行",
+        "完成进度",
+        "上一页",
+        "下一页",
+        "每页",
+        "目录检索",
+        "全部课程",
+        "全部班级",
+        "全部方向",
+        "全部路径",
+        "全部来源",
+        "知识库资料分页",
+        "资料治理总览",
+        "资料入库工作流",
+        "新建资料",
+        "资料入库表单",
+        "维护人",
+        "当前资料",
+        "评测记录工作台",
+        "保存案例与记录",
+        "人工评分",
+        "资料检查",
+        "资料用途",
+        "待完善",
+        "全部场景",
+        "全部优先级",
+        "全部分数",
+    ]:
+        assert_true(marker in frontend_text, f"frontend missing project workspace marker: {marker}")
+    for forbidden_marker in [
+        "当前演示账号",
+        "提示词",
+        "成长路径",
+        "任务复盘",
+        "作业报告",
+        "课程作业分析",
+        "导入当前配置",
+        "授权访问",
+        "授权账号",
+        "运维验收",
+        "校内试运行",
+    ]:
+        assert_true(
+            forbidden_marker not in frontend_text,
+            f"frontend contains demo or outdated wording: {forbidden_marker}",
+        )
 
     print("Smoke check passed.")
     return 0
