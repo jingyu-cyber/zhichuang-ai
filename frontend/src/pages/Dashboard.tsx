@@ -50,6 +50,7 @@ import {
   updateKnowledgeDocument,
 } from "../shared/api/knowledge";
 import { fetchStudentTasks, generateReview, saveTask, updateLearningTask } from "../shared/api/tasks";
+import { OpenCourseStudio } from "./OpenCourseStudio";
 import type { ChatMessage, ChatResponse } from "../shared/types/agent";
 import type {
   AcademicImportRequest,
@@ -236,6 +237,7 @@ function reportStudentIdForAccount(account: SchoolAccount | null) {
 function titleForMode(mode: ViewMode) {
   if (mode === "teacher") return "项目学情诊断";
   if (mode === "student") return "项目管理";
+  if (mode === "open-course") return "开源课堂";
   if (mode === "growth") return "成长规划";
   if (mode === "evaluations") return "测试评测与输出记录";
   if (mode === "academic") return "课程班级与学生列表";
@@ -247,6 +249,7 @@ function titleForMode(mode: ViewMode) {
 function descriptionForMode(mode: ViewMode) {
   if (mode === "teacher") return "查看班级项目报告、能力分布和教学建议。";
   if (mode === "student") return "管理项目资产，上传代码或仓库并生成分析报告。";
+  if (mode === "open-course") return "进入课程目录，按课程、章节和课节打开交互课堂。";
   if (mode === "growth") return "按模块查看画像、计划、竞赛、组队和执行事项。";
   if (mode === "evaluations") return "记录系统输出质量和评测结果。";
   if (mode === "academic") return "维护课程、班级和学生基础数据。";
@@ -257,6 +260,7 @@ function descriptionForMode(mode: ViewMode) {
 
 function stepsForMode(mode: ViewMode) {
   if (mode === "teacher") return ["项目报告", "班级画像", "学情诊断", "教学建议"];
+  if (mode === "open-course") return ["课程选择", "章节小节", "实验任务", "课堂讲评"];
   if (mode === "growth") return ["能力画像", "学习计划", "竞赛组队", "计划执行"];
   if (mode === "knowledge" || mode === "kb") return ["资料入库", "语义检索", "引用追踪", "版本维护"];
   if (mode === "academic") return ["课程数据", "班级数据", "学生名单", "账号授权"];
@@ -809,6 +813,10 @@ export function Dashboard() {
         if (chatQuestion.trim()) {
           await handleAskAgent();
         }
+        return;
+      }
+      if (mode === "open-course") {
+        pushNotice("info", "开源课堂已就绪", "可切换课程方向、课堂模式和动画步骤");
         return;
       }
       if (mode === "kb") {
@@ -1682,6 +1690,14 @@ export function Dashboard() {
               知识库问答
             </button>
           )}
+          {canAccessModule("开源课堂", "知识库问答", "教师看板") && (
+            <button
+              className={mode === "open-course" ? "active" : ""}
+              onClick={() => setMode("open-course")}
+            >
+              开源课堂
+            </button>
+          )}
           {canAccessModule("教师看板") && (
             <button
               className={mode === "teacher" ? "active" : ""}
@@ -1782,6 +1798,8 @@ export function Dashboard() {
             >
               {mode === "knowledge" || mode === "kb"
                 ? "重新检索"
+                : mode === "open-course"
+                  ? "课堂状态"
                 : mode === "academic" || mode === "evaluations"
                   ? "刷新数据"
                   : mode === "teacher"
@@ -1866,6 +1884,8 @@ export function Dashboard() {
         )}
 
         {growthPayload && <GrowthPath {...growthPayload} />}
+
+        {!loading && mode === "open-course" && <OpenCourseStudio />}
 
         {!loading && mode === "kb" && knowledgeDocs && (
           <KnowledgeAdmin
