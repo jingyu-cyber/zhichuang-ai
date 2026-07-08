@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>寄存器观察 · 执行显微镜</title>
+<link rel="stylesheet" href="../assets/common.css">
+<style>
+  .microscope { max-width:1420px; margin:0 auto; padding:18px 22px 44px; }
+  .micro-head { display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); padding-bottom:14px; margin-bottom:16px; }
+  .micro-head h1 { margin:0; font-size:22px; }
+  .micro-head p { margin:2px 0 0; color:var(--text-dim); font-size:12px; }
+  .lab-canvas { display:grid; grid-template-columns: 330px 1fr 380px; grid-template-rows:auto 1fr auto; gap:12px; min-height:calc(100vh - 112px); }
+  .source-strip { grid-row:1/4; background:#0a0f1a; border:1px solid var(--border); border-radius:18px; overflow:hidden; display:grid; grid-template-rows:auto 1fr auto; }
+  .strip-title { padding:12px 14px; background:var(--bg-panel-2); border-bottom:1px solid var(--border); color:var(--text-dim); font-size:12px; }
+  .source-lines { padding:10px 0; font-family:var(--mono); font-size:12.5px; }
+  .line { display:grid; grid-template-columns:34px 1fr; gap:8px; padding:7px 12px; border-left:3px solid transparent; }
+  .line .ln { color:#4a5876; text-align:right; }
+  .line.active { background:rgba(125,211,252,.13); border-left-color:var(--accent); color:var(--accent); }
+  .question-card { margin:12px; padding:12px; border:1px solid var(--border); border-radius:12px; background:var(--bg-panel); color:var(--text-dim); line-height:1.7; }
+  .clock-panel { grid-column:2/4; border:1px solid var(--border); border-radius:18px; background:linear-gradient(90deg,rgba(125,211,252,.09),rgba(167,139,250,.08)),#0a0f1a; padding:14px; display:flex; align-items:center; justify-content:space-between; gap:14px; }
+  .clock-title b { display:block; font-size:18px; }
+  .clock-title span { color:var(--text-dim); font-family:var(--mono); font-size:12px; }
+  .scope-stage { background:var(--bg-panel); border:1px solid var(--border); border-radius:18px; padding:16px; display:grid; grid-template-rows:auto 1fr auto; gap:12px; }
+  .instruction-tape { display:flex; gap:8px; overflow:auto; padding-bottom:4px; }
+  .tick { min-width:114px; border:1px solid var(--border); border-radius:12px; background:#0a0f1a; padding:9px; font-family:var(--mono); font-size:11px; color:var(--text-dim); cursor:pointer; }
+  .tick.active { color:#0b0f17; background:var(--accent); border-color:transparent; font-weight:800; }
+  .datapath { position:relative; border:1px dashed var(--border-hi); border-radius:16px; min-height:360px; background:radial-gradient(circle at 50% 40%,rgba(125,211,252,.08),transparent 55%),#0a0f1a; overflow:hidden; }
+  .node { position:absolute; border:1px solid var(--border); border-radius:12px; background:var(--bg-panel-2); padding:12px; min-width:118px; text-align:center; font-family:var(--mono); }
+  .node b { display:block; color:var(--text); font-size:18px; }
+  .node span { color:var(--text-dim); font-size:11px; }
+  .node.hot { border-color:var(--warn); box-shadow:0 0 0 1px rgba(251,191,36,.28) inset; }
+  .flow-line { position:absolute; height:3px; background:linear-gradient(90deg,var(--accent),var(--warn)); transform-origin:left center; border-radius:999px; transition:.25s; }
+  .register-bank { background:#0a0f1a; border:1px solid var(--border); border-radius:18px; padding:14px; display:grid; grid-template-columns:repeat(2,1fr); gap:10px; align-content:start; }
+  .reg { border:1px solid var(--border); border-radius:12px; background:var(--bg-panel-2); padding:12px; min-height:82px; }
+  .reg .name { color:var(--text-dim); font-family:var(--mono); font-size:12px; }
+  .reg .value { margin-top:8px; color:var(--text); font-family:var(--mono); font-size:20px; }
+  .reg.changed { border-color:var(--warn); background:rgba(251,191,36,.08); }
+  .memory-dock { grid-column:2/4; display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .mem { border:1px solid var(--border); border-radius:12px; background:#0a0f1a; padding:11px; font-family:var(--mono); }
+  .mem b { display:block; color:var(--text-dim); font-size:11px; margin-bottom:6px; }
+  .mem.hot { border-color:var(--ok); color:var(--ok); }
+  @media(max-width:1180px){.lab-canvas{grid-template-columns:1fr}.source-strip,.clock-panel,.memory-dock{grid-column:auto;grid-row:auto}.register-bank{grid-template-columns:repeat(3,1fr)}}
+</style>
+</head>
+<body>
+<div class="microscope">
+  <header class="micro-head">
+    <div><h1>寄存器观察 · 执行显微镜</h1><p>把函数执行拆成时钟拍：源码、寄存器、地址计算、内存读写同步观察</p></div>
+    <a class="nav-back" href="../index.html">← 返回目录</a>
+  </header>
+
+  <main class="lab-canvas">
+    <aside class="source-strip">
+      <div class="strip-title">C 函数切片</div>
+      <div class="source-lines" id="sourceLines"></div>
+      <div class="question-card" id="question">-</div>
+    </aside>
+
+    <section class="clock-panel">
+      <div class="clock-title"><b id="clockTitle">cycle 1</b><span id="clockSubtitle">function entry</span></div>
+      <div class="row"><button class="btn" id="prevBtn">←</button><button class="btn primary" id="nextBtn">下一拍</button><button class="btn" id="resetBtn">复位</button></div>
+    </section>
+
+    <section class="scope-stage">
+      <div class="instruction-tape" id="tape"></div>
+      <div class="datapath" id="datapath">
+        <div class="node" id="nRdi" style="left:30px;top:52px;"><span>%rdi</span><b>-</b></div>
+        <div class="node" id="nRsi" style="left:30px;top:190px;"><span>%rsi</span><b>-</b></div>
+        <div class="node" id="nAlu" style="left:245px;top:120px;"><span>address / ALU</span><b>-</b></div>
+        <div class="node" id="nMem" style="right:42px;top:84px;"><span>memory</span><b>-</b></div>
+        <div class="node" id="nRax" style="right:42px;top:238px;"><span>%rax</span><b>-</b></div>
+        <div class="flow-line" id="flowA" style="left:150px;top:98px;width:110px;transform:rotate(18deg)"></div>
+        <div class="flow-line" id="flowB" style="left:150px;top:230px;width:120px;transform:rotate(-24deg)"></div>
+        <div class="flow-line" id="flowC" style="left:360px;top:165px;width:120px;transform:rotate(-18deg)"></div>
+        <div class="flow-line" id="flowD" style="left:490px;top:240px;width:90px;transform:rotate(30deg)"></div>
+      </div>
+      <div class="strip-title" id="explain">-</div>
+    </section>
+
+    <aside class="register-bank" id="registerBank"></aside>
+    <section class="memory-dock" id="memoryDock"></section>
+  </main>
+</div>
+<script>
+const source=["long mix(long *a, long i, long v) {","    long x = a[i];","    long y = x + v;","    a[i] = y;","    return y - i;","}"];
+const steps=[
+{title:"cycle 1",sub:"function entry",line:0,q:"入口处，前三个参数分别位于哪些寄存器？",regs:{rdi:"0x1000",rsi:"2",rdx:"5",rax:"-",rsp:"0x7ff0",rbp:"-"},mem:["11","17","23","31"],hot:[],nodes:{rdi:"0x1000",rsi:"2",alu:"ready",mem:"a[]",rax:"-"},ex:"参数已经按 ABI 到达寄存器，尚未访问内存。"},
+{title:"cycle 2",sub:"effective address",line:1,q:"为什么访问 a[i] 时，i 要乘以 8？",regs:{rdi:"0x1000",rsi:"2",rdx:"5",rax:"0x1010",rsp:"0x7ff0",rbp:"-"},mem:["11","17","23","31"],hot:[],nodes:{rdi:"0x1000",rsi:"2",alu:"0x1010",mem:"a[2]",rax:"addr"},ex:"LEA 计算有效地址：base + index * sizeof(long)。"},
+{title:"cycle 3",sub:"load",line:1,q:"这一拍是地址计算，还是把内存内容读入寄存器？",regs:{rdi:"0x1000",rsi:"2",rdx:"5",rax:"23",rsp:"0x7ff0",rbp:"-"},mem:["11","17","23","31"],hot:[2],nodes:{rdi:"0x1000",rsi:"2",alu:"0x1010",mem:"23",rax:"23"},ex:"M[0x1010] 被读入 %rax，x 的值现在在寄存器里。"},
+{title:"cycle 4",sub:"add",line:2,q:"第三个参数 v 为什么出现在 %rdx？",regs:{rdi:"0x1000",rsi:"2",rdx:"5",rax:"28",rsp:"0x7ff0",rbp:"-"},mem:["11","17","23","31"],hot:[],nodes:{rdi:"0x1000",rsi:"2",alu:"23+5",mem:"idle",rax:"28"},ex:"ALU 执行 %rax + %rdx，得到 y。"},
+{title:"cycle 5",sub:"store",line:3,q:"寄存器值和内存值都变化时，哪个是最终程序状态？",regs:{rdi:"0x1000",rsi:"2",rdx:"5",rax:"28",rsp:"0x7ff0",rbp:"-"},mem:["11","17","28","31"],hot:[2],nodes:{rdi:"0x1000",rsi:"2",alu:"0x1010",mem:"a[2]=28",rax:"28"},ex:"store 把 %rax 写回 a[i]，数组元素被改变。"},
+{title:"cycle 6",sub:"return value",line:4,q:"返回值固定从哪个寄存器带回调用者？",regs:{rdi:"0x1000",rsi:"2",rdx:"5",rax:"26",rsp:"0x7ff0",rbp:"-"},mem:["11","17","28","31"],hot:[],nodes:{rdi:"0x1000",rsi:"2",alu:"28-2",mem:"idle",rax:"26"},ex:"return y - i 的结果放入 %rax。"}
+];
+let cur=0, previous={};
+function render(){
+ const s=steps[cur];
+ sourceLines.innerHTML=source.map((x,i)=>`<div class="line ${i===s.line?"active":""}"><span class="ln">${i+1}</span><span>${x}</span></div>`).join("");
+ tape.innerHTML=steps.map((x,i)=>`<button class="tick ${i===cur?"active":""}" onclick="cur=${i};render()">${x.title}<br>${x.sub}</button>`).join("");
+ clockTitle.textContent=s.title; clockSubtitle.textContent=s.sub; question.textContent=s.q; explain.textContent=s.ex;
+ const regs=[["rdi","%rdi"],["rsi","%rsi"],["rdx","%rdx"],["rax","%rax"],["rsp","%rsp"],["rbp","%rbp"]];
+ registerBank.innerHTML=regs.map(([k,n])=>`<div class="reg ${previous[k]!==undefined&&previous[k]!==s.regs[k]?"changed":""}"><div class="name">${n}</div><div class="value">${s.regs[k]}</div></div>`).join("");
+ memoryDock.innerHTML=s.mem.map((v,i)=>`<div class="mem ${s.hot.includes(i)?"hot":""}"><b>0x${(0x1000+i*8).toString(16)}</b>a[${i}] = ${v}</div>`).join("");
+ nRdi.querySelector("b").textContent=s.nodes.rdi; nRsi.querySelector("b").textContent=s.nodes.rsi; nAlu.querySelector("b").textContent=s.nodes.alu; nMem.querySelector("b").textContent=s.nodes.mem; nRax.querySelector("b").textContent=s.nodes.rax;
+ document.querySelectorAll(".node").forEach(n=>n.classList.remove("hot"));
+ if(cur===2||cur===5)nMem.classList.add("hot"); if(cur>=3)nRax.classList.add("hot"); if(cur===1||cur===4)nAlu.classList.add("hot");
+ previous={...s.regs};
+}
+previous={...steps[0].regs}; render();
+nextBtn.onclick=()=>{cur=Math.min(steps.length-1,cur+1);render();};
+prevBtn.onclick=()=>{cur=Math.max(0,cur-1);render();};
+resetBtn.onclick=()=>{cur=0;previous={...steps[0].regs};render();};
+document.addEventListener("keydown",e=>{if(e.key==="ArrowRight")nextBtn.click();if(e.key==="ArrowLeft")prevBtn.click();});
+</script>
+</body>
+</html>

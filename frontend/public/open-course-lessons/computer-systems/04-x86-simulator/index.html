@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>状态转移 · 教学 x86 模拟器数据通路与流水线</title>
+<link rel="stylesheet" href="../assets/common.css">
+<style>
+  .sim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .prog-view {
+    background: #0a0f1a; border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+  }
+  .prog-view .head { padding: 8px 12px; background: var(--bg-panel-2); border-bottom: 1px solid var(--border); font-size:12px; color: var(--text-dim); display: flex; justify-content: space-between; }
+  .prog-body { padding: 6px 0; height: 320px; overflow-y: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.65; }
+  .plin { display: grid; grid-template-columns: 60px 100px 1fr; padding: 2px 10px; cursor: pointer; }
+  .plin.pc { background: rgba(167,139,250,0.18); border-left: 3px solid var(--accent-2); padding-left: 7px; }
+  .plin:hover { background: rgba(125,211,252,0.06); }
+  .plin .a { color:#4a5876; }
+  .plin .b { color:#64748b; font-size: 11px; }
+  .plin .c { color: var(--text); }
+  .plin .c .op   { color: #7dd3fc; }
+  .plin .c .reg  { color: #f472b6; }
+  .plin .c .num  { color: #fbbf24; }
+  .plin .c .cmt  { color: #64748b; font-style: italic; margin-left:8px; }
+  .datapath { position: relative; }
+  #datapath-svg { width: 100%; height: 380px; background: #0a0f1a; border: 1px solid var(--border); border-radius: 10px; }
+  .dp-box { fill: var(--bg-panel-2); stroke: var(--border-hi); stroke-width: 1.5; }
+  .dp-box.active { fill: rgba(125,211,252,0.15); stroke: var(--accent); stroke-width: 2; filter: drop-shadow(0 0 6px rgba(125,211,252,0.5)); }
+  .dp-text { fill: var(--text); font-family: var(--mono); font-size: 11px; text-anchor: middle; dominant-baseline: middle; }
+  .dp-text.sub { fill: var(--text-dim); font-size: 10px; }
+  .dp-line { stroke: #3b4a67; stroke-width: 1.5; fill: none; }
+  .dp-line.active { stroke: var(--accent); stroke-width: 2.5; filter: drop-shadow(0 0 4px rgba(125,211,252,0.6)); }
+  .dp-line.data   { stroke: #4ade80; }
+  .dp-line.data.active { stroke: #4ade80; stroke-width: 2.5; filter: drop-shadow(0 0 4px rgba(74,222,128,0.6)); }
+  .dp-line.ctrl   { stroke: #a78bfa; stroke-dasharray: 4 3; }
+  .dp-line.ctrl.active { stroke: #c4b5fd; stroke-width: 2.5; }
+  .pipeline {
+    display: grid; grid-template-columns: 60px repeat(5, 1fr); gap: 4px;
+    background: #0a0f1a; border: 1px solid var(--border); border-radius: 10px; padding: 10px;
+  }
+  .pipeline .h { text-align: center; font-size: 11px; color: var(--text-dim); padding: 4px 0; }
+  .pipeline .cyc { text-align: center; font-size: 11px; color: var(--text-dim); padding: 6px 0; }
+  .pipeline .cell {
+    background: var(--bg-panel-2); border: 1px solid var(--border); border-radius: 4px;
+    padding: 6px 8px; font-family: var(--mono); font-size: 11px; min-height: 26px;
+    transition: all 0.3s;
+  }
+  .pipeline .cell.busy   { background: rgba(125,211,252,0.15); border-color: var(--accent); }
+  .pipeline .cell.bubble { background: rgba(148,163,184,0.08); color: var(--text-dim); font-style: italic; }
+  .pipeline .cell.stall  { background: rgba(251,191,36,0.12); border-color: var(--warn); color: var(--warn); }
+  .pipeline .cell.branch { background: rgba(248,113,113,0.14); border-color: var(--danger); }
+  .memtable { background: #0a0f1a; border: 1px solid var(--border); border-radius: 10px; padding: 10px; max-height: 240px; overflow-y: auto; font-family: var(--mono); font-size: 12px; }
+  .memtable .row { display: grid; grid-template-columns: 110px repeat(8, 1fr); gap: 4px; padding: 2px 0; }
+  .memtable .row .a { color: var(--text-dim); }
+  .memtable .row .b { text-align: center; padding: 2px 0; border-radius: 3px; background: var(--bg-panel-2); }
+  .memtable .row .b.changed { background: rgba(251,191,36,0.2); color: var(--warn); animation: flash 0.7s ease; }
+  .regtbl { width: 100%; font-family: var(--mono); font-size: 12px; border-collapse: collapse; }
+  .regtbl td { padding: 4px 6px; border-bottom: 1px solid var(--border); }
+  .regtbl td.k { color: var(--text-dim); width: 55px; }
+  .regtbl tr.changed td.v { color: var(--warn); animation: flash 0.6s ease-out; }
+  .prog-picker { display: flex; gap: 6px; flex-wrap: wrap; }
+  .prog-picker .btn.active { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #0b0f17; font-weight: 700; }
+  .mode-picker {
+    display: flex; padding: 3px; background: var(--bg-panel-2); border: 1px solid var(--border); border-radius: 999px; width: fit-content;
+  }
+  .mode-picker button { padding: 5px 14px; border: 0; border-radius: 999px; background: transparent; color: var(--text-dim); font-size: 12px; cursor: pointer; }
+  .mode-picker button.active { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #0b0f17; font-weight: 700; }
+  .stat-inline { display: flex; gap: 8px; flex-wrap: wrap; font-family: var(--mono); font-size: 12px; }
+  .stat-inline span { padding: 3px 8px; background: var(--bg-panel-2); border: 1px solid var(--border-hi); border-radius: 4px; color: var(--text-dim); }
+  .stat-inline span b { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">ICS</div>
+      <div>
+        <div class="title">状态转移 · 教学 x86 模拟器</div>
+        <div class="subtitle">Y86-64 风格数据通路 · SEQ vs 5-Stage Pipeline · 逐周期可视化</div>
+      </div>
+    </div>
+    <div class="row">
+      <span class="badge">Y86-64 教学 ISA</span>
+      <a class="nav-back" href="../index.html">← 返回演示中心</a>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div>
+      <h1>看得见的\"取指→译码→执行→访存→写回\"</h1>
+      <p>本演示是一个用纯 JavaScript 实现的 <b>Y86-64 教学 CPU 模拟器</b>，同时支持 <b>SEQ（顺序）</b>与 <b>PIPE（5 级流水）</b>两种执行模式，随程序运行同步高亮数据通路上的活跃模块与信号。学生可选择\"求和 / 数组累加 / 简单分支\"三个内置程序，逐周期或连续运行，观察 CPI、气泡、分支惩罚等真实指标。</p>
+      <div class="callout" style="padding:8px 12px;margin-top:10px;border-radius:8px;background:rgba(167,139,250,0.06);border-left:3px solid var(--accent-2);font-size:12.5px;line-height:1.55;">🎯 教学目标：把 CSAPP Y86-64 Arch Lab 的 Tcl/Tk GUI 搬进浏览器；一次课上看到 SEQ 与 PIPE 在同一程序上的性能差异；直观理解流水线冒险与气泡插入。</div>
+    </div>
+    <div>
+      <div class="section-title">🧪 选择程序</div>
+      <div class="prog-picker" id="prog-picker" style="margin-bottom:10px"></div>
+      <div class="section-title">⚙️ 执行模式</div>
+      <div class="mode-picker" id="mode-picker" style="margin-bottom:10px">
+        <button data-mode="seq" class="active">SEQ 顺序</button>
+        <button data-mode="pipe">PIPE 5 级流水</button>
+      </div>
+      <div class="section-title">🎮 控制</div>
+      <div class="row">
+        <button class="btn primary" id="run-btn">▶ 连续运行</button>
+        <button class="btn" id="step-btn">⤵ 单周期</button>
+        <button class="btn" id="reset-btn">↺ 复位</button>
+      </div>
+      <div class="section-title">📊 性能指标</div>
+      <div class="stat-inline">
+        <span>Cycle: <b id="stat-cycle">0</b></span>
+        <span>Instr done: <b id="stat-done">0</b></span>
+        <span>CPI: <b id="stat-cpi">-</b></span>
+        <span>Stalls: <b id="stat-stall">0</b></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sim-grid">
+    <!-- 左：程序 + 内存 -->
+    <div>
+      <div class="prog-view">
+        <div class="head">
+          <span>📜 程序段（Y86-64）</span>
+          <span class="mono" id="prog-name">sum</span>
+        </div>
+        <div class="prog-body" id="prog-body"></div>
+      </div>
+      <div style="height:14px"></div>
+      <div class="prog-view">
+        <div class="head"><span>💾 数据存储器</span><span class="mono">0x0100 - 0x013F</span></div>
+        <div class="memtable" id="memtable"></div>
+      </div>
+    </div>
+
+    <!-- 右：数据通路 + 寄存器 -->
+    <div>
+      <svg id="datapath-svg" viewBox="0 0 700 380" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#3b4a67"/>
+          </marker>
+          <marker id="arr-a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/>
+          </marker>
+        </defs>
+        <!-- 数据通路示意（五个流水段）-->
+        <!-- Stage boxes -->
+        <g id="stages"></g>
+        <!-- 连接线 -->
+        <g id="wires"></g>
+        <!-- 附加：PC、寄存器堆、内存 -->
+        <g id="side-boxes"></g>
+        <g id="labels"></g>
+      </svg>
+      <div style="height:14px"></div>
+      <div class="card" style="padding:12px;">
+        <h3 style="margin:2px 0 8px;font-size:13px;">🗄️ 寄存器堆 · 状态标志</h3>
+        <table class="regtbl" id="regtbl"></table>
+        <div style="margin-top:6px;font-size:11.5px;color:var(--text-dim);" id="flags-line"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">🚦 流水线时序图（PIPE 模式）</div>
+  <div class="pipeline" id="pipeline">
+    <div class="h"></div><div class="h">IF</div><div class="h">ID</div><div class="h">EX</div><div class="h">MEM</div><div class="h">WB</div>
+  </div>
+
+  <div class="grid" style="grid-template-columns: repeat(3, 1fr); margin-top:16px;">
+    <div class="card"><h3>Level 1 · 单指令</h3><p class="hint">选 <b>sum</b>，SEQ 模式单周期，观察每个 stage 的高亮顺序，确认\"取指 → 译码 → 执行 → 写回\"路径。</p></div>
+    <div class="card"><h3>Level 2 · 数据通路对比</h3><p class="hint">同一 <b>array-sum</b> 程序分别在 SEQ 与 PIPE 下连续运行，比较 CPI 与总周期数，撰写 300 字流水线加速比分析。</p></div>
+    <div class="card"><h3>Level 3 · 冒险与气泡</h3><p class="hint">在 <b>branch-demo</b> 中观察 <span class="mono">jle</span> 引起的分支惩罚（bubble），说明教学模拟器如何简化真实处理器的转发/预测。</p></div>
+  </div>
+
+  <div class="footer">计算机系统导论 · 模拟器实验 · 状态转移</div>
+</div>
+
+<script>
+/* =========================================================================
+ * Y86-64 迷你解释器（教学用简化）
+ * 支持指令：
+ *   irmovq V, rB         (0x30 F rB | V) —— 立即数到寄存器
+ *   rrmovq rA, rB        (0x20 rA rB)
+ *   addq   rA, rB        (0x60 rA rB)
+ *   subq   rA, rB        (0x61 rA rB)
+ *   rmmovq rA, D(rB)     (0x40 rA rB | D)   —— reg → mem
+ *   mrmovq D(rB), rA     (0x50 rA rB | D)   —— mem → reg
+ *   jmp / jle / jg Dest  (0x70/0x71/0x76 | Dest)
+ *   halt                 (0x00)
+ *
+ * 教学：所有指令假设 1 内存字（8字节）取指长度足够；数据通路示意，不与真实字段严格对齐
+ * ========================================================================= */
+
+const REG = ["%rax","%rcx","%rdx","%rbx","%rsp","%rbp","%rsi","%rdi","%r8"];
+const REG_IDX = { rax:0,rcx:1,rdx:2,rbx:3,rsp:4,rbp:5,rsi:6,rdi:7,r8:8 };
+
+const PROGRAMS = {
+  sum: {
+    label: "sum · 两数相加",
+    desc: "把 10 和 32 加到 %rax，然后 halt。展示 irmovq + addq + halt 的基础路径。",
+    initMem: { },
+    lines: [
+      { addr:"0x0000", bytes:"30 F3 0A 00...", asm:[["op","irmovq"],["punc"," "],["num","$10"],["punc",","],["reg","%rbx"]], cmt:"%rbx = 10", type:"irmovq", rB:3, V:10 },
+      { addr:"0x000a", bytes:"30 F0 20 00...", asm:[["op","irmovq"],["punc"," "],["num","$32"],["punc",","],["reg","%rax"]], cmt:"%rax = 32", type:"irmovq", rB:0, V:32 },
+      { addr:"0x0014", bytes:"60 30",         asm:[["op","addq"],  ["punc","   "],["reg","%rbx"],["punc",","],["reg","%rax"]], cmt:"%rax += %rbx → 42", type:"OPq", rA:3, rB:0, op:"add" },
+      { addr:"0x0016", bytes:"00",             asm:[["op","halt"]], cmt:"停机", type:"halt" }
+    ]
+  },
+  "array-sum": {
+    label: "array-sum · 数组累加",
+    desc: "循环累加 mem[0x100..0x120] 的 4 个 qword 到 %rax，展示 mrmovq/addq/jle 循环。",
+    initMem: { 0x100:1, 0x108:2, 0x110:3, 0x118:4 },
+    lines: [
+      { addr:"0x0000", bytes:"30 F0 00 00 00...", asm:[["op","irmovq"],["punc"," "],["num","$0"],["punc",","],["reg","%rax"]], cmt:"sum = 0", type:"irmovq", rB:0, V:0 },
+      { addr:"0x000a", bytes:"30 F1 00 01 00...", asm:[["op","irmovq"],["punc"," "],["num","$0x100"],["punc",","],["reg","%rcx"]], cmt:"ptr = 0x100", type:"irmovq", rB:1, V:0x100 },
+      { addr:"0x0014", bytes:"30 F2 20 01 00...", asm:[["op","irmovq"],["punc"," "],["num","$0x120"],["punc",","],["reg","%rdx"]], cmt:"end = 0x120", type:"irmovq", rB:2, V:0x120 },
+      { addr:"0x001e", bytes:"50 31 00 00 00...", asm:[["op","mrmovq"],["punc"," "],["reg","0(%rcx)"],["punc",","],["reg","%rbx"]], cmt:"load *ptr → %rbx", type:"mrmovq", rA:3, rB:1, D:0 },
+      { addr:"0x0028", bytes:"60 30",             asm:[["op","addq"],["punc","   "],["reg","%rbx"],["punc",","],["reg","%rax"]], cmt:"sum += *ptr", type:"OPq", rA:3, rB:0, op:"add" },
+      { addr:"0x002a", bytes:"30 F5 08 00...",    asm:[["op","irmovq"],["punc"," "],["num","$8"],["punc",","],["reg","%rbp"]], cmt:"tmp=8", type:"irmovq", rB:5, V:8 },
+      { addr:"0x0034", bytes:"60 51",             asm:[["op","addq"],["punc","   "],["reg","%rbp"],["punc",","],["reg","%rcx"]], cmt:"ptr += 8", type:"OPq", rA:5, rB:1, op:"add" },
+      { addr:"0x0036", bytes:"61 12",             asm:[["op","subq"],["punc","   "],["reg","%rcx"],["punc",","],["reg","%rdx"]], cmt:"end - ptr, 更新 flags", type:"OPq", rA:1, rB:2, op:"sub", peek:true },
+      { addr:"0x0038", bytes:"76 1e 00 00...",    asm:[["op","jg"],["punc","     "],["num","0x001e"]], cmt:"若 end>ptr 回到 loop", type:"jXX", cond:"g", dest:3 },
+      { addr:"0x0042", bytes:"00",                asm:[["op","halt"]], cmt:"总和 = 10", type:"halt" }
+    ]
+  },
+  "branch-demo": {
+    label: "branch-demo · 分支演示",
+    desc: "if (%rax > 5) return 100; else return 200; 展示条件跳转与分支惩罚。",
+    initMem: {},
+    lines: [
+      { addr:"0x0000", bytes:"30 F0 07 00...", asm:[["op","irmovq"],["punc"," "],["num","$7"],["punc",","],["reg","%rax"]], cmt:"%rax = 7", type:"irmovq", rB:0, V:7 },
+      { addr:"0x000a", bytes:"30 F1 05 00...", asm:[["op","irmovq"],["punc"," "],["num","$5"],["punc",","],["reg","%rcx"]], cmt:"%rcx = 5", type:"irmovq", rB:1, V:5 },
+      { addr:"0x0014", bytes:"61 10",          asm:[["op","subq"],["punc","   "],["reg","%rcx"],["punc",","],["reg","%rax"]], cmt:"%rax - %rcx，更新 flags", type:"OPq", rA:1, rB:0, op:"sub" },
+      { addr:"0x0016", bytes:"76 24 00 00...", asm:[["op","jg"],["punc","     "],["num","0x0024"]], cmt:"若 >5 跳到 then", type:"jXX", cond:"g", dest:5 },
+      { addr:"0x001f", bytes:"30 F3 C8 00...", asm:[["op","irmovq"],["punc"," "],["num","$200"],["punc",","],["reg","%rbx"]], cmt:"else: %rbx=200", type:"irmovq", rB:3, V:200 },
+      { addr:"0x0029", bytes:"70 30 00 00...", asm:[["op","jmp"],["punc","    "],["num","0x002e"]], cmt:"跳到 end", type:"jXX", cond:"mp", dest:7 },
+      { addr:"0x0024", bytes:"30 F3 64 00...", asm:[["op","irmovq"],["punc"," "],["num","$100"],["punc",","],["reg","%rbx"]], cmt:"then: %rbx=100", type:"irmovq", rB:3, V:100 },
+      { addr:"0x002e", bytes:"00",             asm:[["op","halt"]], cmt:"halt", type:"halt" }
+    ]
+  }
+};
+
+/* ---------------- CPU State ---------------- */
+class CPU {
+  constructor(prog) {
+    this.prog = prog; this.pc = 0;
+    this.regs = new BigInt64Array(9);
+    this.mem = {};
+    Object.entries(prog.initMem||{}).forEach(([k,v]) => this.mem[+k] = BigInt(v));
+    this.flags = { ZF:0, SF:0, OF:0 };
+    this.halted = false;
+    this.cycle = 0; this.done = 0; this.stalls = 0;
+    this.activeStage = null;   // for SEQ animation
+    this.pipe = null;          // for PIPE
+    this.pipeHistory = [];     // for pipeline chart
+  }
+
+  ins() { return this.prog.lines[this.pc]; }
+
+  /* SEQ 单指令执行，返回执行了哪些 stage 用于动画 */
+  stepSEQ() {
+    if (this.halted) return null;
+    const ins = this.ins();
+    if (!ins) { this.halted = true; return null; }
+    const stages = ["IF","ID","EX","MEM","WB"];
+    const active = ["IF","ID"];
+    let newPC = this.pc + 1;
+
+    switch (ins.type) {
+      case "halt":
+        this.halted = true;
+        this.cycle++; this.done++;
+        return { ins, stages: ["IF","ID"] };
+      case "irmovq":
+        this.regs[ins.rB] = BigInt(ins.V);
+        active.push("EX","WB");
+        break;
+      case "OPq": {
+        const a = this.regs[ins.rA], b = this.regs[ins.rB];
+        let r;
+        if (ins.op === "add") r = b + a;
+        else if (ins.op === "sub") r = b - a;
+        this.regs[ins.rB] = r;
+        this.flags.ZF = (r === 0n) ? 1 : 0;
+        this.flags.SF = (r < 0n) ? 1 : 0;
+        this.flags.OF = 0;
+        active.push("EX","WB");
+        break;
+      }
+      case "rmmovq":
+        this.mem[Number(this.regs[ins.rB]) + ins.D] = this.regs[ins.rA];
+        active.push("EX","MEM");
+        break;
+      case "mrmovq":
+        this.regs[ins.rA] = this.mem[Number(this.regs[ins.rB]) + ins.D] || 0n;
+        active.push("EX","MEM","WB");
+        break;
+      case "jXX": {
+        active.push("EX");
+        let take;
+        if (ins.cond === "mp") take = true;
+        else if (ins.cond === "le") take = (this.flags.SF===1 || this.flags.ZF===1);
+        else if (ins.cond === "g")  take = (this.flags.SF===0 && this.flags.ZF===0);
+        else take = false;
+        if (take) newPC = ins.dest;
+        break;
+      }
+    }
+    this.pc = newPC;
+    this.cycle++;
+    if (ins.type !== "halt") this.done++;
+    return { ins, stages: active };
+  }
+
+  /* PIPE 单周期推进（简化）：五段流水，遇到分支/加载-使用 → 插入 bubble */
+  initPipe() {
+    this.pipe = { IF:null, ID:null, EX:null, MEM:null, WB:null };
+    this.pcFetch = 0;
+    this.pipeHistory = [];
+  }
+  stepPIPE() {
+    if (this.halted) return null;
+    const P = this.pipe;
+    // WB
+    if (P.WB && P.WB.ins) {
+      const ins = P.WB.ins;
+      // 写回结果
+      if (ins.type === "irmovq") this.regs[ins.rB] = BigInt(ins.V);
+      if (ins.type === "OPq") {
+        this.regs[ins.rB] = P.WB.result;
+        this.flags = P.WB.flags;
+      }
+      if (ins.type === "mrmovq") this.regs[ins.rA] = P.WB.memVal;
+      if (ins.type !== "halt" && !P.WB.bubble) this.done++;
+      if (ins.type === "halt") this.halted = true;
+    }
+    // shift
+    P.WB = P.MEM;
+    // MEM
+    if (P.WB && P.WB.ins) {
+      const ins = P.WB.ins;
+      if (ins.type === "mrmovq") P.WB.memVal = this.mem[Number(this.regs[ins.rB]) + ins.D] || 0n;
+      if (ins.type === "rmmovq") this.mem[Number(this.regs[ins.rB]) + ins.D] = this.regs[ins.rA];
+    }
+    P.MEM = P.EX;
+    // EX
+    if (P.MEM && P.MEM.ins) {
+      const ins = P.MEM.ins;
+      if (ins.type === "OPq") {
+        const a = this.regs[ins.rA], b = this.regs[ins.rB];
+        let r = ins.op==="add" ? b+a : b-a;
+        P.MEM.result = r;
+        P.MEM.flags = { ZF: r===0n?1:0, SF: r<0n?1:0, OF: 0 };
+      }
+    }
+    P.EX = P.ID;
+    // ID
+    P.ID = P.IF;
+    // IF: 取指
+    const ins = this.prog.lines[this.pcFetch];
+    if (ins) {
+      P.IF = { ins, bubble: false, pc: this.pcFetch };
+      // 简化：分支指令马上引发 bubble
+      if (ins.type === "jXX") {
+        // 简化决定：直接看当前 flags（真实是预测未取）
+        let take;
+        if (ins.cond === "mp") take = true;
+        else if (ins.cond === "le") take = (this.flags.SF===1 || this.flags.ZF===1);
+        else if (ins.cond === "g")  take = (this.flags.SF===0 && this.flags.ZF===0);
+        else take = false;
+        if (take) this.pcFetch = ins.dest;
+        else this.pcFetch = this.pcFetch + 1;
+        // 插入 1 个 bubble：把接下来的 IF 强制置 bubble（示意）
+        this.forceBubbleNext = 1;
+      } else if (ins.type === "halt") {
+        P.IF = { ins, bubble: false, pc: this.pcFetch };
+        this.pcFetch = this.pcFetch; // stall pc
+      } else if (this.forceBubbleNext) {
+        // already fetched real one; treat as bubble
+        P.IF = { ins: { type:"bubble", asm:[["op","nop"]], cmt:"bubble (分支后)", addr:"—", bytes:"—" }, bubble:true };
+        this.stalls++;
+        this.forceBubbleNext--;
+        // 别推进 pcFetch —— 因为已经取了跳转目标
+      } else {
+        this.pcFetch++;
+      }
+    } else {
+      P.IF = null;
+    }
+    this.cycle++;
+    // 记录时序
+    this.pipeHistory.push({
+      cyc: this.cycle,
+      IF:  P.IF  && P.IF.ins  ? P.IF.ins.asm.map(t=>t[1]).join("") : "",
+      ID:  P.ID  && P.ID.ins  ? P.ID.ins.asm.map(t=>t[1]).join("") : "",
+      EX:  P.EX  && P.EX.ins  ? P.EX.ins.asm.map(t=>t[1]).join("") : "",
+      MEM: P.MEM && P.MEM.ins ? P.MEM.ins.asm.map(t=>t[1]).join("") : "",
+      WB:  P.WB  && P.WB.ins  ? P.WB.ins.asm.map(t=>t[1]).join("") : "",
+      IF_b:  P.IF  && P.IF.bubble,
+      ID_b:  P.ID  && P.ID.bubble,
+      EX_b:  P.EX  && P.EX.bubble,
+      MEM_b: P.MEM && P.MEM.bubble,
+      WB_b:  P.WB  && P.WB.bubble,
+      branch: P.IF && P.IF.ins && P.IF.ins.type === "jXX"
+    });
+    if (this.pipeHistory.length > 8) this.pipeHistory.shift();
+    return { pipe: P };
+  }
+}
+
+/* ---------------- 视图 ---------------- */
+const state = { prog: "sum", mode: "seq", cpu: null, running: false, timer: null };
+
+function initCPU() {
+  state.cpu = new CPU(PROGRAMS[state.prog]);
+  if (state.mode === "pipe") state.cpu.initPipe();
+  render();
+}
+
+function render() {
+  renderProg(); renderMem(); renderRegs(); renderDatapath(null); renderPipeline(); renderStats();
+}
+
+function renderProg() {
+  const p = PROGRAMS[state.prog];
+  const body = document.getElementById("prog-body");
+  body.innerHTML = "";
+  p.lines.forEach((ln, i) => {
+    const el = document.createElement("div");
+    el.className = "plin" + (i === state.cpu.pc ? " pc":"");
+    let asm = "";
+    ln.asm.forEach(([k,v]) => asm += `<span class="${k}">${v}</span>`);
+    el.innerHTML = `<span class="a">${ln.addr}</span><span class="b">${ln.bytes||""}</span><span class="c">${asm}<span class="cmt"># ${ln.cmt||""}</span></span>`;
+    body.appendChild(el);
+  });
+  document.getElementById("prog-name").textContent = p.label;
+}
+
+function renderMem() {
+  const box = document.getElementById("memtable");
+  box.innerHTML = "";
+  const start = 0x100;
+  for (let base = start; base < start + 0x40; base += 8) {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `<div class="a">0x${base.toString(16).padStart(4,"0")}</div>`;
+    const v = state.cpu.mem[base];
+    // display each byte
+    const asHex = v == null ? "00 00 00 00 00 00 00 00" : v.toString(16).padStart(16,"0").toUpperCase();
+    for (let i=0;i<8;i++) {
+      const bhex = v == null ? "00" : asHex.substr(14 - i*2, 2);
+      row.innerHTML += `<div class="b" data-a="${base+i}">${bhex}</div>`;
+    }
+    box.appendChild(row);
+  }
+}
+
+function renderRegs() {
+  const tbl = document.getElementById("regtbl");
+  tbl.innerHTML = "";
+  ["rax","rcx","rdx","rbx","rsp","rbp","rsi","rdi","r8"].forEach((n, i) => {
+    const v = state.cpu.regs[i];
+    tbl.innerHTML += `<tr><td class="k">%${n}</td><td class="v">0x${(v & 0xFFFFFFFFFFFFFFFFn).toString(16).padStart(4,"0").toUpperCase()}</td><td class="v" style="color:var(--text-dim)">= ${v.toString()}</td></tr>`;
+  });
+  const f = state.cpu.flags;
+  document.getElementById("flags-line").innerHTML =
+    `flags: <b style="color:${f.ZF?'var(--ok)':'var(--text-dim)'}">ZF=${f.ZF}</b> · <b style="color:${f.SF?'var(--warn)':'var(--text-dim)'}">SF=${f.SF}</b> · <b style="color:${f.OF?'var(--danger)':'var(--text-dim)'}">OF=${f.OF}</b>` +
+    ` &nbsp;&nbsp; pc: <b>${PROGRAMS[state.prog].lines[state.cpu.pc]?.addr || "—"}</b>` +
+    ` &nbsp;&nbsp; ${state.cpu.halted ? '<span class="pill ok">HALTED</span>':''}`;
+}
+
+function renderStats() {
+  document.getElementById("stat-cycle").textContent = state.cpu.cycle;
+  document.getElementById("stat-done").textContent = state.cpu.done;
+  document.getElementById("stat-cpi").textContent = state.cpu.done > 0 ? (state.cpu.cycle / state.cpu.done).toFixed(2) : "-";
+  document.getElementById("stat-stall").textContent = state.cpu.stalls;
+}
+
+/* ---- 数据通路 SVG ---- */
+const STAGES = [
+  { id:"IF",  x:30,  y:150, w:110, h:60, label:"IF · Fetch",    sub:"从 imem 读指令，pc→pc'" },
+  { id:"ID",  x:160, y:150, w:110, h:60, label:"ID · Decode",   sub:"寄存器堆读，控制信号" },
+  { id:"EX",  x:290, y:150, w:110, h:60, label:"EX · Execute",  sub:"ALU 计算，标志位" },
+  { id:"MEM", x:420, y:150, w:110, h:60, label:"MEM · Memory",  sub:"读/写 dmem" },
+  { id:"WB",  x:550, y:150, w:110, h:60, label:"WB · Writeback",sub:"写回寄存器堆" }
+];
+function initDatapath() {
+  const svg = document.getElementById("datapath-svg");
+  const gs = svg.querySelector("#stages");
+  const wr = svg.querySelector("#wires");
+  const sb = svg.querySelector("#side-boxes");
+  const lb = svg.querySelector("#labels");
+  gs.innerHTML = ""; wr.innerHTML = ""; sb.innerHTML = ""; lb.innerHTML = "";
+  const ns = "http://www.w3.org/2000/svg";
+  // stage boxes
+  STAGES.forEach(s => {
+    const r = document.createElementNS(ns,"rect");
+    r.setAttribute("x",s.x); r.setAttribute("y",s.y); r.setAttribute("width",s.w); r.setAttribute("height",s.h); r.setAttribute("rx",8); r.setAttribute("ry",8);
+    r.setAttribute("class","dp-box"); r.dataset.id = s.id;
+    gs.appendChild(r);
+    const t1 = document.createElementNS(ns,"text");
+    t1.setAttribute("x", s.x+s.w/2); t1.setAttribute("y", s.y+22); t1.setAttribute("class","dp-text"); t1.textContent = s.label; gs.appendChild(t1);
+    const t2 = document.createElementNS(ns,"text");
+    t2.setAttribute("x", s.x+s.w/2); t2.setAttribute("y", s.y+40); t2.setAttribute("class","dp-text sub"); t2.textContent = s.sub; gs.appendChild(t2);
+  });
+  // horizontal wires between stages
+  for (let i=0;i<STAGES.length-1;i++) {
+    const a = STAGES[i], b = STAGES[i+1];
+    const p = document.createElementNS(ns,"path");
+    p.setAttribute("d", `M${a.x+a.w},${a.y+a.h/2} L${b.x},${b.y+b.h/2}`);
+    p.setAttribute("class","dp-line data"); p.setAttribute("marker-end","url(#arr)"); p.dataset.wire = `${a.id}-${b.id}`;
+    wr.appendChild(p);
+  }
+  // PC box
+  drawSideBox(sb, ns, "PC", 30, 40, 100, 40, "PC / 取指地址", "pc");
+  drawSideBox(sb, ns, "Regs", 160, 40, 240, 40, "寄存器堆（读/写 3 端口）", "regs");
+  drawSideBox(sb, ns, "IMem", 420, 40, 100, 40, "指令存储器", "imem");
+  drawSideBox(sb, ns, "DMem", 550, 40, 110, 40, "数据存储器", "dmem");
+  // 连接线
+  const drawLine = (from, to, cls, id) => {
+    const p = document.createElementNS(ns,"path");
+    p.setAttribute("d", `M${from.x},${from.y} L${to.x},${to.y}`);
+    p.setAttribute("class","dp-line " + cls); p.dataset.wire = id;
+    wr.appendChild(p);
+  };
+  drawLine({x:80, y:80}, {x:80, y:150}, "ctrl", "pc-if");   // PC → IF
+  drawLine({x:465, y:80}, {x:80, y:150}, "data", "imem-if"); // IMem → IF (弧线略简化)
+  drawLine({x:280, y:80}, {x:215, y:150}, "data", "regs-id"); // Regs → ID
+  drawLine({x:345, y:210}, {x:280, y:80}, "data", "wb-regs"); // WB → Regs (示意)
+  drawLine({x:605, y:80}, {x:475, y:150}, "data", "dmem-mem"); // DMem → MEM
+  // labels
+  const l1 = document.createElementNS(ns,"text");
+  l1.setAttribute("x",30); l1.setAttribute("y",30); l1.setAttribute("class","dp-text sub"); l1.setAttribute("text-anchor","start"); l1.textContent = "数据通路（简化 Y86-64 五段）"; lb.appendChild(l1);
+}
+function drawSideBox(g, ns, title, x, y, w, h, sub, id) {
+  const r = document.createElementNS(ns,"rect");
+  r.setAttribute("x",x); r.setAttribute("y",y); r.setAttribute("width",w); r.setAttribute("height",h); r.setAttribute("rx",6);
+  r.setAttribute("class","dp-box"); r.dataset.id = id;
+  g.appendChild(r);
+  const t = document.createElementNS(ns,"text");
+  t.setAttribute("x",x+w/2); t.setAttribute("y",y+18); t.setAttribute("class","dp-text"); t.textContent = title;
+  g.appendChild(t);
+  const t2 = document.createElementNS(ns,"text");
+  t2.setAttribute("x",x+w/2); t2.setAttribute("y",y+32); t2.setAttribute("class","dp-text sub"); t2.textContent = sub;
+  g.appendChild(t2);
+}
+function renderDatapath(activeStages, extra) {
+  // reset
+  document.querySelectorAll(".dp-box").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".dp-line").forEach(l => l.classList.remove("active"));
+  if (!activeStages) return;
+  activeStages.forEach(s => {
+    const b = document.querySelector(`.dp-box[data-id="${s}"]`);
+    if (b) b.classList.add("active");
+  });
+  // 依据 stage 高亮连线
+  const wires = [];
+  if (activeStages.includes("IF")) { wires.push("pc-if","imem-if"); }
+  if (activeStages.includes("IF") && activeStages.includes("ID")) wires.push("IF-ID");
+  if (activeStages.includes("ID")) wires.push("regs-id");
+  if (activeStages.includes("ID") && activeStages.includes("EX")) wires.push("ID-EX");
+  if (activeStages.includes("EX") && activeStages.includes("MEM")) wires.push("EX-MEM");
+  if (activeStages.includes("MEM")) wires.push("dmem-mem");
+  if (activeStages.includes("MEM") && activeStages.includes("WB")) wires.push("MEM-WB");
+  if (activeStages.includes("WB")) wires.push("wb-regs");
+  wires.forEach(w => {
+    const l = document.querySelector(`.dp-line[data-wire="${w}"]`);
+    if (l) l.classList.add("active");
+  });
+}
+
+/* ---- 流水线时序图 ---- */
+function renderPipeline() {
+  const box = document.getElementById("pipeline");
+  // keep header row (first 6 children)
+  while (box.children.length > 6) box.removeChild(box.lastChild);
+  if (state.mode !== "pipe" || !state.cpu.pipeHistory) return;
+  state.cpu.pipeHistory.forEach(h => {
+    box.innerHTML += `<div class="cyc">c${h.cyc}</div>`;
+    ["IF","ID","EX","MEM","WB"].forEach(s => {
+      const val = h[s];
+      const bubble = h[s+"_b"];
+      let cls = "cell";
+      if (bubble) cls += " bubble";
+      else if (val) cls += " busy";
+      if (s==="IF" && h.branch) cls += " branch";
+      box.innerHTML += `<div class="${cls}">${bubble?"bubble":(val||"—")}</div>`;
+    });
+  });
+}
+
+/* ---- 运行控制 ---- */
+async function step() {
+  if (state.cpu.halted) return;
+  if (state.mode === "seq") {
+    const r = state.cpu.stepSEQ();
+    if (!r) return;
+    // animate stages
+    for (const st of r.stages) {
+      renderDatapath([st]);
+      await sleep(220);
+    }
+    renderDatapath(r.stages);
+    render();
+    await sleep(200);
+    renderDatapath(null);
+  } else {
+    state.cpu.stepPIPE();
+    // highlight all 5
+    renderDatapath(["IF","ID","EX","MEM","WB"]);
+    render();
+    await sleep(200);
+    renderDatapath(null);
+  }
+}
+
+async function runAll() {
+  if (state.running) { state.running = false; document.getElementById("run-btn").textContent = "▶ 连续运行"; return; }
+  state.running = true;
+  document.getElementById("run-btn").textContent = "⏸ 暂停";
+  while (state.running && !state.cpu.halted) {
+    await step();
+    // small delay
+    await sleep(60);
+  }
+  state.running = false;
+  document.getElementById("run-btn").textContent = "▶ 连续运行";
+}
+
+function reset() {
+  state.running = false;
+  document.getElementById("run-btn").textContent = "▶ 连续运行";
+  initCPU();
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* ---- Init ---- */
+function initProgPicker() {
+  const p = document.getElementById("prog-picker");
+  Object.entries(PROGRAMS).forEach(([k,v], i) => {
+    const b = document.createElement("button");
+    b.className = "btn" + (i===0?" active":"");
+    b.textContent = v.label;
+    b.addEventListener("click", () => {
+      document.querySelectorAll("#prog-picker .btn").forEach(x => x.classList.remove("active"));
+      b.classList.add("active");
+      state.prog = k;
+      initCPU();
+    });
+    p.appendChild(b);
+  });
+}
+initProgPicker();
+document.querySelectorAll("#mode-picker button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("#mode-picker button").forEach(x => x.classList.remove("active"));
+  b.classList.add("active");
+  state.mode = b.dataset.mode;
+  initCPU();
+}));
+document.getElementById("run-btn").addEventListener("click", runAll);
+document.getElementById("step-btn").addEventListener("click", step);
+document.getElementById("reset-btn").addEventListener("click", reset);
+
+initDatapath();
+initCPU();
+</script>
+</body>
+</html>

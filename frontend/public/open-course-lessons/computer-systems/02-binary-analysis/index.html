@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>反汇编读法 · 反汇编 · CFG · 单步拆弹</title>
+<link rel="stylesheet" href="../assets/common.css">
+<style>
+  .main-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 16px; }
+  .disasm { background: #0a0f1a; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .disasm .head { padding: 8px 12px; background: var(--bg-panel-2); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-dim); display: flex; justify-content: space-between; }
+  .disasm .body { padding: 6px 0; height: 420px; overflow: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.7; }
+  .ins-line { display: grid; grid-template-columns: 100px 130px 1fr; padding: 2px 12px; cursor: pointer; border-left: 3px solid transparent; }
+  .ins-line:hover { background: rgba(125,211,252,0.05); }
+  .ins-line.cur { background: rgba(167,139,250,0.16); border-left-color: var(--accent-2); }
+  .ins-line.brk { border-left-color: var(--danger); }
+  .ins-line .addr { color: #4a5876; }
+  .ins-line .bytes { color: #64748b; font-size: 11px; }
+  .ins-line .code { color: var(--text); }
+  .tok-op { color: #7dd3fc; }
+  .tok-reg { color: #f472b6; }
+  .tok-num { color: #fbbf24; }
+  .tok-lbl { color: #a78bfa; }
+  .tok-punc { color: #a3b1c6; }
+  .tok-cmt { color: #64748b; font-style: italic; margin-left: 6px; }
+  .phase-tag { display: inline-block; padding: 3px 8px; border-radius: 6px; background: var(--bg-panel-2); border: 1px solid var(--border-hi); color: var(--text-dim); font-size: 11px; }
+  #cfg { width: 100%; height: 320px; }
+  .cfg-node { fill: var(--bg-panel-2); stroke: var(--border-hi); stroke-width: 1.5; }
+  .cfg-node.cur { fill: rgba(167,139,250,0.25); stroke: var(--accent-2); }
+  .cfg-node.taken { fill: rgba(74,222,128,0.15); stroke: var(--ok); }
+  .cfg-text { fill: var(--text); font-family: var(--mono); font-size: 11px; }
+  .cfg-text.sub { fill: var(--text-dim); font-size: 10px; }
+  .cfg-edge { stroke: #4a5876; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+  .cfg-edge.taken { stroke: var(--ok); stroke-width: 2; }
+  .cfg-edge.no { stroke: var(--danger); stroke-width: 2; }
+  .regbox {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; font-family: var(--mono); font-size: 12px;
+  }
+  .regbox .r { padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel-2); }
+  .regbox .r .n { color: var(--text-dim); font-size: 10.5px; }
+  .regbox .r.changed { border-color: var(--warn); animation: flash 0.7s ease-out; }
+  .flagbox { display: flex; gap: 8px; margin-top: 6px; }
+  .flagbox span { padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border-hi); font-size: 11px; color: var(--text-dim); }
+  .flagbox span.on { color: var(--ok); border-color: var(--ok); background: rgba(74,222,128,0.1); }
+  .puzzle-input { display: flex; gap: 8px; align-items: center; }
+  .puzzle-input input { flex: 1; padding: 8px 10px; font-family: var(--mono); font-size: 13px; }
+  .result-good { color: var(--ok); font-weight: 700; }
+  .result-bad  { color: var(--danger); font-weight: 700; }
+  .step-controls { display: flex; gap: 6px; flex-wrap: wrap; }
+  .analysis-panel { background: #0a0f1a; border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-size: 12.5px; line-height: 1.7; color: var(--text-dim); }
+  .analysis-panel h4 { color: var(--text); margin: 4px 0 8px; font-size: 13px; }
+  .analysis-panel .step { padding: 6px 0; border-top: 1px dashed var(--border); }
+  .analysis-panel .step:first-child { border-top: 0; }
+  .analysis-panel .idx { display: inline-block; width: 22px; height: 22px; border-radius: 50%; background: var(--bg-panel-2); border: 1px solid var(--border-hi); color: var(--text); text-align: center; line-height: 22px; font-size: 11px; margin-right: 6px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">ICS</div>
+      <div>
+        <div class="title">反汇编读法 · 二进制程序分析</div>
+        <div class="subtitle">反汇编 · 控制流图 · 单步执行 · 一枚 mini bomb</div>
+      </div>
+    </div>
+    <div class="row">
+      <span class="badge">静态 + 动态分析</span>
+      <a class="nav-back" href="../index.html">← 返回演示中心</a>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div>
+      <h1>反汇编 + 控制流图 + 单步执行的三位一体</h1>
+      <p>本演示是一个「迷你 Bomb Lab」。给定一段 <span class="mono">phase(char*)</span> 反汇编，你需要通过阅读汇编、观察控制流图、单步执行寄存器变化，反推出使 <span class="mono">phase</span> 不 <span class="mono">explode</span> 的输入。学生借此掌握：<b>反汇编阅读、CFG 重建、条件跳转分析、动态调试与静态分析的交叉验证</b>。</p>
+      <div class="callout" style="padding:8px 12px;margin-top:10px;border-radius:8px;background:rgba(125,211,252,0.05);border-left:3px solid var(--accent);font-size:12.5px;line-height:1.55;">🎯 教学目标：把 CSAPP Bomb Lab 的\"gdb+objdump 命令行体验\"改造成可视化课堂演示，让全班同时看到同一条指令如何影响 CFG 路径与寄存器值。</div>
+    </div>
+    <div>
+      <div class="section-title">🧨 待拆弹 phase</div>
+      <div class="row" style="margin-bottom:10px">
+        <span class="phase-tag" id="phase-label">phase_1 · 单值比较</span>
+        <button class="btn" data-phase="1">phase_1</button>
+        <button class="btn" data-phase="2">phase_2</button>
+        <button class="btn" data-phase="3">phase_3</button>
+      </div>
+      <div class="section-title">🎮 输入你的猜测</div>
+      <div class="puzzle-input">
+        <input type="text" id="guess" placeholder="输入一个整数或空格分隔的整数序列" />
+        <button class="btn primary" id="run-btn">▶ 引爆 / 拆解</button>
+      </div>
+      <div style="margin-top:8px;font-size:12.5px;" id="verdict">尚未运行。</div>
+      <div class="section-title">💡 单步调试</div>
+      <div class="step-controls">
+        <button class="btn" id="load-btn">▶ 载入并断点</button>
+        <button class="btn" id="step-btn">⤵ Step (F10)</button>
+        <button class="btn" id="cont-btn">⏭ Continue (F5)</button>
+        <button class="btn" id="reset-btn">↺ Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <div class="disasm">
+      <div class="head"><span>反汇编视图 · <span class="mono" id="disasm-fn">phase_1</span></span><span class="mono" id="disasm-info">-</span></div>
+      <div class="body" id="disasm-body"></div>
+    </div>
+    <div class="card" style="padding: 0;">
+      <div style="padding: 8px 12px; background: var(--bg-panel-2); border-bottom: 1px solid var(--border); font-size:12px; color:var(--text-dim);">🧭 控制流图 · CFG（当前路径高亮）</div>
+      <svg id="cfg" viewBox="0 0 500 340" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#4a5876"/>
+          </marker>
+        </defs>
+      </svg>
+    </div>
+  </div>
+
+  <div class="grid" style="grid-template-columns: 1.1fr 1fr; margin-top: 16px;">
+    <div class="card">
+      <h3>🖥️ CPU 状态（单步执行时同步更新）</h3>
+      <div class="regbox" id="regbox"></div>
+      <div class="flagbox" id="flagbox">
+        <span data-f="ZF">ZF=0</span><span data-f="SF">SF=0</span><span data-f="OF">OF=0</span><span data-f="CF">CF=0</span>
+      </div>
+      <div style="margin-top:10px;font-size:12.5px;color:var(--text-dim);line-height:1.7;" id="explain">
+        点击\"载入并断点\"从函数入口开始，或点击左侧任一指令设置断点。
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🧠 分析笔记（教师侧栏）</h3>
+      <div class="analysis-panel" id="analysis-panel"></div>
+    </div>
+  </div>
+
+  <div class="section-title">🧪 三阶段教学难度设计</div>
+  <div class="grid" style="grid-template-columns: repeat(3, 1fr);">
+    <div class="card"><h3>phase_1 · 立即数比较</h3><p class="hint">最简单：找到 <span class="mono">cmp $0x??, %edi</span> 中的立即数即可通关。训练学生识别 <b>cmp+je/jne</b> 模式。</p></div>
+    <div class="card"><h3>phase_2 · 循环递推</h3><p class="hint">6 个数的序列，满足 <span class="mono">a[i]=a[i-1]+i</span>。需要静态阅读循环体，或单步观察 <span class="mono">%rax %rbx</span> 的演变。</p></div>
+    <div class="card"><h3>phase_3 · switch/跳转表</h3><p class="hint">观察 <span class="mono">jmpq *0x...(,%rdi,8)</span>；CFG 会给出多分支，学生需辨识 <b>跳转表寻址</b>并找到\"良性\" case。</p></div>
+  </div>
+
+  <div class="footer">计算机系统导论 · 二进制程序分析 · 反汇编读法</div>
+</div>
+
+<script>
+/* ============================================================
+ * 迷你 Bomb Lab —— 三个 phase 的反汇编、CFG、语义模型
+ * ============================================================ */
+const PHASES = {
+
+/* ---------- phase_1: 单值比较 (答案 = 42) ---------- */
+"1": {
+  label: "phase_1 · 单值比较",
+  answer: (input) => input.trim().split(/\s+/).length === 1 && +input.trim() === 42,
+  answerHint: "答案：一个整数 42",
+  disasm: [
+    { addr:"0x4011a0", bytes:"55",             asm:[["op","push"],["punc"," "],["reg","%rbp"]], desc:"保存 caller %rbp" },
+    { addr:"0x4011a1", bytes:"48 89 e5",       asm:[["op","mov"],["punc"," "],["reg","%rsp"],["punc",","],["reg","%rbp"]], desc:"建立新栈帧" },
+    { addr:"0x4011a4", bytes:"83 ff 2a",       asm:[["op","cmp"],["punc"," "],["num","$0x2a"],["punc",","],["reg","%edi"]], desc:"比较 %edi 与立即数 42。0x2a = 42！" },
+    { addr:"0x4011a7", bytes:"74 07",          asm:[["op","je"],["punc","  "],["lbl","0x4011b0"]],  desc:"若相等跳到 defused" },
+    { addr:"0x4011a9", bytes:"e8 32 00 00 00", asm:[["op","call"],["punc"," "],["lbl","explode_bomb"]], desc:"💥 引爆" },
+    { addr:"0x4011ae", bytes:"eb 03",          asm:[["op","jmp"],["punc"," "],["lbl","0x4011b3"]], desc:"跳到函数末尾" },
+    { addr:"0x4011b0", bytes:"b8 01 00 00 00", asm:[["op","mov"],["punc"," "],["num","$0x1"],["punc",","],["reg","%eax"]], desc:"return 1（defused）" },
+    { addr:"0x4011b3", bytes:"5d",             asm:[["op","pop"],["punc"," "],["reg","%rbp"]], desc:"恢复 %rbp" },
+    { addr:"0x4011b4", bytes:"c3",             asm:[["op","ret"]], desc:"返回" }
+  ],
+  cfg: {
+    nodes: [
+      { id:"A", x:250, y:40,  w:180, h:40, label:"entry / cmp $0x2a,%edi" },
+      { id:"B", x:100, y:150, w:170, h:40, label:"explode_bomb 💥",  danger:true },
+      { id:"C", x:340, y:150, w:150, h:40, label:"defused ✅", good:true }
+    ],
+    edges: [
+      { from:"A", to:"B", label:"jne (input≠42)", type:"no" },
+      { from:"A", to:"C", label:"je (input=42)",  type:"taken" }
+    ]
+  },
+  notes: [
+    "① 函数序言 push/mov 是标准栈帧建立，忽略即可。",
+    "② 核心是 <b>cmp $0x2a, %edi</b>：System V ABI 第一个整型参数在 %edi。0x2a=42。",
+    "③ je 跳转条件由 <b>ZF</b> 决定；ZF=1 意味着 %edi==42。",
+    "④ 若跳转失败则调用 explode_bomb —— 静态分析已知的\"死亡分支\"。"
+  ],
+  // simulation: input==%edi
+  sim: (input) => {
+    const s = { regs:{ RDI:input, RAX:0, RBP:0, RSP:0 }, flags:{ZF:0,SF:0,OF:0,CF:0}, pc:0, log:[] };
+    const steps = [
+      { pc:0, act:s=>{ s.regs.RBP = 0xDEAD0000; s.log.push("push %rbp — 保存 caller frame pointer"); }},
+      { pc:1, act:s=>{ s.regs.RBP = 0xBEEF1000; s.log.push("mov %rsp,%rbp — 建立新栈帧"); }},
+      { pc:2, act:s=>{
+        const diff = (s.regs.RDI - 42) | 0;
+        s.flags.ZF = (diff===0)?1:0;
+        s.flags.SF = (diff<0)?1:0;
+        s.log.push(`cmp $0x2a,%edi → %edi=${s.regs.RDI}, 结果 ZF=${s.flags.ZF}`);
+      }},
+      { pc:3, act:s=>{
+        if (s.flags.ZF===1) { s.log.push("je 命中 → 跳到 0x4011b0"); s.pcNext = 6; }
+        else                { s.log.push("je 未命中 → 落入 explode_bomb"); s.pcNext = 4; }
+      }},
+      { pc:4, act:s=>{ s.log.push("💥 explode_bomb called"); s.exploded = true; }},
+      { pc:6, act:s=>{ s.regs.RAX = 1; s.log.push("mov $0x1,%eax — 返回值置 1"); }},
+      { pc:7, act:s=>{ s.log.push("pop %rbp"); }},
+      { pc:8, act:s=>{ s.log.push("ret ✅"); s.defused = true; }}
+    ];
+    return { s, steps };
+  }
+},
+
+/* ---------- phase_2: 循环 (答案 = 1 3 6 10 15 21) ---------- */
+"2": {
+  label: "phase_2 · 循环递推",
+  answer: (input) => {
+    const xs = input.trim().split(/\s+/).map(Number);
+    if (xs.length !== 6 || xs.some(isNaN)) return false;
+    if (xs[0] !== 1) return false;
+    for (let i=1; i<6; i++) if (xs[i] !== xs[i-1] + (i+1)) return false;
+    return true;
+  },
+  answerHint: "答案：满足 a[0]=1 且 a[i]=a[i-1]+(i+1)  →  \"1 3 6 10 15 21\"",
+  disasm: [
+    { addr:"0x401200", bytes:"41 54",       asm:[["op","push"],["punc"," "],["reg","%r12"]], desc:"保存 callee-saved %r12" },
+    { addr:"0x401202", bytes:"53",          asm:[["op","push"],["punc"," "],["reg","%rbx"]], desc:"保存 callee-saved %rbx" },
+    { addr:"0x401203", bytes:"49 89 fc",    asm:[["op","mov"],["punc"," "],["reg","%rdi"],["punc",","],["reg","%r12"]], desc:"%r12 保存数组基址" },
+    { addr:"0x401206", bytes:"83 3f 01",    asm:[["op","cmpl"],["punc"," "],["num","$0x1"],["punc",","],["reg","(%rdi)"]], desc:"a[0] 必须 == 1" },
+    { addr:"0x401209", bytes:"75 1f",       asm:[["op","jne"],["punc"," "],["lbl","explode_bomb"]], desc:"不等则爆" },
+    { addr:"0x40120b", bytes:"bb 01 00 00 00", asm:[["op","mov"],["punc"," "],["num","$0x1"],["punc",","],["reg","%ebx"]], desc:"i = 1" },
+    { addr:"0x401210", bytes:"8b 04 9c",    asm:[["op","mov"],["punc"," "],["reg","(%r12,%rbx,4)"],["punc",","],["reg","%eax"]], desc:"读 a[i]（SIB 缩放×4）" },
+    { addr:"0x401214", bytes:"8b 54 9c fc", asm:[["op","mov"],["punc"," "],["reg","-4(%r12,%rbx,4)"],["punc",","],["reg","%edx"]], desc:"读 a[i-1]" },
+    { addr:"0x401219", bytes:"41 8d 14 13", asm:[["op","lea"],["punc"," "],["reg","(%rbx,%rdx,1)"],["punc",","],["reg","%edx"]], desc:"tmp = a[i-1] + i" },
+    { addr:"0x40121d", bytes:"ff c2",       asm:[["op","inc"],["punc"," "],["reg","%edx"]], desc:"tmp += 1  →  = a[i-1]+(i+1)" },
+    { addr:"0x40121f", bytes:"39 d0",       asm:[["op","cmp"],["punc"," "],["reg","%edx"],["punc",","],["reg","%eax"]], desc:"a[i] 必须 == tmp" },
+    { addr:"0x401221", bytes:"75 0a",       asm:[["op","jne"],["punc"," "],["lbl","explode_bomb"]], desc:"不等则爆" },
+    { addr:"0x401223", bytes:"48 ff c3",    asm:[["op","inc"],["punc"," "],["reg","%rbx"]], desc:"i++" },
+    { addr:"0x401226", bytes:"48 83 fb 06", asm:[["op","cmp"],["punc"," "],["num","$0x6"],["punc",","],["reg","%rbx"]], desc:"i < 6 ?" },
+    { addr:"0x40122a", bytes:"7c e4",       asm:[["op","jl"],["punc"," "],["lbl","0x401210"]], desc:"循环回跳" },
+    { addr:"0x40122c", bytes:"5b",          asm:[["op","pop"],["punc"," "],["reg","%rbx"]], desc:"恢复" },
+    { addr:"0x40122d", bytes:"41 5c",       asm:[["op","pop"],["punc"," "],["reg","%r12"]], desc:"恢复" },
+    { addr:"0x40122f", bytes:"c3",          asm:[["op","ret"]], desc:"defused" }
+  ],
+  cfg: {
+    nodes: [
+      { id:"A", x:250, y:20,  w:200, h:36, label:"entry / a[0]==1 ?" },
+      { id:"B", x:80,  y:110, w:180, h:36, label:"explode 💥", danger:true },
+      { id:"C", x:340, y:110, w:180, h:36, label:"init i=1" },
+      { id:"D", x:340, y:190, w:200, h:36, label:"loop body: a[i]==a[i-1]+(i+1)?" },
+      { id:"E", x:340, y:280, w:180, h:36, label:"i<6 ? → back / defused ✅", good:true }
+    ],
+    edges: [
+      { from:"A", to:"B", label:"a[0]≠1", type:"no" },
+      { from:"A", to:"C", label:"a[0]=1", type:"taken" },
+      { from:"C", to:"D", type:"taken" },
+      { from:"D", to:"B", label:"mismatch", type:"no" },
+      { from:"D", to:"E", label:"match",    type:"taken" },
+      { from:"E", to:"D", label:"i<6 loop back", type:"taken" }
+    ]
+  },
+  notes: [
+    "① <b>%r12/%rbx</b> 都是 callee-saved，函数会 push 保存。",
+    "② <b>a[i]</b> 由 <span class='mono'>(%r12,%rbx,4)</span> 寻址：base+index*scale。",
+    "③ <b>lea (%rbx,%rdx,1),%edx</b> 常用于\"不改标志的加法\"。",
+    "④ 关键约束：<span class='mono'>a[0]=1</span> 且 <span class='mono'>a[i]=a[i-1]+(i+1)</span>。这是等差三角数：1,3,6,10,15,21。",
+    "⑤ 学生可以静态推理，也可以设错值单步观察 ZF 变化，交叉验证。"
+  ],
+  sim: () => ({ s:{regs:{},flags:{},pc:0,log:[]}, steps:[] })
+},
+
+/* ---------- phase_3: switch (答案 = 3 5) ---------- */
+"3": {
+  label: "phase_3 · switch / 跳转表",
+  answer: (input) => {
+    const xs = input.trim().split(/\s+/).map(Number);
+    // switch(x[0]): case 0→? case 3→need x[1]==5
+    if (xs.length !== 2) return false;
+    return xs[0] === 3 && xs[1] === 5;
+  },
+  answerHint: "答案：两个整数，第一个是 switch 编号，第二个满足对应 case 的常数校验。可接受 \"3 5\"。",
+  disasm: [
+    { addr:"0x401300", bytes:"48 83 ec 08", asm:[["op","sub"],["punc"," "],["num","$0x8"],["punc",","],["reg","%rsp"]], desc:"栈上留一个 slot" },
+    { addr:"0x401304", bytes:"83 ff 07",    asm:[["op","cmp"],["punc"," "],["num","$0x7"],["punc",","],["reg","%edi"]], desc:"unsigned 边界检查：input < 8 ?" },
+    { addr:"0x401307", bytes:"77 30",       asm:[["op","ja"],["punc"," "],["lbl","explode_bomb"]], desc:"unsigned 超过则爆" },
+    { addr:"0x401309", bytes:"ff 24 fd 60 20 40 00", asm:[["op","jmpq"],["punc"," "],["reg","*0x402060(,%rdi,8)"]], desc:"跳转表寻址：case 分派" },
+    { addr:"0x401310", bytes:"b8 aa 00 00 00", asm:[["op","mov"],["punc"," "],["num","$0xaa"],["punc",","],["reg","%eax"]], desc:"case 0: goto out" },
+    { addr:"0x401315", bytes:"eb 20",          asm:[["op","jmp"],["punc"," "],["lbl","out"]], desc:"" },
+    { addr:"0x401317", bytes:"e8 aa 00 00 00", asm:[["op","call"],["punc"," "],["lbl","explode_bomb"]], desc:"case 1: 直接爆 💥" },
+    { addr:"0x40131c", bytes:"e8 aa 00 00 00", asm:[["op","call"],["punc"," "],["lbl","explode_bomb"]], desc:"case 2: 直接爆 💥" },
+    { addr:"0x401321", bytes:"83 7e 04 05",    asm:[["op","cmpl"],["punc"," "],["num","$0x5"],["punc",","],["reg","4(%rsi)"]], desc:"case 3: 需要 x[1]==5" },
+    { addr:"0x401325", bytes:"75 10",          asm:[["op","jne"],["punc"," "],["lbl","explode_bomb"]], desc:"不等则爆" },
+    { addr:"0x401327", bytes:"eb 0e",          asm:[["op","jmp"],["punc"," "],["lbl","out"]], desc:"defused" },
+    { addr:"0x401329", bytes:"e8 aa 00 00 00", asm:[["op","call"],["punc"," "],["lbl","explode_bomb"]], desc:"case 4..7: 都爆" },
+    { addr:"0x40132e", bytes:"48 83 c4 08",    asm:[["op","add"],["punc"," "],["num","$0x8"],["punc",","],["reg","%rsp"]], desc:"out: 收回栈" },
+    { addr:"0x401332", bytes:"c3",             asm:[["op","ret"]], desc:"return" }
+  ],
+  cfg: {
+    nodes: [
+      { id:"A", x:250, y:20,  w:200, h:36, label:"entry / bound check" },
+      { id:"B", x:60,  y:110, w:150, h:36, label:"explode 💥", danger:true },
+      { id:"J", x:250, y:100, w:200, h:36, label:"jmpq *tbl(,%rdi,8)" },
+      { id:"C0",x:20,  y:200, w:80,  h:32, label:"case 0 → out" },
+      { id:"C1",x:110, y:200, w:80,  h:32, label:"case 1 💥", danger:true },
+      { id:"C2",x:200, y:200, w:80,  h:32, label:"case 2 💥", danger:true },
+      { id:"C3",x:290, y:200, w:80,  h:32, label:"case 3 (chk)"},
+      { id:"C47",x:380,y:200, w:100, h:32, label:"case 4-7 💥", danger:true },
+      { id:"O", x:250, y:290, w:170, h:32, label:"out / ret ✅", good:true }
+    ],
+    edges: [
+      { from:"A", to:"B", label:"ja", type:"no" },
+      { from:"A", to:"J", label:"in-range", type:"taken" },
+      { from:"J", to:"C0", type:"" }, { from:"J", to:"C1", type:"no" }, { from:"J", to:"C2", type:"no" },
+      { from:"J", to:"C3", type:"taken" }, { from:"J", to:"C47", type:"no" },
+      { from:"C0", to:"O", type:"" }, { from:"C3", to:"O", label:"x[1]=5", type:"taken" },
+      { from:"C3", to:"B", label:"else 💥", type:"no" }
+    ]
+  },
+  notes: [
+    "① <b>cmp $0x7, %edi</b> + <b>ja</b> 是标准的 <em>无符号</em> 边界检查（signed 用 jg）。",
+    "② <b>jmpq *0x402060(,%rdi,8)</b> —— 经典跳转表：base + rdi × 8。<span class='mono'>0x402060</span> 是编译器生成的 <b>.rodata</b> 表。",
+    "③ CFG 显示：仅 case 0 和 case 3 可通向 out；case 3 还需 x[1]==5。",
+    "④ 教学要点：区分 <b>直接调用 explode_bomb</b> 与 <b>条件跳到 explode_bomb</b>；理解 jump table 相对于 chain-of-if 的性能与安全含义。"
+  ],
+  sim: () => ({ s:{regs:{},flags:{},pc:0,log:[]}, steps:[] })
+},
+};
+
+/* ============================================================ 视图 ============================================================ */
+const state = { phase:"1", cur:0, cfgTaken:{ nodes:new Set(), edges:new Set() }, sim:null, steps:null, stepIdx:0, regs:{}, flags:{ZF:0,SF:0,OF:0,CF:0} };
+
+function renderDisasm() {
+  const p = PHASES[state.phase];
+  const body = document.getElementById("disasm-body");
+  body.innerHTML = "";
+  p.disasm.forEach((ins, i) => {
+    const el = document.createElement("div");
+    el.className = "ins-line";
+    el.dataset.i = i;
+    let asmHtml = "";
+    ins.asm.forEach(([k,v]) => asmHtml += `<span class="tok-${k}">${escapeHtml(v)}</span>`);
+    el.innerHTML = `<div class="addr">${ins.addr}</div><div class="bytes">${ins.bytes}</div><div class="code">${asmHtml}<span class="tok-cmt"># ${escapeHtml(ins.desc)}</span></div>`;
+    el.addEventListener("click", () => setCur(i));
+    body.appendChild(el);
+  });
+  document.getElementById("phase-label").textContent = p.label;
+  document.getElementById("disasm-fn").textContent = "phase_" + state.phase;
+  document.getElementById("disasm-info").textContent = p.disasm.length + " instructions";
+  renderAnalysis();
+}
+
+function setCur(i) {
+  state.cur = i;
+  document.querySelectorAll(".ins-line").forEach(el => el.classList.toggle("cur", +el.dataset.i === i));
+  const cur = document.querySelector(`.ins-line[data-i="${i}"]`);
+  if (cur) cur.scrollIntoView({block:"nearest", behavior:"smooth"});
+}
+
+function renderCFG() {
+  const p = PHASES[state.phase];
+  const svg = document.getElementById("cfg");
+  // clear except defs
+  Array.from(svg.querySelectorAll("g,rect,path,text")).forEach(el => el.remove());
+  const ns = "http://www.w3.org/2000/svg";
+  const cfg = p.cfg;
+  // edges first
+  cfg.edges.forEach((e, i) => {
+    const a = cfg.nodes.find(n => n.id === e.from);
+    const b = cfg.nodes.find(n => n.id === e.to);
+    const p1 = { x:a.x + a.w/2, y:a.y + a.h };
+    const p2 = { x:b.x + b.w/2, y:b.y };
+    const mx = (p1.x + p2.x) / 2;
+    const path = document.createElementNS(ns,"path");
+    path.setAttribute("d", `M${p1.x},${p1.y} C${mx},${p1.y+30} ${mx},${p2.y-30} ${p2.x},${p2.y}`);
+    path.setAttribute("class", "cfg-edge " + (e.type||""));
+    svg.appendChild(path);
+    if (e.label) {
+      const t = document.createElementNS(ns,"text");
+      t.setAttribute("x", mx); t.setAttribute("y", (p1.y+p2.y)/2);
+      t.setAttribute("text-anchor","middle");
+      t.setAttribute("class","cfg-text sub");
+      t.textContent = e.label;
+      svg.appendChild(t);
+    }
+  });
+  cfg.nodes.forEach(n => {
+    const r = document.createElementNS(ns,"rect");
+    r.setAttribute("x", n.x); r.setAttribute("y", n.y);
+    r.setAttribute("width", n.w); r.setAttribute("height", n.h);
+    r.setAttribute("rx", 6); r.setAttribute("ry", 6);
+    r.setAttribute("class", "cfg-node" + (n.good?" taken":"") + (n.danger?"":""));
+    if (n.danger) { r.style.fill = "rgba(248,113,113,0.13)"; r.style.stroke = "#f87171"; }
+    svg.appendChild(r);
+    const t = document.createElementNS(ns,"text");
+    t.setAttribute("x", n.x + n.w/2); t.setAttribute("y", n.y + n.h/2 + 4);
+    t.setAttribute("text-anchor","middle"); t.setAttribute("class","cfg-text");
+    t.textContent = n.label;
+    svg.appendChild(t);
+  });
+}
+
+function renderRegs() {
+  const el = document.getElementById("regbox");
+  const regs = ["RDI","RSI","RAX","RBX","RCX","RDX","R12","RSP"];
+  el.innerHTML = "";
+  regs.forEach(n => {
+    const v = state.regs[n];
+    const d = document.createElement("div");
+    d.className = "r";
+    d.innerHTML = `<div class="n">%${n.toLowerCase()}</div><div>${v==null?"—":"0x"+v.toString(16)}</div>`;
+    el.appendChild(d);
+  });
+  document.querySelectorAll("#flagbox span").forEach(s => {
+    const f = s.dataset.f;
+    s.textContent = f + "=" + (state.flags[f]||0);
+    s.classList.toggle("on", state.flags[f]===1);
+  });
+}
+
+function renderAnalysis() {
+  const p = PHASES[state.phase];
+  const el = document.getElementById("analysis-panel");
+  let html = `<h4>${p.label}</h4><div style="color:var(--text);font-size:12.5px;margin-bottom:8px;"><b>目标：</b>${p.answerHint}</div>`;
+  p.notes.forEach((n,i) => html += `<div class="step"><span class="idx">${i+1}</span>${n}</div>`);
+  el.innerHTML = html;
+}
+
+/* ---------- 输入验证 ---------- */
+function verify() {
+  const input = document.getElementById("guess").value;
+  const p = PHASES[state.phase];
+  const ok = p.answer(input);
+  const v = document.getElementById("verdict");
+  if (!input.trim()) { v.innerHTML = "<span class='result-bad'>请输入内容</span>"; return; }
+  if (ok) {
+    v.innerHTML = `<span class='result-good'>✅ 拆弹成功！</span> phase_${state.phase} 通过。`;
+  } else {
+    v.innerHTML = `<span class='result-bad'>💥 BOOM！</span> 输入未能满足所有约束，请回到反汇编 / CFG 找线索。`;
+  }
+}
+
+/* ---------- 单步执行 (仅 phase 1 提供完整模拟) ---------- */
+function loadSim() {
+  if (state.phase !== "1") {
+    document.getElementById("explain").innerHTML = `<span style="color:var(--warn)">💡 该 phase 只演示静态反汇编+CFG；phase_1 提供完整单步动态模拟。</span>`;
+    return;
+  }
+  const input = +(document.getElementById("guess").value.trim() || "0");
+  const { s, steps } = PHASES["1"].sim(input);
+  state.sim = s; state.steps = steps; state.stepIdx = 0;
+  state.regs = { ...s.regs }; state.flags = { ...s.flags };
+  setCur(0); renderRegs();
+  document.getElementById("explain").innerHTML = `已载入 <b>phase_1</b>，%edi = <span class="mono">${input}</span>。点击 <b>Step</b> 单步执行。`;
+}
+function step() {
+  if (state.phase !== "1" || !state.steps) return;
+  if (state.stepIdx >= state.steps.length) return;
+  const st = state.steps[state.stepIdx];
+  setCur(st.pc);
+  st.act(state.sim);
+  state.regs = { ...state.sim.regs };
+  state.flags = { ...state.sim.flags };
+  renderRegs();
+  const lastLog = state.sim.log[state.sim.log.length-1];
+  document.getElementById("explain").innerHTML = `<span class="mono" style="color:var(--accent)">▶</span> ${escapeHtml(lastLog||"")}`;
+  // handle jump
+  if (st.pcNext !== undefined) {
+    // find next step matching pcNext
+    const nextIdx = state.steps.findIndex((x,i)=>i>state.stepIdx && x.pc===st.pcNext);
+    state.stepIdx = nextIdx >= 0 ? nextIdx : state.stepIdx+1;
+  } else {
+    state.stepIdx++;
+  }
+  if (state.sim.defused) document.getElementById("explain").innerHTML += `<br><span class="result-good">✅ 已 defuse</span>`;
+  if (state.sim.exploded) document.getElementById("explain").innerHTML += `<br><span class="result-bad">💥 BOMB EXPLODED</span>`;
+}
+function cont() { if (state.phase!=="1") return; let i=0; while(i++<20 && state.stepIdx < state.steps.length && !state.sim.defused && !state.sim.exploded) step(); }
+function resetSim() {
+  state.regs = {}; state.flags = {ZF:0,SF:0,OF:0,CF:0}; state.sim = null; state.steps = null; state.stepIdx = 0;
+  renderRegs(); setCur(0);
+  document.getElementById("explain").innerHTML = "已重置。请重新载入。";
+  document.getElementById("verdict").textContent = "尚未运行。";
+}
+
+/* ---------- 事件 ---------- */
+function switchPhase(p) {
+  state.phase = p;
+  document.querySelectorAll("[data-phase]").forEach(b => b.classList.toggle("primary", b.dataset.phase === p));
+  resetSim();
+  renderDisasm(); renderCFG();
+}
+document.querySelectorAll("[data-phase]").forEach(b => b.addEventListener("click", () => switchPhase(b.dataset.phase)));
+document.getElementById("run-btn").addEventListener("click", verify);
+document.getElementById("load-btn").addEventListener("click", loadSim);
+document.getElementById("step-btn").addEventListener("click", step);
+document.getElementById("cont-btn").addEventListener("click", cont);
+document.getElementById("reset-btn").addEventListener("click", resetSim);
+document.getElementById("guess").addEventListener("keydown", e => { if (e.key === "Enter") verify(); });
+
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+
+/* init */
+switchPhase("1");
+renderRegs();
+</script>
+</body>
+</html>

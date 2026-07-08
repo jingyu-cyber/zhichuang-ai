@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>指令生命周期 · C ↔ 汇编 ↔ 机器码 三级联动</title>
+<link rel="stylesheet" href="../assets/common.css">
+<style>
+  .three-cols { display: grid; grid-template-columns: 1fr 1fr 1.1fr; gap: 14px; }
+  .code-pane { background: #0a0f1a; border: 1px solid var(--border); border-radius: 10px; padding: 0; overflow: hidden; }
+  .code-pane .head { padding: 8px 12px; background: var(--bg-panel-2); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-dim); display: flex; justify-content: space-between; align-items: center; }
+  .code-body { padding: 8px 0; height: 360px; overflow: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.65; }
+  .line { display: grid; grid-template-columns: 36px 1fr; padding: 1px 0; cursor: pointer; }
+  .line:hover { background: rgba(125,211,252,0.06); }
+  .line .ln  { color: #4a5876; text-align: right; padding-right: 10px; user-select: none; }
+  .line .code { padding-left: 8px; white-space: pre; }
+  .tok-kw   { color: #c084fc; }
+  .tok-fn   { color: #7dd3fc; }
+  .tok-num  { color: #fbbf24; }
+  .tok-str  { color: #86efac; }
+  .tok-cmt  { color: #64748b; font-style: italic; }
+  .tok-reg  { color: #f472b6; }
+  .tok-op   { color: #a3b1c6; }
+  .tok-lbl  { color: #a78bfa; }
+  .tok-punc { color: #a3b1c6; }
+  .bit-field { display: inline-block; padding: 2px 6px; margin: 0 2px 4px; border-radius: 4px; font-family: var(--mono); font-size: 11.5px; }
+  .bf-prefix { background: rgba(148,163,184,0.15);  border: 1px solid #64748b; color: #94a3b8; }
+  .bf-rex    { background: rgba(167,139,250,0.15);  border: 1px solid #a78bfa; color: #c4b5fd; }
+  .bf-op     { background: rgba(125,211,252,0.18);  border: 1px solid #7dd3fc; color: #7dd3fc; }
+  .bf-mod    { background: rgba(251,191,36,0.15);   border: 1px solid #fbbf24; color: #fbbf24; }
+  .bf-sib    { background: rgba(74,222,128,0.15);   border: 1px solid #4ade80; color: #4ade80; }
+  .bf-disp   { background: rgba(96,165,250,0.15);   border: 1px solid #60a5fa; color: #60a5fa; }
+  .bf-imm    { background: rgba(248,113,113,0.15);  border: 1px solid #f87171; color: #f87171; }
+  .decode-panel { background: #0a0f1a; border: 1px solid var(--border); border-radius: 10px; padding: 14px; min-height: 200px; }
+  .field-explain { margin-top: 12px; font-size: 12px; line-height: 1.7; color: var(--text-dim); }
+  .field-explain .row-e { display: grid; grid-template-columns: 90px 1fr; gap: 8px; padding: 3px 0; border-top: 1px dashed var(--border); }
+  .field-explain .row-e:first-child { border-top: 0; }
+  .field-explain b { color: var(--text); font-weight: 600; }
+  .stack-mem { display: grid; grid-template-columns: 100px 1fr; gap: 2px; font-family: var(--mono); font-size: 12px; }
+  .stack-mem .addr { color: var(--text-dim); text-align: right; padding-right: 6px; }
+  .stack-mem .cell { border: 1px solid var(--border); border-radius: 4px; padding: 3px 8px; background: var(--bg-panel-2); }
+  .fnpicker { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .fnpicker .btn { padding: 5px 10px; font-size: 12px; }
+  .fnpicker .btn.active { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #0b0f17; font-weight: 700; }
+  .callout {
+    padding: 8px 12px; margin-top: 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.55;
+    background: rgba(125,211,252,0.05); border-left: 3px solid var(--accent); color: var(--text);
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">ICS</div>
+      <div>
+        <div class="title">指令生命周期 · 程序的机器级表示</div>
+        <div class="subtitle">C 源码 ↔ x86-64 汇编 ↔ 机器码字节：三级联动可视化</div>
+      </div>
+    </div>
+    <div class="row">
+      <span class="badge">x86-64 · System V ABI</span>
+      <a class="nav-back" href="../index.html">← 返回演示中心</a>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div>
+      <h1>把「一条 C 语句」拆成看得见的字节</h1>
+      <p>本演示把一段 C 代码逐句编译到 x86-64 汇编，再把汇编逐条解码到机器码字段（Prefix / REX / Opcode / ModR/M / SIB / Disp / Imm）。当你在任一栏点击某一行，另外两栏对应的部分会同步高亮——让学生真正看清「一条 <span class="mono">movq (%rdi,%rsi,8),%rax</span> 究竟由哪几个字节组成」。</p>
+      <div class="callout">🎯 教学目标：理解寻址方式 → ModR/M / SIB 编码；观察调用约定（<span class="mono">%rdi %rsi %rdx</span> 传参、<span class="mono">%rax</span> 返回）；直观感受编译器为不同 C 语句选择的指令模式。</div>
+    </div>
+    <div>
+      <div class="section-title">操作</div>
+      <div class="fnpicker" id="fnpicker"></div>
+      <div class="section-title">图例</div>
+      <div class="row" style="font-size:12px;line-height:1.9">
+        <span class="bit-field bf-prefix">Prefix</span>
+        <span class="bit-field bf-rex">REX</span>
+        <span class="bit-field bf-op">Opcode</span>
+        <span class="bit-field bf-mod">ModR/M</span>
+        <span class="bit-field bf-sib">SIB</span>
+        <span class="bit-field bf-disp">Displacement</span>
+        <span class="bit-field bf-imm">Immediate</span>
+      </div>
+      <div class="section-title">自动播放</div>
+      <div class="row">
+        <button class="btn primary" id="play-btn">▶ 逐条播放</button>
+        <button class="btn" id="reset-btn">↺ 复位</button>
+        <span class="pill info" id="play-status">已停止</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="three-cols">
+    <div class="code-pane">
+      <div class="head"><span>① C 源代码</span><span class="mono" id="c-info">-</span></div>
+      <div class="code-body" id="c-body"></div>
+    </div>
+    <div class="code-pane">
+      <div class="head"><span>② x86-64 汇编（gcc -O0 风格）</span><span class="mono" id="asm-info">-</span></div>
+      <div class="code-body" id="asm-body"></div>
+    </div>
+    <div class="code-pane">
+      <div class="head"><span>③ 机器码字节 + 字段拆解</span><span class="mono" id="mc-info">-</span></div>
+      <div class="code-body" id="mc-body" style="height:360px;padding:12px 14px;"></div>
+    </div>
+  </div>
+
+  <div class="grid" style="grid-template-columns: 1.3fr 1fr; margin-top: 16px;">
+    <div class="card">
+      <h3>🔍 当前指令的机器码字段解释</h3>
+      <div class="decode-panel" id="decode-panel">
+        <div class="hint">在中间栏点击任意一条汇编指令，这里会展开对应字节的字段级解释。</div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>🧭 调用约定 · 栈帧速览</h3>
+      <div style="font-size:12.5px;line-height:1.7;color:var(--text-dim);margin-bottom:8px;">
+        System V AMD64 前 6 个整型参数依次经过：<span class="mono" style="color:var(--text)">%rdi %rsi %rdx %rcx %r8 %r9</span>；返回值放 <span class="mono" style="color:var(--text)">%rax</span>。</div>
+      <div class="stack-mem" id="stack-mem"></div>
+      <div class="callout" id="stack-note">调用 <span class="mono">sum(a,b)</span> 时，参数直接进寄存器，栈上通常只留返回地址与保存的 <span class="mono">%rbp</span>。</div>
+    </div>
+  </div>
+
+  <div class="section-title">🧪 建议课堂任务</h3></div>
+  <div class="grid" style="grid-template-columns: repeat(3, 1fr);">
+    <div class="card"><h3>Level 1 · 认字节</h3><p class="hint">选择 <b>sum</b> 与 <b>swap</b>，比较两者机器码长度差异，解释为何 <span class="mono">movq (%rdi,%rsi,8),%rax</span> 需要 SIB 字节。</p></div>
+    <div class="card"><h3>Level 2 · 找立即数</h3><p class="hint">找出 <b>fact</b> 中所有 <span class="mono">Imm</span> 字节；结合 opcode 说明为什么 <span class="mono">cmp $0x1,%edi</span> 使用 8-bit 立即数而不是 32-bit。</p></div>
+    <div class="card"><h3>Level 3 · 反查工具</h3><p class="hint">把本页的机器码字节粘贴到 <span class="mono">rasm2 -d</span> 或 Compiler Explorer，验证解码字段是否一致，撰写 200 字实验报告。</p></div>
+  </div>
+
+  <div class="footer">计算机系统导论 · 数据表示与机器级执行 · 指令生命周期</div>
+</div>
+
+<script>
+/* ============================================================
+ * 数据：三个精心设计的 C 函数，及其对应汇编 / 机器码
+ * 每条汇编指令带 `fields`，用于机器码字段拆解与三级联动
+ * ============================================================ */
+const SNIPPETS = {
+  sum: {
+    label: "sum(a,b)",
+    c: [
+      { code: "// 求两个整数之和（最基础的寄存器传参）",             kind:"c" },
+      { code: "long sum(long a, long b) {" },
+      { code: "    return a + b;",   maps:["asm-2","asm-3"] },
+      { code: "}" }
+    ],
+    asm: [
+      { id:"asm-0", code:"sum:", tokens:[["lbl","sum:"]], mach:[], desc:"函数标签，不占字节。" },
+      { id:"asm-1", code:"    endbr64",              tokens:[["op","endbr64"]],
+        mach:[["prefix","F3 0F 1E FA"]],
+        cLine:1,
+        desc:"CET 分支跟踪引导指令；F3 0F 1E FA 是完整 4 字节 opcode。" },
+      { id:"asm-2", code:"    leaq (%rdi,%rsi,1),%rax",
+        tokens:[["op","leaq"],["punc","    "],["reg","(%rdi,%rsi,1)"],["punc",","],["reg","%rax"]],
+        mach:[["rex","48"],["op","8D"],["mod","04"],["sib","37"]],
+        cLine:2,
+        desc:"利用 LEA + SIB 一步完成加法：dest = base + index*1 + 0"},
+      { id:"asm-3", code:"    ret", tokens:[["op","ret"]],
+        mach:[["op","C3"]],
+        cLine:2,
+        desc:"返回，从栈顶弹出返回地址跳转。" }
+    ],
+    fields: {
+      "asm-2": [
+        { name:"REX",      cls:"bf-rex",  bytes:"48",  bits:"0100 1000", meaning:"W=1（64-bit 操作数尺寸），R/X/B=0" },
+        { name:"Opcode",   cls:"bf-op",   bytes:"8D",  bits:"1000 1101", meaning:"LEA r64, m —— 把有效地址加载到寄存器" },
+        { name:"ModR/M",   cls:"bf-mod",  bytes:"04",  bits:"00 000 100", meaning:"mod=00, reg=000 (%rax), r/m=100 → 需要 SIB 字节且无 disp" },
+        { name:"SIB",      cls:"bf-sib",  bytes:"37",  bits:"00 110 111", meaning:"scale=1, index=110 (%rsi), base=111 (%rdi) → 有效地址 = %rdi + %rsi*1" }
+      ]
+    },
+    stack: [
+      { addr:"高地址",  cell:"...", note:"" },
+      { addr:"%rsp+8",  cell:"caller's saved regs", note:"" },
+      { addr:"%rsp",    cell:"返回地址 (call sum 压入)", note:"ret 从这里弹出" },
+      { addr:"低地址",  cell:"a=%rdi  b=%rsi (寄存器传参)", note:"本例无需栈上传参" }
+    ]
+  },
+
+  swap: {
+    label: "swap(p, q, i)",
+    c: [
+      { code: "// 演示 SIB 缩放寻址：a[i] = q; b = a[i]",         kind:"c" },
+      { code: "long swap(long *a, long i, long v) {" },
+      { code: "    long t = a[i];",   maps:["asm-2"] },
+      { code: "    a[i] = v;",        maps:["asm-3"] },
+      { code: "    return t;",        maps:["asm-4","asm-5"] },
+      { code: "}" }
+    ],
+    asm: [
+      { id:"asm-0", code:"swap:", tokens:[["lbl","swap:"]], mach:[], desc:"函数标签"},
+      { id:"asm-1", code:"    endbr64", tokens:[["op","endbr64"]], mach:[["prefix","F3 0F 1E FA"]], desc:"CET 引导"},
+      { id:"asm-2", code:"    movq (%rdi,%rsi,8),%rax",
+        tokens:[["op","movq"],["punc","    "],["reg","(%rdi,%rsi,8)"],["punc",","],["reg","%rax"]],
+        mach:[["rex","48"],["op","8B"],["mod","04"],["sib","F7"]],
+        cLine:2,
+        desc:"经典 SIB 缩放寻址：%rdi + %rsi*8，读取 a[i] 到 %rax"},
+      { id:"asm-3", code:"    movq %rdx,(%rdi,%rsi,8)",
+        tokens:[["op","movq"],["punc","    "],["reg","%rdx"],["punc",","],["reg","(%rdi,%rsi,8)"]],
+        mach:[["rex","48"],["op","89"],["mod","14"],["sib","F7"]],
+        cLine:3,
+        desc:"把 %rdx (v) 写入 a[i]"},
+      { id:"asm-4", code:"    ret", tokens:[["op","ret"]], mach:[["op","C3"]], cLine:4, desc:"返回，%rax 已含 t"}
+    ],
+    fields: {
+      "asm-2": [
+        { name:"REX",    cls:"bf-rex", bytes:"48", bits:"0100 1000", meaning:"W=1 → 64-bit 操作数" },
+        { name:"Opcode", cls:"bf-op",  bytes:"8B", bits:"1000 1011", meaning:"MOV r64, r/m64 —— 从内存读到寄存器" },
+        { name:"ModR/M",cls:"bf-mod", bytes:"04", bits:"00 000 100", meaning:"mod=00, reg=000(%rax), r/m=100 → 使用 SIB，无 disp" },
+        { name:"SIB",   cls:"bf-sib", bytes:"F7", bits:"11 110 111", meaning:"scale=11(×8), index=110(%rsi), base=111(%rdi) → 有效地址 = %rdi + %rsi*8" }
+      ],
+      "asm-3": [
+        { name:"REX",    cls:"bf-rex", bytes:"48", bits:"0100 1000", meaning:"W=1 → 64-bit" },
+        { name:"Opcode", cls:"bf-op",  bytes:"89", bits:"1000 1001", meaning:"MOV r/m64, r64 —— 从寄存器写入内存（写方向）" },
+        { name:"ModR/M",cls:"bf-mod", bytes:"14", bits:"00 010 100", meaning:"mod=00, reg=010(%rdx), r/m=100 → SIB，无 disp" },
+        { name:"SIB",   cls:"bf-sib", bytes:"F7", bits:"11 110 111", meaning:"同上：%rdi + %rsi*8" }
+      ]
+    },
+    stack: [
+      { addr:"%rdi[0]",       cell:"a[0]",     note:""},
+      { addr:"%rdi[1]",       cell:"a[1]",     note:""},
+      { addr:"%rdi+i*8",      cell:"a[i]  ← 读/写目标",     note:"SIB scale=×8"},
+      { addr:"...",           cell:"...",      note:""},
+    ]
+  },
+
+  fact: {
+    label: "fact(n) 递归",
+    c: [
+      { code: "// 递归阶乘：观察条件比较、条件跳转、call/ret 与栈帧" },
+      { code: "long fact(long n) {" },
+      { code: "    if (n <= 1) return 1;", maps:["asm-2","asm-3","asm-4"] },
+      { code: "    return n * fact(n-1);",  maps:["asm-6","asm-7","asm-8"] },
+      { code: "}" }
+    ],
+    asm: [
+      { id:"asm-0", code:"fact:", tokens:[["lbl","fact:"]], mach:[], desc:"函数标签"},
+      { id:"asm-1", code:"    endbr64", tokens:[["op","endbr64"]], mach:[["prefix","F3 0F 1E FA"]], desc:"CET"},
+      { id:"asm-2", code:"    cmpq $0x1,%rdi",
+        tokens:[["op","cmpq"],["punc","    "],["num","$0x1"],["punc",","],["reg","%rdi"]],
+        mach:[["rex","48"],["op","83"],["mod","FF"],["imm","01"]],
+        cLine:2,
+        desc:"CMP 立即数 vs %rdi；使用 8-bit 立即数（符号扩展为 64-bit）"},
+      { id:"asm-3", code:"    jg  .Lrec",
+        tokens:[["op","jg"],["punc","     "],["lbl",".Lrec"]],
+        mach:[["op","7F"],["disp","07"]],
+        cLine:2,
+        desc:"Signed >：Jump if Greater。此处使用短跳转（rel8）"},
+      { id:"asm-4", code:"    movl $0x1,%eax",
+        tokens:[["op","movl"],["punc","    "],["num","$0x1"],["punc",","],["reg","%eax"]],
+        mach:[["op","B8"],["imm","01 00 00 00"]],
+        cLine:2,
+        desc:"返回 1；使用 32-bit MOV（隐式零扩展到 64-bit）"},
+      { id:"asm-5", code:"    ret",
+        tokens:[["op","ret"]], mach:[["op","C3"]], cLine:2, desc:"返回 1"},
+      { id:"asm-6", code:".Lrec: leaq -1(%rdi),%rdi",
+        tokens:[["lbl",".Lrec:"],["punc"," "],["op","leaq"],["punc","  "],["reg","-1(%rdi)"],["punc",","],["reg","%rdi"]],
+        mach:[["rex","48"],["op","8D"],["mod","7F"],["disp","FF"]],
+        cLine:3,
+        desc:"用 LEA 完成 n-1（不修改标志位）；disp8=-1"},
+      { id:"asm-7", code:"    callq fact",
+        tokens:[["op","callq"],["punc","  "],["lbl","fact"]],
+        mach:[["op","E8"],["disp","F0 FF FF FF"]],
+        cLine:3,
+        desc:"32-bit 相对跳转到 fact；将下条指令地址压栈"},
+      { id:"asm-8", code:"    imulq %rdi,%rax",
+        tokens:[["op","imulq"],["punc","   "],["reg","%rdi"],["punc",","],["reg","%rax"]],
+        mach:[["rex","48"],["op","0F"],["op","AF"],["mod","C7"]],
+        cLine:3,
+        desc:"注意：这里 %rdi 已经变了；实际代码需保存原 n。演示用简化版。"},
+      { id:"asm-9", code:"    ret", tokens:[["op","ret"]], mach:[["op","C3"]], cLine:3, desc:"返回"}
+    ],
+    fields: {
+      "asm-2": [
+        { name:"REX",   cls:"bf-rex", bytes:"48", bits:"0100 1000", meaning:"W=1"},
+        { name:"Opcode",cls:"bf-op",  bytes:"83", bits:"1000 0011", meaning:"CMP r/m64, imm8 —— 8-bit 立即数（会符号扩展）"},
+        { name:"ModR/M",cls:"bf-mod",bytes:"FF", bits:"11 111 111", meaning:"mod=11 (寄存器直接寻址), reg=111 (opcode 扩展位: CMP), r/m=111 (%rdi)"},
+        { name:"Imm8",  cls:"bf-imm", bytes:"01", bits:"0000 0001", meaning:"立即数 = 1"}
+      ],
+      "asm-3": [
+        { name:"Opcode", cls:"bf-op",   bytes:"7F", bits:"0111 1111", meaning:"JG rel8：若 ZF=0 且 SF=OF 则跳转"},
+        { name:"rel8",   cls:"bf-disp", bytes:"07", bits:"0000 0111", meaning:"相对偏移 +7（跳过 movl+ret 共 6 字节到 .Lrec）"}
+      ],
+      "asm-4": [
+        { name:"Opcode", cls:"bf-op",  bytes:"B8", bits:"1011 1000", meaning:"MOV r32, imm32 —— 目标为 %eax（隐式零扩展到 %rax）"},
+        { name:"Imm32",  cls:"bf-imm", bytes:"01 00 00 00", bits:"（小端）", meaning:"立即数 = 1（小端序）"}
+      ],
+      "asm-6": [
+        { name:"REX",     cls:"bf-rex",  bytes:"48", bits:"0100 1000", meaning:"W=1"},
+        { name:"Opcode",  cls:"bf-op",   bytes:"8D", bits:"1000 1101", meaning:"LEA r64, m"},
+        { name:"ModR/M", cls:"bf-mod",  bytes:"7F", bits:"01 111 111", meaning:"mod=01 (有 disp8), reg=111 (%rdi), r/m=111 (%rdi)"},
+        { name:"disp8",   cls:"bf-disp", bytes:"FF", bits:"1111 1111", meaning:"-1（符号扩展）"}
+      ],
+      "asm-7": [
+        { name:"Opcode", cls:"bf-op",  bytes:"E8", bits:"1110 1000", meaning:"CALL rel32：把下条 rip 压栈后相对跳转"},
+        { name:"rel32",  cls:"bf-disp",bytes:"F0 FF FF FF", bits:"（小端）", meaning:"偏移 = -16（跳回 fact 起始附近，示意）"}
+      ],
+      "asm-8": [
+        { name:"REX",    cls:"bf-rex", bytes:"48", bits:"0100 1000", meaning:"W=1"},
+        { name:"Opcode", cls:"bf-op",  bytes:"0F AF", bits:"两字节 opcode", meaning:"IMUL r64, r/m64"},
+        { name:"ModR/M",cls:"bf-mod",  bytes:"C7", bits:"11 000 111", meaning:"mod=11 (寄存器直接), reg=000 (%rax), r/m=111 (%rdi)"}
+      ]
+    },
+    stack: [
+      { addr:"caller %rsp", cell:"caller frame", note:""},
+      { addr:"%rsp+8",      cell:"返回地址 → 主调", note:"call 压入"},
+      { addr:"%rsp",        cell:"（未开栈帧）", note:"leaf-ish"},
+      { addr:"recursion",   cell:"每次 call 压入一个 return addr", note:"n 层栈深"},
+    ]
+  }
+};
+
+/* ============================================================ 视图 ============================================================ */
+const state = { cur: "sum", selectedAsm: null, playing: false, playTimer: null };
+
+function tokenClass(k) { return "tok-" + k; }
+
+function renderC() {
+  const s = SNIPPETS[state.cur];
+  const body = document.getElementById("c-body");
+  body.innerHTML = "";
+  s.c.forEach((line, i) => {
+    const el = document.createElement("div");
+    el.className = "line";
+    el.dataset.cline = i;
+    // simple highlight: comment lines start with //
+    let html;
+    if (line.code.trim().startsWith("//")) html = `<span class="tok-cmt">${escapeHtml(line.code)}</span>`;
+    else html = highlightC(line.code);
+    el.innerHTML = `<div class="ln">${i+1}</div><div class="code">${html}</div>`;
+    el.addEventListener("click", () => highlightByCLine(i));
+    body.appendChild(el);
+  });
+  document.getElementById("c-info").textContent = s.label + ".c";
+}
+
+function renderAsm() {
+  const s = SNIPPETS[state.cur];
+  const body = document.getElementById("asm-body");
+  body.innerHTML = "";
+  s.asm.forEach((ins, i) => {
+    const el = document.createElement("div");
+    el.className = "line"; el.dataset.aid = ins.id; el.dataset.cline = (ins.cLine ?? "");
+    let toks = "";
+    if (ins.tokens) ins.tokens.forEach(([k,v]) => { toks += `<span class="${tokenClass(k)}">${escapeHtml(v)}</span>`; });
+    else toks = escapeHtml(ins.code);
+    el.innerHTML = `<div class="ln">${i+1}</div><div class="code">${toks}</div>`;
+    el.addEventListener("click", () => selectAsm(ins.id));
+    body.appendChild(el);
+  });
+  document.getElementById("asm-info").textContent = s.label + ".s";
+}
+
+function renderMC() {
+  const s = SNIPPETS[state.cur];
+  const body = document.getElementById("mc-body");
+  body.innerHTML = "";
+  s.asm.forEach((ins, i) => {
+    if (!ins.mach || ins.mach.length === 0) return;
+    const wrap = document.createElement("div");
+    wrap.dataset.aid = ins.id;
+    wrap.style.marginBottom = "10px";
+    wrap.style.padding = "6px 8px";
+    wrap.style.borderRadius = "6px";
+    wrap.style.cursor = "pointer";
+    wrap.addEventListener("click", () => selectAsm(ins.id));
+    const cls = "bit-field ";
+    const clsMap = { prefix:"bf-prefix", rex:"bf-rex", op:"bf-op", mod:"bf-mod", sib:"bf-sib", disp:"bf-disp", imm:"bf-imm" };
+    let inner = `<div style="font-size:11px;color:var(--text-dim);margin-bottom:3px;">${ins.code.trim()}</div>`;
+    ins.mach.forEach(([k, b]) => {
+      inner += `<span class="${cls}${clsMap[k]||''}">${b}</span>`;
+    });
+    wrap.innerHTML = inner;
+    body.appendChild(wrap);
+  });
+  const totalBytes = s.asm.reduce((n, ins) => n + (ins.mach||[]).reduce((m,x)=>m+x[1].split(/\s+/).length, 0), 0);
+  document.getElementById("mc-info").textContent = totalBytes + " bytes total";
+}
+
+function renderStack() {
+  const s = SNIPPETS[state.cur];
+  const el = document.getElementById("stack-mem");
+  el.innerHTML = "";
+  s.stack.forEach(row => {
+    el.innerHTML += `<div class="addr">${escapeHtml(row.addr)}</div><div class="cell">${escapeHtml(row.cell)}${row.note?` <span class="tag">${escapeHtml(row.note)}</span>`:""}</div>`;
+  });
+}
+
+function selectAsm(aid) {
+  state.selectedAsm = aid;
+  // clear all
+  document.querySelectorAll("#asm-body .line").forEach(l => l.classList.remove("hl-line-strong","hl-line"));
+  document.querySelectorAll("#mc-body [data-aid]").forEach(l => { l.style.background = "transparent"; l.style.border = "1px solid transparent"; });
+  document.querySelectorAll("#c-body .line").forEach(l => l.classList.remove("hl-line"));
+  // asm
+  const asmEl = document.querySelector(`#asm-body .line[data-aid="${aid}"]`);
+  if (asmEl) {
+    asmEl.classList.add("hl-line-strong");
+    asmEl.scrollIntoView({block:"nearest", behavior:"smooth"});
+    // c line
+    const cline = asmEl.dataset.cline;
+    if (cline !== "" && cline !== "undefined") {
+      const cEl = document.querySelector(`#c-body .line[data-cline="${cline}"]`);
+      if (cEl) cEl.classList.add("hl-line");
+    }
+  }
+  // mc
+  const mcEl = document.querySelector(`#mc-body [data-aid="${aid}"]`);
+  if (mcEl) {
+    mcEl.style.background = "rgba(167,139,250,0.10)";
+    mcEl.style.border = "1px solid rgba(167,139,250,0.45)";
+    mcEl.scrollIntoView({block:"nearest", behavior:"smooth"});
+  }
+  renderDecodePanel(aid);
+}
+
+function renderDecodePanel(aid) {
+  const s = SNIPPETS[state.cur];
+  const ins = s.asm.find(x => x.id === aid);
+  const pane = document.getElementById("decode-panel");
+  if (!ins) { pane.innerHTML = `<div class="hint">未选中指令。</div>`; return; }
+  const fields = (s.fields && s.fields[aid]) || null;
+  let html = `<div style="margin-bottom:8px;"><span class="tag">${ins.id}</span> <span class="mono">${escapeHtml(ins.code.trim())}</span></div>`;
+  html += `<div style="font-size:12.5px;color:var(--text-dim);margin-bottom:8px;line-height:1.6;">${escapeHtml(ins.desc||"")}</div>`;
+  if (fields) {
+    html += `<div class="field-explain">`;
+    fields.forEach(f => {
+      html += `<div class="row-e"><div><span class="bit-field ${f.cls}">${escapeHtml(f.bytes)}</span></div><div><b>${escapeHtml(f.name)}</b> <span class="mono" style="color:var(--text-dim)">${escapeHtml(f.bits||'')}</span><br>${escapeHtml(f.meaning)}</div></div>`;
+    });
+    html += `</div>`;
+  } else {
+    html += `<div class="hint">该指令未提供字段拆解（多为无操作数指令 / 简单 opcode）。</div>`;
+  }
+  pane.innerHTML = html;
+}
+
+function highlightByCLine(i) {
+  // find all asm ins mapping to this line and highlight the first
+  const s = SNIPPETS[state.cur];
+  const target = s.asm.find(a => a.cLine === i);
+  if (target) selectAsm(target.id);
+}
+
+/* ---------------- Auto play ---------------- */
+function play() {
+  if (state.playing) return stop();
+  state.playing = true;
+  document.getElementById("play-btn").textContent = "⏸ 暂停";
+  document.getElementById("play-status").textContent = "播放中…";
+  document.getElementById("play-status").className = "pill ok";
+  const s = SNIPPETS[state.cur];
+  const seq = s.asm.filter(a => a.mach && a.mach.length > 0);
+  let i = 0;
+  const tick = () => {
+    if (!state.playing) return;
+    if (i >= seq.length) { stop(); return; }
+    selectAsm(seq[i].id);
+    i++;
+    state.playTimer = setTimeout(tick, 1800);
+  };
+  tick();
+}
+function stop() {
+  state.playing = false;
+  clearTimeout(state.playTimer);
+  document.getElementById("play-btn").textContent = "▶ 逐条播放";
+  document.getElementById("play-status").textContent = "已停止";
+  document.getElementById("play-status").className = "pill info";
+}
+function reset() {
+  stop();
+  state.selectedAsm = null;
+  document.querySelectorAll(".line, [data-aid]").forEach(l => {
+    l.classList.remove("hl-line","hl-line-strong");
+    l.style.background = "transparent"; l.style.border = "1px solid transparent";
+  });
+  document.getElementById("decode-panel").innerHTML = `<div class="hint">已复位。请选择函数或点击任一条汇编查看字段拆解。</div>`;
+}
+
+/* ---------------- Highlighting helpers ---------------- */
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function highlightC(src) {
+  // trivial C highlighter
+  let s = escapeHtml(src);
+  s = s.replace(/\b(long|int|char|short|void|return|if|else|while|for|do|struct|typedef|const|static|unsigned|signed)\b/g, '<span class="tok-kw">$1</span>');
+  s = s.replace(/\b(sum|swap|fact|main)\s*(?=\()/g, '<span class="tok-fn">$1</span>');
+  s = s.replace(/\b(0x[0-9a-fA-F]+|\d+)\b/g, '<span class="tok-num">$1</span>');
+  s = s.replace(/(\/\/.*)$/g, '<span class="tok-cmt">$1</span>');
+  return s;
+}
+
+/* ---------------- Init ---------------- */
+function initPicker() {
+  const p = document.getElementById("fnpicker");
+  Object.entries(SNIPPETS).forEach(([k, v], i) => {
+    const b = document.createElement("button");
+    b.className = "btn" + (i===0?" active":"");
+    b.textContent = v.label;
+    b.dataset.k = k;
+    b.addEventListener("click", () => {
+      state.cur = k;
+      document.querySelectorAll("#fnpicker .btn").forEach(x => x.classList.remove("active"));
+      b.classList.add("active");
+      renderAll();
+      reset();
+    });
+    p.appendChild(b);
+  });
+}
+function renderAll() { renderC(); renderAsm(); renderMC(); renderStack(); }
+initPicker();
+renderAll();
+document.getElementById("play-btn").addEventListener("click", play);
+document.getElementById("reset-btn").addEventListener("click", reset);
+</script>
+</body>
+</html>

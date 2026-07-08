@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>简单漏洞复现 · 崩溃证据板</title>
+<link rel="stylesheet" href="../assets/common.css">
+<style>
+  .evidence-room { max-width:1440px; margin:0 auto; padding:18px 22px 42px; }
+  .room-top { display:flex; justify-content:space-between; align-items:center; padding-bottom:14px; border-bottom:1px solid var(--border); }
+  .room-top h1 { margin:0; font-size:22px; }
+  .room-top p { margin:2px 0 0; color:var(--text-dim); font-size:12px; }
+  .board { display:grid; grid-template-columns: 1fr 360px; grid-template-rows:auto 1fr; gap:14px; margin-top:16px; min-height:calc(100vh - 112px); }
+  .casebar { grid-column:1/3; display:flex; align-items:center; justify-content:space-between; gap:12px; border:1px solid var(--border); border-radius:18px; background:#0a0f1a; padding:12px 14px; }
+  .casebar b { color:var(--accent); }
+  .casebar span { color:var(--text-dim); font-size:12px; }
+  .evidence-wall { display:grid; grid-template-columns: 1.2fr .9fr; grid-template-rows:auto 1fr; gap:14px; }
+  .payload-film { grid-column:1/3; border:1px solid var(--border); border-radius:18px; background:var(--bg-panel); padding:14px; }
+  .bytes { display:grid; grid-template-columns:repeat(32,1fr); gap:4px; font-family:var(--mono); margin-top:10px; }
+  .byte { border:1px solid var(--border); border-radius:6px; text-align:center; padding:7px 0; background:#0a0f1a; font-size:11px; }
+  .byte.buf { border-color:var(--ok); color:var(--ok); }
+  .byte.over { border-color:var(--warn); color:var(--warn); }
+  .byte.ret { border-color:var(--danger); color:var(--danger); }
+  .stack-photo,.register-photo,.report { border:1px solid var(--border); border-radius:18px; background:var(--bg-panel); padding:14px; }
+  .stack { display:flex; flex-direction:column; gap:8px; font-family:var(--mono); }
+  .slot { display:grid; grid-template-columns:110px 1fr; gap:8px; border:1px solid var(--border); border-radius:10px; background:#0a0f1a; padding:10px; }
+  .slot.bad { border-color:var(--danger); background:rgba(248,113,113,.1); }
+  .slot span:first-child { color:var(--text-dim); }
+  .regline { display:grid; grid-template-columns:90px 1fr; gap:8px; border-bottom:1px solid var(--border); padding:10px 0; font-family:var(--mono); }
+  .regline b { color:var(--text-dim); }
+  .regline.hot span { color:var(--danger); }
+  .report { display:grid; grid-template-rows:auto 1fr auto; gap:12px; }
+  .report h2 { margin:0; color:var(--accent); font-size:16px; }
+  .finding { border-left:3px solid var(--warn); background:#0a0f1a; border-radius:8px; padding:10px 12px; line-height:1.75; color:var(--text-dim); }
+  .fix { border-left-color:var(--ok); }
+  @media(max-width:1120px){.board{grid-template-columns:1fr}.casebar,.payload-film{grid-column:auto}.evidence-wall{grid-template-columns:1fr}.bytes{grid-template-columns:repeat(16,1fr)}}
+</style>
+</head>
+<body>
+<div class="evidence-room">
+  <header class="room-top">
+    <div><h1>简单漏洞复现 · 崩溃证据板</h1><p>把“程序崩了”整理成输入、栈快照、寄存器和修复建议四类证据</p></div>
+    <a class="nav-back" href="../index.html">← 返回目录</a>
+  </header>
+
+  <main class="board">
+    <section class="casebar">
+      <div><b id="caseName">安全样例</b><br><span id="caseDesc">输入没有越过缓冲区边界</span></div>
+      <div class="row"><button class="btn" id="safeBtn">安全输入</button><button class="btn danger" id="crashBtn">触发崩溃</button></div>
+    </section>
+
+    <section class="evidence-wall">
+      <div class="payload-film"><b>输入字节胶片</b><div class="bytes" id="bytes"></div></div>
+      <div class="stack-photo"><b>栈快照</b><div class="stack" id="stack"></div></div>
+      <div class="register-photo"><b>寄存器与异常</b><div id="regs"></div></div>
+    </section>
+
+    <aside class="report">
+      <h2>复现报告</h2>
+      <div>
+        <div class="finding" id="finding"></div>
+        <div class="finding fix" id="fix" style="margin-top:10px;"></div>
+      </div>
+      <p class="hint">课堂要求：学生必须指出第一个被破坏的栈槽，而不是只说“输入太长”。</p>
+    </aside>
+  </main>
+</div>
+<script>
+let crashed=false;
+function render(){
+ const len=crashed?40:12;
+ caseName.textContent=crashed?"崩溃样例":"安全样例";
+ caseDesc.textContent=crashed?"40 字节输入覆盖 saved %rbp 与返回地址":"12 字节输入停留在 buf 内部";
+ bytes.innerHTML=Array.from({length:len},(_,i)=>`<div class="byte ${i<16?"buf":i<32?"over":"ret"}">${i<32?"41":"ef"}</div>`).join("");
+ stack.innerHTML=[
+  ["0x7ff0","return address",crashed],
+  ["0x7fe8","saved %rbp",crashed],
+  ["0x7fd8","buf[16]",crashed],
+  ["0x7fc8","local state",false]
+ ].map(x=>`<div class="slot ${x[2]?"bad":""}"><span>${x[0]}</span><b>${x[1]}${x[2]?" · overwritten":""}</b></div>`).join("");
+ regs.innerHTML=[
+  ["%rip",crashed?"0xefefefefefefefef":"0x40128a"],
+  ["%rsp",crashed?"0x7ff8":"0x7fe0"],
+  ["signal",crashed?"SIGSEGV at ret":"normal return"],
+  ["input length",`${len} bytes`]
+ ].map(x=>`<div class="regline ${crashed&&x[0]==="%rip"?"hot":""}"><b>${x[0]}</b><span>${x[1]}</span></div>`).join("");
+ finding.textContent=crashed?"结论：输入从 buf[16] 越界，先覆盖 saved %rbp，随后覆盖返回地址；ret 时 %rip 变成攻击输入的一部分。":"结论：输入长度小于 buf 容量，返回地址保持完整，函数正常返回。";
+ fix.textContent=crashed?"修复：限制拷贝长度，保留边界检查；编译开启栈保护；在报告中记录触发长度、被覆盖槽位和异常寄存器。":"继续实验：逐步增加输入长度，找到第一次覆盖 saved %rbp 的临界点。";
+}
+safeBtn.onclick=()=>{crashed=false;render();}; crashBtn.onclick=()=>{crashed=true;render();}; render();
+</script>
+</body>
+</html>

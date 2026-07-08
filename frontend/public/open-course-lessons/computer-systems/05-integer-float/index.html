@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>整数与浮点表示 · 位模式解剖台</title>
+<link rel="stylesheet" href="../assets/common.css">
+<style>
+  body { overflow-x: hidden; }
+  .bitlab-shell { max-width: 1440px; margin: 0 auto; padding: 18px 22px 42px; }
+  .bitlab-top { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:10px 0 16px; border-bottom:1px solid var(--border); }
+  .course-mark { display:flex; align-items:center; gap:12px; }
+  .course-mark .logo { width:34px; height:34px; border-radius:8px; background:linear-gradient(135deg,var(--accent),var(--warn)); color:#0b0f17; display:grid; place-items:center; font-weight:900; }
+  .course-mark b { display:block; letter-spacing:.2px; }
+  .course-mark span { color:var(--text-dim); font-size:12px; }
+  .bitlab-board { min-height: calc(100vh - 116px); display:grid; grid-template-rows:auto auto 1fr; gap:14px; }
+  .control-deck { display:grid; grid-template-columns: 1fr auto auto auto; gap:10px; align-items:end; margin-top:16px; padding:14px; border:1px solid var(--border); border-radius:16px; background:linear-gradient(135deg,rgba(125,211,252,.08),rgba(251,191,36,.06)),#0a0f1a; }
+  .control-deck label { display:grid; gap:6px; color:var(--text-dim); font-size:12px; }
+  .control-deck input { font-size:24px; padding:12px 14px; border-radius:10px; }
+  .mode-switch { display:flex; gap:8px; flex-wrap:wrap; }
+  .mode-switch .btn.active { background:var(--accent); color:#0b0f17; border-color:transparent; font-weight:800; }
+  .bit-ruler { position:relative; padding:16px; border:1px solid var(--border); border-radius:18px; background:var(--bg-panel); }
+  .bit-row { display:grid; grid-template-columns: repeat(32,minmax(20px,1fr)); gap:4px; }
+  .bit-cell { min-height:76px; border:1px solid var(--border); border-radius:8px; background:#0a0f1a; display:grid; grid-template-rows:auto 1fr auto; place-items:center; font-family:var(--mono); }
+  .bit-cell .index { width:100%; padding:4px 0 0; color:#4a5876; font-size:10px; text-align:center; }
+  .bit-cell .value { font-size:24px; color:var(--text); }
+  .bit-cell .field { color:var(--text-dim); font-size:9px; padding-bottom:5px; text-transform:uppercase; }
+  .bit-cell.sign { border-color:var(--danger); }
+  .bit-cell.exp { border-color:var(--warn); }
+  .bit-cell.frac { border-color:var(--accent); }
+  .field-legend { display:grid; grid-template-columns: 1fr 8fr 23fr; gap:4px; margin-top:8px; font-family:var(--mono); font-size:11px; }
+  .field-legend div { text-align:center; border-radius:999px; padding:4px; border:1px solid var(--border); color:var(--text-dim); background:#0a0f1a; }
+  .field-legend .sign { border-color:var(--danger); color:var(--danger); }
+  .field-legend .exp { border-color:var(--warn); color:var(--warn); }
+  .field-legend .frac { border-color:var(--accent); color:var(--accent); }
+  .interpretation-stage { display:grid; grid-template-columns: 1.1fr 1.1fr 1.2fr; gap:14px; min-height:0; }
+  .readout { border:1px solid var(--border); border-radius:16px; background:var(--bg-panel); padding:14px; display:grid; gap:10px; align-content:start; }
+  .readout h2 { margin:0; font-size:16px; color:var(--accent); }
+  .large-number { font-family:var(--mono); font-size:28px; color:var(--text); word-break:break-all; }
+  .fact-line { display:grid; grid-template-columns:120px 1fr; gap:10px; padding:8px 0; border-top:1px solid var(--border); font-family:var(--mono); font-size:12px; }
+  .fact-line:first-of-type { border-top:0; }
+  .fact-line span:first-child { color:var(--text-dim); }
+  .equation-panel { border:1px solid var(--border); border-radius:16px; background:#0a0f1a; padding:14px; }
+  .equation-panel h2 { margin:0 0 12px; font-size:16px; color:var(--warn); }
+  .eq-step { display:grid; grid-template-columns:34px 1fr; gap:10px; padding:9px 0; border-top:1px dashed var(--border); color:var(--text-dim); line-height:1.65; }
+  .eq-step:first-of-type { border-top:0; }
+  .eq-step b { color:var(--accent); font-family:var(--mono); }
+  .experiment-strip { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .experiment-strip .btn { min-width:106px; justify-content:center; }
+  @media(max-width:1100px){.bit-row{grid-template-columns:repeat(16,1fr)}.field-legend{display:none}.interpretation-stage{grid-template-columns:1fr}.control-deck{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="bitlab-shell">
+  <header class="bitlab-top">
+    <div class="course-mark"><div class="logo">32</div><div><b>整数与浮点表示 · 位模式解剖台</b><span>同一串 bit，在不同解释器下变成不同的数</span></div></div>
+    <a class="nav-back" href="../index.html">← 返回目录</a>
+  </header>
+
+  <main class="bitlab-board">
+    <section class="control-deck">
+      <label>输入数值或十六进制位模式
+        <input id="valueInput" value="2147483647" spellcheck="false">
+      </label>
+      <div class="mode-switch">
+        <button class="btn active" data-mode="signed">int32</button>
+        <button class="btn" data-mode="unsigned">uint32</button>
+        <button class="btn" data-mode="float">float32</button>
+      </div>
+      <button class="btn primary" id="decodeBtn">解剖位模式</button>
+      <div class="experiment-strip">
+        <button class="btn" id="plusBtn">+1</button>
+        <button class="btn" id="minusBtn">-1</button>
+        <button class="btn" id="floatCaseBtn">0.1</button>
+        <button class="btn" id="nanBtn">NaN 位型</button>
+      </div>
+    </section>
+
+    <section class="bit-ruler">
+      <div class="bit-row" id="bitRow"></div>
+      <div class="field-legend">
+        <div class="sign">sign</div>
+        <div class="exp">exponent</div>
+        <div class="frac">fraction / payload</div>
+      </div>
+    </section>
+
+    <section class="interpretation-stage">
+      <aside class="readout">
+        <h2>原始位模式</h2>
+        <div class="large-number" id="hexOut">-</div>
+        <div class="fact-line"><span>binary</span><span id="binaryOut">-</span></div>
+        <div class="fact-line"><span>sign bit</span><span id="signOut">-</span></div>
+        <div class="fact-line"><span>field split</span><span id="splitOut">-</span></div>
+      </aside>
+
+      <aside class="readout">
+        <h2>整数解释器</h2>
+        <div class="fact-line"><span>uint32</span><span id="uintOut">-</span></div>
+        <div class="fact-line"><span>int32</span><span id="intOut">-</span></div>
+        <div class="fact-line"><span>overflow lens</span><span id="overflowOut">-</span></div>
+        <div class="fact-line"><span>课堂追问</span><span>为什么 0xffffffff 既可以是 4294967295，也可以是 -1？</span></div>
+      </aside>
+
+      <section class="equation-panel">
+        <h2>浮点解释器</h2>
+        <div class="large-number" id="floatOut">-</div>
+        <div id="floatSteps"></div>
+      </section>
+    </section>
+  </main>
+</div>
+<script>
+const input=document.getElementById("valueInput");
+const ids=["bitRow","hexOut","binaryOut","signOut","splitOut","uintOut","intOut","overflowOut","floatOut","floatSteps"].reduce((m,id)=>(m[id]=document.getElementById(id),m),{});
+let mode="signed";
+function bits(u){return (u>>>0).toString(2).padStart(32,"0");}
+function parseInput(){
+  const raw=input.value.trim();
+  if(/^0x/i.test(raw)) return Number.parseInt(raw,16)>>>0;
+  if(mode==="float"){
+    const buf=new ArrayBuffer(4), view=new DataView(buf);
+    view.setFloat32(0,Number(raw),false);
+    return view.getUint32(0,false)>>>0;
+  }
+  return Number(raw)>>>0;
+}
+function floatFromBits(u){const b=new ArrayBuffer(4),v=new DataView(b);v.setUint32(0,u,false);return v.getFloat32(0,false);}
+function render(){
+  const u=parseInput(), b=bits(u), exp=parseInt(b.slice(1,9),2), frac=parseInt(b.slice(9),2), int32=u|0;
+  ids.bitRow.innerHTML=b.split("").map((x,i)=>`<div class="bit-cell ${i===0?"sign":i<9?"exp":"frac"}"><span class="index">${31-i}</span><span class="value">${x}</span><span class="field">${i===0?"s":i<9?"e":"f"}</span></div>`).join("");
+  ids.hexOut.textContent="0x"+u.toString(16).padStart(8,"0");
+  ids.binaryOut.textContent=b.replace(/(.{4})/g,"$1 ").trim();
+  ids.signOut.textContent=`${b[0]} · ${b[0]==="1"?"negative":"positive"} lens`;
+  ids.splitOut.textContent=`${b[0]} | ${b.slice(1,9)} | ${b.slice(9,17)} ${b.slice(17,25)} ${b.slice(25)}`;
+  ids.uintOut.textContent=String(u);
+  ids.intOut.textContent=String(int32);
+  ids.overflowOut.textContent=(u===0x7fffffff)?"再 +1 会翻到 int32 最小值":(u===0x80000000)?"这是 int32 最小值的位模式":"按 2^32 环绕解释";
+  ids.floatOut.textContent=String(floatFromBits(u));
+  const floatKind=exp===255?(frac===0?"Infinity":"NaN"):exp===0?"denormal":"normal";
+  const steps=[
+    ["01",`符号位 sign=${b[0]}，决定整体正负。`],
+    ["02",`阶码 bits=${b.slice(1,9)}，十进制 E=${exp}。`],
+    ["03",floatKind==="normal"?`规格化：指数为 ${exp}-127=${exp-127}，隐藏位为 1。`:floatKind==="denormal"?"非规格化：指数固定为 -126，隐藏位为 0。":"特殊值：阶码全 1，进入 Infinity / NaN 区间。"],
+    ["04",`尾数字段 F=0x${frac.toString(16).padStart(6,"0")}。`]
+  ];
+  ids.floatSteps.innerHTML=steps.map(([n,t])=>`<div class="eq-step"><b>${n}</b><span>${t}</span></div>`).join("");
+}
+document.querySelectorAll("[data-mode]").forEach(btn=>btn.onclick=()=>{mode=btn.dataset.mode;document.querySelectorAll("[data-mode]").forEach(x=>x.classList.toggle("active",x===btn));render();});
+decodeBtn.onclick=render;
+plusBtn.onclick=()=>{input.value=mode==="float"?String(Number(input.value||0)+1):String((parseInput()+1)|0);render();};
+minusBtn.onclick=()=>{input.value=mode==="float"?String(Number(input.value||0)-1):String((parseInput()-1)|0);render();};
+floatCaseBtn.onclick=()=>{mode="float";input.value="0.1";document.querySelectorAll("[data-mode]").forEach(x=>x.classList.toggle("active",x.dataset.mode==="float"));render();};
+nanBtn.onclick=()=>{input.value="0x7fc00001";render();};
+input.addEventListener("keydown",e=>{if(e.key==="Enter")render();});
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>缓冲区越界 · 栈帧动画与防御机制对比</title>
+<link rel="stylesheet" href="../assets/common.css">
+<style>
+  .lab-grid { display: grid; grid-template-columns: 1.05fr 1fr; gap: 16px; }
+  .stack-view {
+    background: #0a0f1a; border: 1px solid var(--border); border-radius: 10px; padding: 12px; height: 560px; overflow-y: auto;
+    display: flex; flex-direction: column-reverse; /* 高地址在上 */ gap: 3px;
+  }
+  .stack-title {
+    font-size: 12px; color: var(--text-dim); text-align:center;
+    padding: 6px 0; border-bottom: 1px dashed var(--border); margin-bottom: 8px;
+  }
+  .frame-hdr {
+    text-align: center; font-size: 11px; color: var(--text-dim); padding: 6px 0;
+  }
+  .slot {
+    display: grid; grid-template-columns: 90px 1fr 90px; align-items: center; gap: 8px;
+    padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel-2);
+    font-family: var(--mono); font-size: 12px; transition: all 0.35s ease;
+    position: relative;
+  }
+  .slot .addr { color: var(--text-dim); font-size: 11px; }
+  .slot .val  { color: var(--text); word-break: break-all; }
+  .slot .tag  { text-align: right; font-size: 10.5px; color: var(--text-dim); }
+  .slot.retaddr  { border-color: #a78bfa; }
+  .slot.canary   { border-color: #fbbf24; }
+  .slot.savedrbp { border-color: #60a5fa; }
+  .slot.buffer   { border-color: #4ade80; }
+  .slot.local    { border-color: #64748b; }
+  .slot.padding  { border-color: #334155; background: #10151f; color: #4a5876; font-style: italic; }
+  .slot.overwritten { background: linear-gradient(90deg, rgba(248,113,113,0.28), rgba(248,113,113,0.10));
+                     border-color: var(--danger); animation: attack-shake 0.6s ease; }
+  @keyframes attack-shake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-2px);} 75%{transform:translateX(2px);} }
+  .slot.writing { animation: writePulse 0.6s ease; }
+  @keyframes writePulse {
+    0%   { background: rgba(74,222,128,0.5); }
+    100% { background: var(--bg-panel-2); }
+  }
+  .payload-view {
+    font-family: var(--mono); font-size: 11.5px; line-height: 1.4;
+    background: #0a0f1a; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+    max-height: 190px; overflow-y: auto; white-space: pre-wrap; word-break: break-all;
+  }
+  .payload-view .byte { display: inline-block; padding: 2px 4px; margin: 1px; border-radius: 3px; background: var(--bg-panel-2); border: 1px solid var(--border); }
+  .payload-view .byte.buf   { border-color: #4ade80; }
+  .payload-view .byte.pad   { border-color: #64748b; color: var(--text-dim); }
+  .payload-view .byte.canary{ border-color: #fbbf24; color: #fbbf24; }
+  .payload-view .byte.rbp   { border-color: #60a5fa; color: #60a5fa; }
+  .payload-view .byte.ret   { border-color: #a78bfa; color: #a78bfa; }
+  .payload-view .byte.shellcode{ border-color: #f87171; color: #f87171; }
+  .defense-panel {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;
+  }
+  .toggle {
+    display: flex; align-items: center; justify-content: space-between; padding: 8px 10px;
+    background: var(--bg-panel-2); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; user-select: none;
+  }
+  .toggle .name { font-size: 12.5px; }
+  .toggle .desc { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+  .toggle .sw { width: 34px; height: 18px; background: var(--bg); border: 1px solid var(--border-hi); border-radius: 999px; position: relative; transition: 0.2s; }
+  .toggle .sw::after { content:""; position:absolute; top:1px; left:1px; width:14px; height:14px; border-radius:50%; background:#64748b; transition:0.2s; }
+  .toggle.on .sw { background: rgba(74,222,128,0.15); border-color: var(--ok); }
+  .toggle.on .sw::after { left: 17px; background: var(--ok); }
+  .attack-log {
+    background: #0a0f1a; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px;
+    font-family: var(--mono); font-size: 12px; line-height: 1.6; max-height: 190px; overflow-y: auto;
+  }
+  .attack-log .l { padding: 2px 0; }
+  .attack-log .l::before { content: "▸ "; color: var(--text-dim); }
+  .attack-log .l.ok    { color: var(--ok); }
+  .attack-log .l.warn  { color: var(--warn); }
+  .attack-log .l.danger{ color: var(--danger); }
+  .attack-log .l.info  { color: var(--info); }
+  .scenario-picker { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .rip-indicator {
+    position: relative; padding: 8px 10px; background: linear-gradient(90deg, rgba(167,139,250,0.15), transparent);
+    border-left: 3px solid var(--accent-2); border-radius: 6px; font-family: var(--mono); font-size: 12.5px;
+  }
+  .rip-indicator .lbl { color: var(--text-dim); font-size: 11px; margin-right: 8px; }
+  .code-src { font-family: var(--mono); font-size: 12px; background: #0a0f1a; border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; }
+  .code-src .kw{color:#c084fc;} .code-src .fn{color:#7dd3fc;} .code-src .num{color:#fbbf24;} .code-src .str{color:#86efac;} .code-src .cmt{color:#64748b;font-style:italic;}
+  .stat-box { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 8px; }
+  .stat-box .s { padding: 8px 10px; background: var(--bg-panel-2); border: 1px solid var(--border); border-radius: 6px; text-align: center; font-family: var(--mono); }
+  .stat-box .s .n { font-size: 10.5px; color: var(--text-dim); }
+  .stat-box .s .v { font-size: 14px; margin-top: 2px; }
+  .stat-box .s.attack-good .v { color: var(--danger); }
+  .stat-box .s.defend-good .v { color: var(--ok); }
+  .flow-arrow {
+    display:flex; align-items:center; justify-content:center; height: 22px;
+    color: var(--accent-2); font-size: 20px; opacity: 0.6;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">ICS</div>
+      <div>
+        <div class="title">缓冲区越界 · 栈帧动画与防御机制</div>
+        <div class="subtitle">栈帧动画 · Canary / ASLR / NX 防御机制对比</div>
+      </div>
+    </div>
+    <div class="row">
+      <span class="badge">经典栈溢出 · Ret2Shellcode · Ret2Libc</span>
+      <a class="nav-back" href="../index.html">← 返回演示中心</a>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div>
+      <h1>看得见的栈帧攻击：从 <span class="mono">gets()</span> 到 shell</h1>
+      <p>本演示是当前教学生态最缺的一环：<b>栈帧动态演化动画</b>。左侧是随攻击流程实时更新的栈布局（高地址在上，符合真实内存视角），右侧是攻击载荷字节流与防御机制切换。你可以在\"经典栈溢出 / Ret2Shellcode / Ret2Libc\"三个场景之间切换，也可以开关 Canary/ASLR/NX 观察对同一 payload 的不同后果。</p>
+      <div class="callout" style="padding:8px 12px;margin-top:10px;border-radius:8px;background:rgba(248,113,113,0.06);border-left:3px solid var(--danger);font-size:12.5px;line-height:1.55;">🎯 教学目标：<b>看清返回地址被覆盖那一瞬间的字节内容</b>；<b>对比开启 / 关闭防御时同一 payload 的不同结局</b>；理解 SEED Buffer Overflow Setuid Lab 的每一步含义。</div>
+    </div>
+    <div>
+      <div class="section-title">🎬 攻击场景</div>
+      <div class="scenario-picker">
+        <button class="btn primary" data-scn="classic">经典栈溢出</button>
+        <button class="btn" data-scn="ret2sc">Ret2Shellcode</button>
+        <button class="btn" data-scn="ret2libc">Ret2Libc (/bin/sh)</button>
+      </div>
+      <div class="section-title">🛡️ 防御机制（可开关）</div>
+      <div class="defense-panel">
+        <div class="toggle" id="def-canary" data-def="canary">
+          <div><div class="name">Stack Canary</div><div class="desc">栈保护值</div></div><div class="sw"></div>
+        </div>
+        <div class="toggle" id="def-nx" data-def="nx">
+          <div><div class="name">NX / DEP</div><div class="desc">栈不可执行</div></div><div class="sw"></div>
+        </div>
+        <div class="toggle" id="def-aslr" data-def="aslr">
+          <div><div class="name">ASLR</div><div class="desc">地址随机化</div></div><div class="sw"></div>
+        </div>
+        <div class="toggle" id="def-pie" data-def="pie">
+          <div><div class="name">PIE / RELRO</div><div class="desc">位置无关可执行</div></div><div class="sw"></div>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="attack-btn">💣 发起攻击（动画演示）</button>
+        <button class="btn" id="reset-btn">↺ 重置栈</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="lab-grid">
+    <!-- 左：栈帧 -->
+    <div class="card" style="padding: 0;">
+      <div style="padding: 8px 12px; background: var(--bg-panel-2); border-bottom: 1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:12px;color:var(--text-dim);">🥞 进程栈帧（高地址在上）</span>
+        <span class="mono" style="font-size:11px;color:var(--text-dim);">%rsp / %rbp 实时跟踪</span>
+      </div>
+      <div class="stack-view" id="stack-view"></div>
+    </div>
+
+    <!-- 右：payload、rip、log、code -->
+    <div>
+      <div class="card">
+        <h3>📦 攻击载荷字节流（学生构造）</h3>
+        <div class="payload-view" id="payload-view"></div>
+        <div class="stat-box">
+          <div class="s"><div class="n">buffer size</div><div class="v mono" id="stat-bufsize">64</div></div>
+          <div class="s"><div class="n">payload len</div><div class="v mono" id="stat-paylen">0</div></div>
+          <div class="s"><div class="n">overflow</div><div class="v mono" id="stat-overflow">0</div></div>
+          <div class="s"><div class="n">status</div><div class="v mono" id="stat-status">idle</div></div>
+        </div>
+      </div>
+
+      <div class="flow-arrow">▼</div>
+
+      <div class="card">
+        <h3>🎯 指令指针 %rip 走向</h3>
+        <div class="rip-indicator"><span class="lbl">当前 %rip:</span><span id="rip-cur" class="mono">0x401200 (vuln)</span></div>
+        <div class="flow-arrow">↓</div>
+        <div class="rip-indicator"><span class="lbl">ret 后 %rip:</span><span id="rip-next" class="mono">尚未 ret</span></div>
+      </div>
+
+      <div class="flow-arrow">▼</div>
+
+      <div class="card">
+        <h3>📜 攻击日志</h3>
+        <div class="attack-log" id="attack-log"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid" style="grid-template-columns: 1.1fr 1fr; margin-top:16px;">
+    <div class="card">
+      <h3>🐛 存在漏洞的 C 源代码</h3>
+      <pre class="code-src" id="vuln-src"></pre>
+    </div>
+    <div class="card">
+      <h3>📖 防御机制原理速览</h3>
+      <div style="font-size:12.5px;line-height:1.75;color:var(--text-dim);">
+        <p><b style="color:var(--warn)">Stack Canary</b>：在返回地址前插入一个随机 8 字节 <em>canary</em>，函数返回前校验。溢出破坏 canary → 触发 <span class="mono">__stack_chk_fail</span>。</p>
+        <p><b style="color:var(--info)">NX / DEP</b>：把栈页标为不可执行（页表 XD 位）。栈上 shellcode 无法直接跳去执行，迫使攻击者转向 <b>ret2libc</b> 或 <b>ROP</b>。</p>
+        <p><b style="color:var(--accent-2)">ASLR</b>：进程加载时随机化栈、堆、libc 的基址。攻击者必须通过信息泄漏或暴力猜测得到实际地址。</p>
+        <p><b style="color:var(--accent)">PIE</b>：让可执行文件段本身随机基址，增加 gadget 定位难度。RELRO 使 GOT 只读，防篡改。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">🧪 建议课堂任务（三步阶梯）</div>
+  <div class="grid" style="grid-template-columns: repeat(3, 1fr);">
+    <div class="card"><h3>Step 1 · 关闭所有防御</h3><p class="hint">在 <b>经典栈溢出</b> 场景下，让攻击成功。观察\"返回地址\"槽从 <span class="mono">0x40129a</span> 变为 <span class="mono">0xdeadbeef</span> 的那一帧。</p></div>
+    <div class="card"><h3>Step 2 · 打开 Canary</h3><p class="hint">同一 payload 会破坏 canary。观察日志：<em>*** stack smashing detected ***</em>。写出攻击者\"猜/泄漏 canary\"的思路。</p></div>
+    <div class="card"><h3>Step 3 · 打开 NX，切到 Ret2Libc</h3><p class="hint">Shellcode 场景失败；切到 <b>Ret2Libc</b> 用 <span class="mono">system("/bin/sh")</span> 绕过。分析\"跳到已存在代码\"为何不受 NX 影响。</p></div>
+  </div>
+
+  <div class="footer">计算机系统导论 · 函数调用与栈帧 · 缓冲区越界</div>
+</div>
+
+<script>
+/* ================================================================
+ * 模型：一个可视化的\"函数 vuln\" 栈帧
+ *   高地址 → 低地址：
+ *     [caller frame ...]
+ *     ret addr (0x40129a 主调 caller)
+ *     saved %rbp
+ *     [canary (可选)]
+ *     local var
+ *     char buf[64]              ← gets() 从这里开始写
+ *   栈向低地址生长，写入方向：低 → 高（gets 从 buf 起始写，越界会覆盖后续 slot）
+ * ================================================================ */
+
+const SCENARIOS = {
+  classic: {
+    label: "经典栈溢出",
+    bufSize: 64,
+    src: `<span class="cmt">/* vuln 函数：gets 不检查长度，容易溢出 */</span>
+<span class="kw">void</span> <span class="fn">vuln</span>() {
+    <span class="kw">int</span> secret = <span class="num">0xC0DE</span>;
+    <span class="kw">char</span> buf[<span class="num">64</span>];
+    <span class="fn">gets</span>(buf);              <span class="cmt">// ← 无边界检查！</span>
+    <span class="fn">printf</span>(<span class="str">"hi %s\\n"</span>, buf);
+}`,
+    // 攻击目标：把 ret addr 覆盖成 0xdeadbeef，让 ret 跳到不存在地址（演示：证明能被控制）
+    payloadBuilder: () => {
+      const pad = new Array(64).fill(0x41); // 'A'
+      const savedRbp = [0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x42];
+      const retAddr  = [0xef,0xbe,0xad,0xde,0x00,0x00,0x00,0x00]; // 0xdeadbeef 小端
+      return { bytes: [...pad, ...savedRbp, ...retAddr], type: "control-flow-hijack" };
+    },
+    ripAfter: "0x00000000deadbeef  ⚠️ 已被劫持",
+    outcomeSuccess: "🎯 %rip 被控制到 0xdeadbeef（此地址非法，进程 SIGSEGV，但已证明控制流劫持成功）",
+    outcomeFail: "❌ 攻击失败，看下方日志"
+  },
+
+  ret2sc: {
+    label: "Ret2Shellcode",
+    bufSize: 128,
+    src: `<span class="cmt">/* 缓冲区放 shellcode，返回地址指向 buf 起始 */</span>
+<span class="kw">void</span> <span class="fn">vuln</span>() {
+    <span class="kw">char</span> buf[<span class="num">128</span>];
+    <span class="fn">gets</span>(buf);
+}`,
+    payloadBuilder: () => {
+      // 先 shellcode (示意 32 字节)，然后填充到 128+8+8
+      const shellcode = [
+        0x48,0x31,0xff, 0x48,0xf7,0xe7,        // xor rdi,rdi; mul rdi
+        0x50, 0x68,0x2f,0x2f,0x73,0x68,        // push "//sh"
+        0x68,0x2f,0x62,0x69,0x6e,              // push "/bin"
+        0x48,0x89,0xe7,                        // mov rdi,rsp
+        0x50, 0x57, 0x48,0x89,0xe6,            // /bin//sh, argv
+        0xb0,0x3b, 0x0f,0x05                   // mov al,59; syscall
+      ];
+      const nop = new Array(128 - shellcode.length).fill(0x90);
+      const padded = [...shellcode, ...nop];
+      const savedRbp = [0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x42];
+      const retToBuf = [0x00,0xf0,0xff,0xff,0xff,0x7f,0x00,0x00]; // 0x7fff_ffff_f000 示意栈上地址
+      return { bytes: [...padded, ...savedRbp, ...retToBuf], type: "shellcode-injection", shellcodeLen: shellcode.length };
+    },
+    ripAfter: "0x00007fffffff f000  → 栈上 shellcode",
+    outcomeSuccess: "🐚 shellcode 执行，getshell 成功！/bin/sh $ ",
+    outcomeFail: "❌ 攻击失败"
+  },
+
+  ret2libc: {
+    label: "Ret2Libc",
+    bufSize: 64,
+    src: `<span class="cmt">/* NX 开启，无法执行栈上代码 */</span>
+<span class="cmt">/* 转而跳到 libc 的 system("/bin/sh") */</span>
+<span class="kw">void</span> <span class="fn">vuln</span>() {
+    <span class="kw">char</span> buf[<span class="num">64</span>];
+    <span class="fn">gets</span>(buf);
+}`,
+    payloadBuilder: () => {
+      const pad = new Array(64).fill(0x41);
+      const savedRbp = [0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x42];
+      // ROP: pop rdi; ret  →  &"/bin/sh"  →  &system
+      const popRdi   = [0x22,0x11,0x40,0x00,0x00,0x00,0x00,0x00]; // 0x00401122 gadget
+      const binSh    = [0x00,0x80,0xf7,0xff,0x7f,0x00,0x00,0x00]; // 0x7ffff7f78000 libc "/bin/sh"
+      const systemFn = [0x40,0xc0,0xe4,0xf7,0xff,0x7f,0x00,0x00]; // 0x7ffff7e4c040 system()
+      return { bytes: [...pad, ...savedRbp, ...popRdi, ...binSh, ...systemFn], type: "ret2libc" };
+    },
+    ripAfter: "0x00401122 pop rdi;ret  →  system(\"/bin/sh\")",
+    outcomeSuccess: "🐚 system(\"/bin/sh\") 调用成功！Ret2Libc 完成绕过 NX。",
+    outcomeFail: "❌ 攻击失败"
+  }
+};
+
+const state = {
+  scn: "classic",
+  def: { canary: false, nx: false, aslr: false, pie: false },
+  stack: [],
+  payload: null,
+  animating: false
+};
+
+/* ---------- 构建初始栈帧 ---------- */
+function buildStack() {
+  const scn = SCENARIOS[state.scn];
+  const bufSize = scn.bufSize;
+  const canaryOn = state.def.canary;
+  const aslrOn   = state.def.aslr;
+
+  // 基址（受 ASLR 影响）
+  const baseHi = aslrOn ? 0x7ffcabcd0000n + BigInt(Math.floor(Math.random()*0x10000)&~0xf) : 0x7fffffffe000n;
+
+  // 按高地址→低地址布局
+  const stack = [];
+  let addr = baseHi;
+
+  // caller frame
+  stack.push({ addr, val:"... caller frame ...", tag:"caller", cls:"padding" });
+  addr -= 8n;
+
+  // ret address
+  stack.push({ addr, val:"0x000000000040129a", tag:"↩ ret addr", cls:"retaddr", role:"ret", orig:"0x000000000040129a" });
+  addr -= 8n;
+
+  // saved rbp
+  stack.push({ addr, val:"0x00007fffffffe100", tag:"saved %rbp", cls:"savedrbp", role:"savedrbp", orig:"0x00007fffffffe100" });
+  addr -= 8n;
+
+  if (canaryOn) {
+    stack.push({ addr, val:"0x" + genCanary(), tag:"🍪 canary", cls:"canary", role:"canary", orig:"canary" });
+    addr -= 8n;
+  }
+
+  // local var
+  stack.push({ addr, val:"0x000000000000C0DE", tag:"int secret", cls:"local", role:"local" });
+  addr -= 8n;
+
+  // buf (bufSize bytes = bufSize/8 slots)
+  const slotN = bufSize / 8;
+  for (let i = slotN - 1; i >= 0; i--) {
+    stack.push({ addr, val: `[buf +${(i*8).toString().padStart(3,' ')}]`, tag: i===0?"↑ buf start":"", cls:"buffer", role:"buf", bufIdx: i });
+    addr -= 8n;
+  }
+
+  // rsp indicator
+  stack.push({ addr, val:"...  %rsp  ...", tag:"low addr", cls:"padding" });
+
+  state.stack = stack;
+}
+
+function genCanary() {
+  // 典型 canary 尾字节 00（防字符串泄漏）
+  let s = "";
+  for (let i=0;i<7;i++) s += Math.floor(Math.random()*256).toString(16).padStart(2,"0");
+  return (s + "00").toUpperCase();
+}
+
+function renderStack() {
+  const box = document.getElementById("stack-view");
+  box.innerHTML = "";
+  // 从低地址到高地址渲染（因为 flex-direction column-reverse，视觉上高地址在上）
+  const stackLo2Hi = [...state.stack].reverse();
+  stackLo2Hi.forEach(s => {
+    const el = document.createElement("div");
+    el.className = "slot " + (s.cls || "");
+    if (s.overwritten) el.classList.add("overwritten");
+    if (s.writing) el.classList.add("writing");
+    el.dataset.role = s.role || "";
+    const addrStr = "0x" + s.addr.toString(16).padStart(12,"0");
+    el.innerHTML = `<span class="addr">${addrStr}</span><span class="val">${s.val}</span><span class="tag">${s.tag||""}</span>`;
+    box.appendChild(el);
+  });
+}
+
+function renderPayload() {
+  const box = document.getElementById("payload-view");
+  if (!state.payload) { box.textContent = "尚未构造载荷。选择场景后点击\"发起攻击\"自动生成 payload。"; return; }
+  const p = state.payload;
+  const scn = SCENARIOS[state.scn];
+  const bufSize = scn.bufSize;
+  let html = "";
+  p.bytes.forEach((b, i) => {
+    let cls = "byte ";
+    if (state.scn === "ret2sc" && i < (p.shellcodeLen||0)) cls += "shellcode";
+    else if (i < bufSize) cls += "buf";
+    else if (i < bufSize + 8) cls += (state.def.canary ? "canary" : "rbp");
+    else if (state.def.canary && i < bufSize + 16) cls += "rbp";
+    else cls += "ret";
+    html += `<span class="${cls}">${b.toString(16).padStart(2,"0")}</span>`;
+  });
+  box.innerHTML = html;
+  document.getElementById("stat-bufsize").textContent = bufSize;
+  document.getElementById("stat-paylen").textContent  = p.bytes.length;
+  document.getElementById("stat-overflow").textContent = Math.max(0, p.bytes.length - bufSize);
+}
+
+function renderVulnSrc() {
+  document.getElementById("vuln-src").innerHTML = SCENARIOS[state.scn].src;
+}
+
+/* ---------- 日志 ---------- */
+function log(msg, level="info") {
+  const box = document.getElementById("attack-log");
+  const el = document.createElement("div");
+  el.className = "l " + level;
+  el.innerHTML = msg;
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+}
+function clearLog() { document.getElementById("attack-log").innerHTML = ""; }
+
+/* ---------- 攻击动画 ---------- */
+async function attack() {
+  if (state.animating) return;
+  state.animating = true;
+  clearLog();
+  buildStack(); renderStack();
+  const scn = SCENARIOS[state.scn];
+  const p = scn.payloadBuilder();
+  state.payload = p;
+  renderPayload();
+
+  log(`<b>[+]</b> 场景: <b>${scn.label}</b>`, "info");
+  log(`<b>[+]</b> 防御机制: canary=${state.def.canary?'ON':'OFF'}, nx=${state.def.nx?'ON':'OFF'}, aslr=${state.def.aslr?'ON':'OFF'}, pie=${state.def.pie?'ON':'OFF'}`, "info");
+  await sleep(500);
+  log(`<b>[*]</b> 调用 <span class="mono">gets(buf)</span>，开始从 buf 起始向高地址写入 ${p.bytes.length} 字节...`, "warn");
+  await sleep(400);
+
+  // 逐 slot 写入（每 slot 8 字节，从低地址开始）
+  // 找出 buf 起始 slot 索引
+  const slots = state.stack;
+  // 按低地址→高地址顺序遍历（slots 是高→低存储，因此 reverse）
+  const seq = [...slots].reverse().filter(s => s.role !== undefined || s.cls === "buffer" || s.role === "buf" || s.role === "local" || s.role === "canary" || s.role === "savedrbp" || s.role === "ret");
+  // 实际上我们只用 slots 顺序（高→低），逆序遍历
+  const writingOrder = [...slots].reverse(); // 从低到高
+  let byteOffset = 0;
+  const bufSize = scn.bufSize;
+  document.getElementById("stat-status").textContent = "writing";
+
+  for (const s of writingOrder) {
+    if (s.cls === "padding") continue;
+    // 跳过 caller-frame padding
+    if (byteOffset >= p.bytes.length) break;
+    // 每 slot 消耗 8 字节
+    const chunk = p.bytes.slice(byteOffset, byteOffset+8);
+    byteOffset += 8;
+
+    // 覆盖显示
+    s.writing = true;
+    if (s.role === "buf") {
+      s.val = "0x" + [...chunk].reverse().map(b=>b.toString(16).padStart(2,"0")).join("");
+    } else {
+      // 越界写入
+      s.overwritten = true;
+      s.val = "0x" + [...chunk].reverse().map(b=>b.toString(16).padStart(2,"0")).join("");
+      if (s.role === "canary") s.newCanary = chunk;
+      if (s.role === "ret") s.newRet = chunk;
+    }
+    renderStack();
+    await sleep(180);
+    s.writing = false;
+  }
+  renderStack();
+  await sleep(400);
+  log(`<b>[*]</b> gets() 完成，共写入 ${p.bytes.length} 字节，其中 <b>${Math.max(0, p.bytes.length - bufSize)}</b> 字节越界。`, "warn");
+
+  // canary check
+  if (state.def.canary) {
+    await sleep(500);
+    log(`<b>[!]</b> 函数返回前 <span class="mono">__stack_chk_fail</span> 校验 canary...`, "warn");
+    await sleep(600);
+    // 攻击者写入的字节几乎必然覆盖 canary，除非精心构造并泄漏 canary（本演示假设未泄漏）
+    log(`<b>*** stack smashing detected ***: terminated</b>`, "danger");
+    log(`<b>[✓]</b> Canary 触发保护，进程被终止，控制流未被劫持。`, "ok");
+    document.getElementById("stat-status").textContent = "canary hit";
+    document.getElementById("rip-cur").textContent = "0x40129a → __stack_chk_fail";
+    document.getElementById("rip-next").textContent = "abort()";
+    state.animating = false;
+    return;
+  }
+
+  // no canary → 检查 shellcode + NX
+  if (state.scn === "ret2sc" && state.def.nx) {
+    await sleep(400);
+    log(`<b>[✓]</b> ret 完成，%rip 跳到栈上 shellcode 起始地址...`, "warn");
+    await sleep(400);
+    log(`<b>[!]</b> 栈页被标记为 <b>NX</b>（不可执行），CPU 触发通用保护异常。`, "warn");
+    await sleep(300);
+    log(`Segmentation fault (core dumped)`, "danger");
+    log(`<b>[✓]</b> NX 生效，shellcode 无法执行。攻击者需转向 <b>Ret2Libc / ROP</b>。`, "ok");
+    document.getElementById("stat-status").textContent = "NX blocked";
+    document.getElementById("rip-cur").textContent = "0x40129a → shellcode";
+    document.getElementById("rip-next").textContent = "SIGSEGV @ non-executable page";
+    state.animating = false;
+    return;
+  }
+
+  // ASLR: shellcode 场景下 ret 地址错位
+  if (state.scn === "ret2sc" && state.def.aslr) {
+    await sleep(400);
+    log(`<b>[!]</b> ASLR 开启，栈基址已随机化。载荷中\"跳回栈的地址\"未同步更新。`, "warn");
+    await sleep(400);
+    log(`ret → 0x00007fffffff f000，但真实栈位于 0x${(0x7ffcabcd0000n + 0x1234n).toString(16)}...`, "info");
+    log(`Segmentation fault`, "danger");
+    log(`<b>[✓]</b> ASLR 阻止了固定地址跳转。攻击者需要\"信息泄漏\"或\"暴力猜测\"。`, "ok");
+    document.getElementById("stat-status").textContent = "ASLR blocked";
+    state.animating = false;
+    return;
+  }
+
+  // Ret2Libc + PIE
+  if (state.scn === "ret2libc" && state.def.pie) {
+    await sleep(400);
+    log(`<b>[!]</b> PIE 开启，system 与 gadget 地址随机。载荷中的地址未更新。`, "warn");
+    await sleep(400);
+    log(`Segmentation fault`, "danger");
+    log(`<b>[✓]</b> PIE 生效。攻击者需通过 GOT/PLT 泄漏 libc 基址后再构造 payload。`, "ok");
+    document.getElementById("stat-status").textContent = "PIE blocked";
+    state.animating = false;
+    return;
+  }
+
+  // ---- 攻击成功路径 ----
+  await sleep(400);
+  log(`<b>[✓]</b> 函数返回，从栈顶弹出 <b>被覆盖的返回地址</b>。`, "warn");
+  await sleep(400);
+  document.getElementById("rip-next").textContent = scn.ripAfter;
+  log(`<b>[!]</b> %rip = ${scn.ripAfter}`, "danger");
+  await sleep(500);
+  log(scn.outcomeSuccess, "danger");
+  if (state.scn === "ret2sc")   log(`<b># </b><span class="mono">whoami</span>\n<b>root</b>\n<b># </b>`, "danger");
+  if (state.scn === "ret2libc") log(`<b># </b><span class="mono">id</span>\n<b>uid=0(root) gid=0(root) groups=0(root)</b>`, "danger");
+  document.getElementById("stat-status").textContent = "PWNED 💀";
+  state.animating = false;
+}
+
+function reset() {
+  buildStack(); renderStack();
+  state.payload = null; renderPayload();
+  clearLog();
+  document.getElementById("stat-status").textContent = "idle";
+  document.getElementById("rip-cur").textContent = "0x401200 (vuln)";
+  document.getElementById("rip-next").textContent = "尚未 ret";
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* ---------- 事件 ---------- */
+document.querySelectorAll("[data-scn]").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("[data-scn]").forEach(x => x.classList.remove("primary"));
+  b.classList.add("primary");
+  state.scn = b.dataset.scn;
+  reset(); renderVulnSrc();
+}));
+document.querySelectorAll("[data-def]").forEach(t => t.addEventListener("click", () => {
+  const k = t.dataset.def;
+  state.def[k] = !state.def[k];
+  t.classList.toggle("on", state.def[k]);
+  reset();
+}));
+document.getElementById("attack-btn").addEventListener("click", attack);
+document.getElementById("reset-btn").addEventListener("click", reset);
+
+/* ---------- init ---------- */
+renderVulnSrc();
+buildStack();
+renderStack();
+renderPayload();
+</script>
+</body>
+</html>

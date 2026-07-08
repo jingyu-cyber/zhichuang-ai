@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>调用约定 · ABI 调度台</title>
+<link rel="stylesheet" href="../assets/common.css">
+<style>
+  .abi-stage { max-width:1440px; margin:0 auto; padding:18px 22px 44px; }
+  .abi-top { display:flex; justify-content:space-between; align-items:center; gap:16px; padding-bottom:14px; border-bottom:1px solid var(--border); }
+  .abi-top h1 { margin:0; font-size:22px; }
+  .abi-top p { margin:2px 0 0; color:var(--text-dim); font-size:12px; }
+  .dispatch { display:grid; grid-template-columns: 280px 1fr 280px; gap:14px; margin-top:16px; min-height:calc(100vh - 120px); }
+  .panel { border:1px solid var(--border); border-radius:18px; background:var(--bg-panel); overflow:hidden; }
+  .panel-title { padding:12px 14px; border-bottom:1px solid var(--border); background:var(--bg-panel-2); color:var(--text-dim); font-size:12px; }
+  .caller { display:grid; grid-template-rows:auto 1fr auto; }
+  .callsite { padding:14px; font-family:var(--mono); font-size:12.5px; line-height:1.9; }
+  .callsite .active { color:var(--accent); background:rgba(125,211,252,.12); border-radius:6px; padding:2px 4px; }
+  .phase-controls { padding:12px; border-top:1px solid var(--border); display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .switchyard { position:relative; border:1px solid var(--border); border-radius:18px; background:radial-gradient(circle at center,rgba(125,211,252,.08),transparent 55%),#0a0f1a; overflow:hidden; }
+  .register-rail { position:absolute; left:40px; right:40px; top:38px; display:grid; grid-template-columns:repeat(6,1fr); gap:8px; }
+  .reg-slot { border:1px solid var(--border); border-radius:12px; padding:10px 8px; text-align:center; background:var(--bg-panel-2); font-family:var(--mono); min-height:76px; }
+  .reg-slot b { display:block; color:var(--accent); font-size:16px; }
+  .reg-slot span { color:var(--text-dim); font-size:11px; }
+  .stack-belt { position:absolute; left:40px; right:40px; bottom:40px; min-height:148px; border:1px dashed var(--border-hi); border-radius:16px; padding:12px; display:flex; flex-direction:column-reverse; gap:8px; }
+  .stack-item { border:1px solid var(--warn); border-radius:10px; background:rgba(251,191,36,.09); padding:9px 12px; font-family:var(--mono); display:flex; justify-content:space-between; }
+  .arg-token { position:absolute; width:82px; height:42px; border-radius:999px; border:1px solid var(--accent); background:rgba(125,211,252,.14); display:grid; place-items:center; font-family:var(--mono); color:var(--accent); transition:.35s; }
+  .callee { display:grid; grid-template-rows:auto auto 1fr; }
+  .frame { padding:14px; display:grid; gap:10px; }
+  .frame-slot { border:1px solid var(--border); border-radius:12px; padding:10px; background:#0a0f1a; display:grid; grid-template-columns:90px 1fr; gap:8px; font-family:var(--mono); }
+  .frame-slot.hot { border-color:var(--accent-2); color:var(--accent-2); }
+  .responsibility { padding:14px; display:grid; gap:10px; }
+  .rule { border:1px solid var(--border); border-radius:12px; padding:12px; background:#0a0f1a; line-height:1.65; color:var(--text-dim); }
+  .rule b { color:var(--accent); }
+  .timeline { grid-column:1/4; display:flex; gap:8px; overflow:auto; }
+  .phase { border:1px solid var(--border); border-radius:999px; padding:7px 12px; color:var(--text-dim); font-size:12px; background:#0a0f1a; white-space:nowrap; cursor:pointer; }
+  .phase.active { background:var(--accent); color:#0b0f17; border-color:transparent; font-weight:800; }
+  @media(max-width:1120px){.dispatch{grid-template-columns:1fr}.timeline{grid-column:auto}.switchyard{min-height:520px}.arg-token{display:none}}
+</style>
+</head>
+<body>
+<div class="abi-stage">
+  <header class="abi-top">
+    <div><h1>调用约定 · ABI 调度台</h1><p>观察 8 个参数如何被调度到寄存器和调用栈，并区分调用双方职责</p></div>
+    <a class="nav-back" href="../index.html">← 返回目录</a>
+  </header>
+
+  <main class="dispatch">
+    <section class="panel caller">
+      <div class="panel-title">调用点源码</div>
+      <div class="callsite" id="callsite"></div>
+      <div class="phase-controls"><button class="btn" id="prevBtn">← 上一步</button><button class="btn primary" id="nextBtn">下一步 →</button></div>
+    </section>
+
+    <section class="switchyard" id="yard">
+      <div class="register-rail" id="registerRail"></div>
+      <div class="stack-belt" id="stackBelt"></div>
+      <div id="tokens"></div>
+    </section>
+
+    <aside class="panel callee">
+      <div class="panel-title">被调用者入口视图</div>
+      <div class="frame" id="frame"></div>
+      <div class="responsibility">
+        <div class="rule"><b>Caller saved</b><br>%rax %rcx %rdx %rsi %rdi %r8-%r11 调用后可能被覆盖，调用者需要自己保存。</div>
+        <div class="rule"><b>Callee saved</b><br>%rbx %rbp %r12-%r15 若被函数使用，被调用者必须在返回前恢复。</div>
+      </div>
+    </aside>
+
+    <nav class="timeline" id="timeline"></nav>
+  </main>
+</div>
+<script>
+const regs=["%rdi","%rsi","%rdx","%rcx","%r8","%r9"], args=["a=11","b=22","c=33","d=44","e=55","f=66","g=77","h=88"];
+const phases=[
+{name:"准备 call",activeLine:0,stack:[],frame:["callee 尚未运行"],note:"调用者准备实参。"},
+{name:"分配寄存器参数",activeLine:1,regArgs:[0,1,2,3,4,5],stack:[],frame:["arg1-6 已在寄存器中"],note:"前 6 个整型/指针参数进入固定寄存器。"},
+{name:"压入栈参数",activeLine:2,regArgs:[0,1,2,3,4,5],stack:["arg8 h=88","arg7 g=77"],frame:["栈上传参等待 callee 读取"],note:"第 7 个之后的参数走栈。"},
+{name:"call 压返回地址",activeLine:3,regArgs:[0,1,2,3,4,5],stack:["return address","arg8 h=88","arg7 g=77"],frame:["%rsp 指向返回地址"],note:"call 指令把返回地址压栈。"},
+{name:"callee 建帧",activeLine:4,regArgs:[0,1,2,3,4,5],stack:["saved %rbp","return address","arg8 h=88","arg7 g=77"],frame:["saved %rbp","return address","stack arg7/arg8","local area"],note:"被调用者保存帧指针并建立自己的栈帧。"},
+{name:"返回",activeLine:5,regArgs:[],stack:[],frame:["%rax = return value","控制权回到 caller"],note:"返回值放入 %rax，ret 使用返回地址恢复控制流。"}
+];
+let cur=0;
+function render(){
+ const p=phases[cur];
+ timeline.innerHTML=phases.map((x,i)=>`<button class="phase ${i===cur?"active":""}" onclick="cur=${i};render()">${i+1}. ${x.name}</button>`).join("");
+ callsite.innerHTML=[
+  "long z = target(a,b,c,d,e,f,g,h);",
+  "arg1..arg6 → %rdi..%r9",
+  "push h; push g;",
+  "call target",
+  "push %rbp; mov %rsp,%rbp",
+  "return value ← %rax"
+ ].map((x,i)=>`<div class="${i===p.activeLine?"active":""}">${x}</div>`).join("");
+ registerRail.innerHTML=regs.map((r,i)=>`<div class="reg-slot"><b>${r}</b><span>${p.regArgs?.includes(i)?args[i]:"empty"}</span></div>`).join("");
+ stackBelt.innerHTML=(p.stack||[]).map((x,i)=>`<div class="stack-item"><span>%rsp+${i*8}</span><b>${x}</b></div>`).join("") || `<div class="stack-item" style="border-color:var(--border);color:var(--text-dim)">栈上传参区空</div>`;
+ frame.innerHTML=p.frame.map((x,i)=>`<div class="frame-slot ${i===0?"hot":""}"><span>${i===0?"current":"slot"}</span><b>${x}</b></div>`).join("") + `<div class="frame-slot"><span>提示</span><b>${p.note}</b></div>`;
+ const pos=[[80,210],[190,210],[300,210],[410,210],[520,210],[630,210],[330,360],[430,360]];
+ tokens.innerHTML=args.map((a,i)=>{
+   const inReg=p.regArgs?.includes(i), inStack=(p.stack||[]).join(" ").includes(a.split("=")[0]);
+   const [x,y]=inReg?pos[i]:inStack?pos[i]:[40+i*82,20];
+   return `<div class="arg-token" style="left:${x}px;top:${y}px">${a.split("=")[0]}</div>`;
+ }).join("");
+}
+render();
+nextBtn.onclick=()=>{cur=Math.min(phases.length-1,cur+1);render();};
+prevBtn.onclick=()=>{cur=Math.max(0,cur-1);render();};
+</script>
+</body>
+</html>

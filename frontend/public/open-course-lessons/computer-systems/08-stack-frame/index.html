@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>栈帧布局 · 栈帧升降机</title>
+<link rel="stylesheet" href="../assets/common.css">
+<style>
+  .elevator-shell { max-width:1400px; margin:0 auto; padding:18px 22px 42px; }
+  .elevator-top { display:flex; justify-content:space-between; align-items:center; gap:14px; padding-bottom:14px; border-bottom:1px solid var(--border); }
+  .elevator-top h1 { margin:0; font-size:22px; }
+  .elevator-top p { margin:2px 0 0; color:var(--text-dim); font-size:12px; }
+  .elevator { display:grid; grid-template-columns: 220px 1fr 360px; gap:14px; margin-top:16px; min-height:calc(100vh - 112px); }
+  .shaft { position:relative; border:1px solid var(--border); border-radius:18px; background:#0a0f1a; overflow:hidden; }
+  .addr-ruler { position:absolute; left:0; top:0; bottom:0; width:88px; border-right:1px solid var(--border); background:rgba(255,255,255,.015); font-family:var(--mono); color:#4a5876; font-size:11px; }
+  .addr-ruler span { position:absolute; right:10px; }
+  .frame-stack { position:absolute; left:104px; right:18px; top:22px; bottom:22px; display:flex; flex-direction:column; gap:7px; justify-content:flex-start; }
+  .slot { display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:center; border:1px solid var(--border); border-radius:10px; padding:10px 12px; background:var(--bg-panel-2); font-family:var(--mono); min-height:54px; transition:.25s; }
+  .slot.ret { border-color:var(--accent-2); }
+  .slot.rbp { border-color:var(--info); }
+  .slot.local { border-color:var(--ok); }
+  .slot.new { border-color:var(--warn); background:rgba(251,191,36,.08); }
+  .slot small { color:var(--text-dim); }
+  .pointer { position:absolute; left:86px; width:calc(100% - 92px); height:2px; background:var(--danger); transition:.25s; }
+  .pointer::before { content:attr(data-name); position:absolute; left:-72px; top:-10px; color:var(--danger); font-family:var(--mono); font-size:12px; }
+  .pointer.rbp { background:var(--info); }
+  .pointer.rbp::before { color:var(--info); }
+  .control-column { display:grid; grid-template-rows:auto 1fr auto; gap:12px; }
+  .op-list { border:1px solid var(--border); border-radius:18px; background:var(--bg-panel); overflow:hidden; }
+  .op { padding:12px 14px; border-bottom:1px solid var(--border); font-family:var(--mono); color:var(--text-dim); cursor:pointer; }
+  .op.active { color:#0b0f17; background:var(--accent); font-weight:800; }
+  .op:last-child { border-bottom:0; }
+  .ptr-board { display:grid; gap:10px; }
+  .ptr { border:1px solid var(--border); border-radius:14px; background:#0a0f1a; padding:12px; font-family:var(--mono); }
+  .ptr b { color:var(--accent); }
+  .inspector { border:1px solid var(--border); border-radius:18px; background:var(--bg-panel); padding:14px; display:grid; grid-template-rows:auto 1fr; gap:12px; }
+  .inspector h2 { margin:0; font-size:16px; color:var(--accent); }
+  .note { line-height:1.8; color:var(--text-dim); }
+  .mapping { display:grid; gap:8px; font-family:var(--mono); font-size:12px; }
+  .map-row { border:1px solid var(--border); border-radius:10px; padding:9px; background:#0a0f1a; display:grid; grid-template-columns:90px 1fr; }
+  .map-row b { color:var(--warn); }
+  @media(max-width:1080px){.elevator{grid-template-columns:1fr}.shaft{min-height:560px}}
+</style>
+</head>
+<body>
+<div class="elevator-shell">
+  <header class="elevator-top">
+    <div><h1>栈帧布局 · 栈帧升降机</h1><p>函数进入和返回时，%rsp 像电梯一样向低地址移动，再回到调用者帧</p></div>
+    <a class="nav-back" href="../index.html">← 返回目录</a>
+  </header>
+  <main class="elevator">
+    <aside class="control-column">
+      <div class="op-list" id="ops"></div>
+      <div class="ptr-board" id="ptrBoard"></div>
+      <div class="row"><button class="btn" id="prevBtn">← 上一步</button><button class="btn primary" id="nextBtn">下一步 →</button></div>
+    </aside>
+    <section class="shaft">
+      <div class="addr-ruler"><span style="top:24px;">高地址</span><span style="top:120px;">0x7ff8</span><span style="top:210px;">0x7ff0</span><span style="top:300px;">0x7fe8</span><span style="top:420px;">0x7fc8</span><span style="bottom:24px;">低地址</span></div>
+      <div class="frame-stack" id="frameStack"></div>
+      <div class="pointer rbp" id="rbpLine" data-name="%rbp"></div>
+      <div class="pointer" id="rspLine" data-name="%rsp"></div>
+    </section>
+    <aside class="inspector">
+      <h2 id="stepTitle">-</h2>
+      <div>
+        <p class="note" id="note"></p>
+        <div class="mapping" id="mapping"></div>
+      </div>
+    </aside>
+  </main>
+</div>
+<script>
+const ops=["call vuln","push %rbp","mov %rsp,%rbp","sub $0x20,%rsp","写入局部变量","leave","ret"];
+const states=[
+{title:"调用刚进入",op:0,rsp:210,rbp:80,note:"call 指令已经把返回地址压入栈。此时当前函数还没有建立自己的栈帧。",slots:[["caller local",""],["return address","ret"]],map:[["%rsp","指向返回地址"],["%rbp","仍属于调用者"]]},
+{title:"保存旧帧指针",op:1,rsp:300,rbp:80,note:"push %rbp 把调用者帧指针保存下来，方便返回时恢复。",slots:[["caller local",""],["return address","ret"],["saved %rbp","rbp new"]],map:[["saved %rbp","调用者帧锚点"],["%rsp","向低地址移动 8 字节"]]},
+{title:"建立当前帧锚点",op:2,rsp:300,rbp:300,note:"mov %rsp,%rbp 之后，%rbp 成为当前函数访问局部变量的稳定基准。",slots:[["caller local",""],["return address","ret"],["saved %rbp","rbp"]],map:[["%rbp","当前帧基准"],["返回地址","8(%rbp)"]]},
+{title:"分配局部变量空间",op:3,rsp:430,rbp:300,note:"sub $0x20,%rsp 为局部变量和对齐空间预留 32 字节。",slots:[["caller local",""],["return address","ret"],["saved %rbp","rbp"],["local x","local new"],["buf[16]","local new"],["padding","new"]],map:[["x","-0x8(%rbp)"],["buf","-0x20(%rbp)"]]},
+{title:"局部变量被写入",op:4,rsp:430,rbp:300,note:"局部变量使用负偏移访问。越界写入会从 buf 向高地址覆盖 saved %rbp 和返回地址。",slots:[["caller local",""],["return address","ret"],["saved %rbp","rbp"],["local x = 7","local"],["buf = \"hello\"","local"],["padding",""]],map:[["风险","buf 越界会向返回地址推进"],["证据","看覆盖是否越过 %rbp"]]},
+{title:"释放当前栈帧",op:5,rsp:300,rbp:80,note:"leave 等价于 mov %rbp,%rsp; pop %rbp，局部变量空间一次性释放。",slots:[["caller local",""],["return address","ret"],["saved %rbp","rbp"]],map:[["%rsp","回到 saved %rbp"],["%rbp","恢复调用者值"]]},
+{title:"返回调用点",op:6,rsp:120,rbp:80,note:"ret 弹出返回地址并跳回调用者，当前栈帧消失。",slots:[["caller local",""]],map:[["控制流","返回地址进入 PC"],["栈帧","callee frame removed"]]}
+];
+let cur=0;
+function render(){
+ const s=states[cur];
+ ops.innerHTML=ops.map((x,i)=>`<div class="op ${i===s.op?"active":""}" onclick="cur=${i};render()">${i+1}. ${x}</div>`).join("");
+ ptrBoard.innerHTML=`<div class="ptr"><b>%rsp</b><br>y=${s.rsp}</div><div class="ptr"><b>%rbp</b><br>y=${s.rbp}</div>`;
+ frameStack.innerHTML=s.slots.map(x=>`<div class="slot ${x[1]}"><span>${x[0]}</span><small>${x[1]||"mem"}</small></div>`).join("");
+ rspLine.style.top=s.rsp+"px"; rbpLine.style.top=s.rbp+"px";
+ stepTitle.textContent=s.title; note.textContent=s.note;
+ mapping.innerHTML=s.map.map(x=>`<div class="map-row"><b>${x[0]}</b><span>${x[1]}</span></div>`).join("");
+}
+render();
+nextBtn.onclick=()=>{cur=Math.min(states.length-1,cur+1);render();};
+prevBtn.onclick=()=>{cur=Math.max(0,cur-1);render();};
+</script>
+</body>
+</html>
