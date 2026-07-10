@@ -1,6 +1,6 @@
 # 智创Agent · 计算机学科垂类大模型与双创能力赋能平台
 
-> **GitLink × CCF 开源创新大赛 参赛作品**  
+> **GitLink 开源创新大赛 参赛作品**  
 > 🏆 面向一流学科建设的学科垂类大模型与创新应用开发  
 > 🌐 在线演示：http://70.39.193.15:5173
 
@@ -118,7 +118,7 @@ zhichuang-ai/
 ├── evals/                      # RAG / Agent 评测资产
 ├── infra/                      # Docker Compose + 部署配置
 ├── scripts/                    # 开发辅助脚本
-└── 立项/                       # 需求文档 + 架构设计 + 立项PPT + 赛题资料
+└── 立项/                       # 需求文档 + 架构设计 + 立项PPT + 开源创新大赛资料
 ```
 
 ## 🔧 部署优化清单
@@ -143,7 +143,7 @@ zhichuang-ai/
 
 ## 📄 许可证
 
-本项目为 **GitLink × CCF 开源创新大赛** 参赛作品，用于学术竞赛与教学展示。
+本项目为 **GitLink 开源创新大赛** 参赛作品，用于学术竞赛与教学展示。
 
 ## 👨‍💻 贡献者
 
@@ -156,5 +156,5 @@ zhichuang-ai/
 
 <div align="center">
   <sub>Built with ❤️ for Computer Science Education</sub><br>
-  <sub>GitLink × CCF 开源创新大赛 · 2026</sub>
+  <sub>GitLink 开源创新大赛 · 2026</sub>
 </div>
