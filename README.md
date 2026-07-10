@@ -13,6 +13,8 @@
 |:---:|:---:|:---:|
 | ![](docs/screenshots/screenshot-student-v2.png) | ![](docs/screenshots/screenshot-teacher-full.png) | ![](docs/screenshots/screenshot-admin-full.png) |
 | 代码提交→五维分析(83/82/79/71/83)→证据追踪→改进任务 | 班级分布·能力热力图·梯队筛选·教学建议 | 31条知识库资料·检索入库·重点路径分类 |
+| ![](docs/screenshots/screenshot-knowledge.png) |
+| 语义检索·引用追踪·知识库持续积累 |
 
 ## 开源课堂 · 交互式课件
 
