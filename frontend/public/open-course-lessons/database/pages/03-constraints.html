@@ -1,0 +1,466 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>数据约束与完整性 (Constraints)</title><style>:root{--bg:#1a1e1d;--bg-soft:#25302d;--bg-code:#0d1111;--fg:#e0eee8;--fg-dim:#90a898;--line:#304038;--accent:#40c0b0;--accent-2:#4898e0;--grad:#4898e0;--success:#40c870;--danger:#e05050}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(72,152,224,.18);color:var(--grad)}.badge--tip{background:rgba(64,200,112,.18);color:var(--success)}.badge--warn{background:rgba(224,80,80,.18);color:var(--danger)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}</style></head><body>
+<div class="demo-shell">
+<div class="demo-header"><div><h1>数据约束与完整性 (Constraints)</h1><div class="breadcrumb"><a href="../index.html">数据库系统概论</a> / 第一章 · 数据建模 / 数据约束与完整性</div></div><span class="badge" style="border:1px solid var(--line)">4 个步骤</span></div>
+<div class="demo-main">
+<div class="panel-explain"><div class="step-title" id="stepTitle"></div><div class="info-line" id="infoLine"></div><div class="step-desc" id="stepDesc"></div><div class="badge-row" id="badges"></div></div>
+<div class="panel-stage" id="stage"></div>
+</div>
+<div class="demo-controls">
+<button id="btnPrev" onclick="changeStep(-1)">◀ 上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btnNext" onclick="changeStep(1)">下一步 ▶</button>
+<button id="btnAuto" onclick="toggleAuto()">▶</button>
+<button onclick="resetStep()">↺ 重置</button>
+</div>
+</div>
+<script>
+var NS='http://www.w3.org/2000/svg';
+
+function grid(sv){
+  for(let i=0;i<800;i+=40){let l=document.createElementNS(NS,'line');l.setAttribute('x1',i);l.setAttribute('y1',0);l.setAttribute('x2',i);l.setAttribute('y2',340);l.setAttribute('stroke','#1a2824');l.setAttribute('stroke-width',0.5);sv.appendChild(l);}
+  for(let j=0;j<340;j+=40){let l=document.createElementNS(NS,'line');l.setAttribute('x1',0);l.setAttribute('y1',j);l.setAttribute('x2',800);l.setAttribute('y2',j);l.setAttribute('stroke','#1a2824');l.setAttribute('stroke-width',0.5);sv.appendChild(l);}
+}
+
+function gate(sv,x,y,w,h,color,label){
+  let g=document.createElementNS(NS,'rect');
+  g.setAttribute('x',x);g.setAttribute('y',y);g.setAttribute('width',w);g.setAttribute('height',h);
+  g.setAttribute('rx',4);g.setAttribute('fill','rgba('+(color==='green'?'64,200,112':'224,80,80')+',0.12)');
+  g.setAttribute('stroke',color==='green'?'#40c870':'#e05050');g.setAttribute('stroke-width',2);
+  sv.appendChild(g);
+  // Gate bars
+  for(let i=0;i<3;i++){
+    let bar=document.createElementNS(NS,'line');
+    bar.setAttribute('x1',x+4);bar.setAttribute('y1',y+4+i*8);bar.setAttribute('x2',x+w-4);bar.setAttribute('y2',y+4+i*8);
+    bar.setAttribute('stroke',color==='green'?'#40c870':'#e05050');bar.setAttribute('stroke-width',2);
+    sv.appendChild(bar);
+  }
+  if(label){
+    let lt=document.createElementNS(NS,'text');
+    lt.setAttribute('x',x+w/2);lt.setAttribute('y',y+h+16);lt.setAttribute('fill',color==='green'?'#40c870':'#e05050');
+    lt.setAttribute('font-size',10);lt.setAttribute('font-weight','bold');lt.setAttribute('text-anchor','middle');
+    lt.textContent=label;sv.appendChild(lt);
+  }
+}
+
+function checkMark(sv,cx,cy,sz){
+  let g=document.createElementNS(NS,'g');
+  // Check circle
+  let c=document.createElementNS(NS,'circle');
+  c.setAttribute('cx',cx);c.setAttribute('cy',cy);c.setAttribute('r',sz);
+  c.setAttribute('fill','none');c.setAttribute('stroke','#40c870');c.setAttribute('stroke-width',2.5);
+  sv.appendChild(c);
+  // Check mark
+  let p=document.createElementNS(NS,'polyline');
+  p.setAttribute('points',(cx-sz*0.55)+','+cy+' '+(cx-sz*0.1)+','+(cy+sz*0.45)+' '+(cx+sz*0.55)+','+(cy-sz*0.4));
+  p.setAttribute('fill','none');p.setAttribute('stroke','#40c870');p.setAttribute('stroke-width',2.5);
+  p.setAttribute('stroke-linecap','round');p.setAttribute('stroke-linejoin','round');
+  sv.appendChild(p);
+}
+
+function xMark(sv,cx,cy,sz){
+  let g=document.createElementNS(NS,'g');
+  let c=document.createElementNS(NS,'circle');
+  c.setAttribute('cx',cx);c.setAttribute('cy',cy);c.setAttribute('r',sz);
+  c.setAttribute('fill','none');c.setAttribute('stroke','#e05050');c.setAttribute('stroke-width',2.5);
+  sv.appendChild(c);
+  let l1=document.createElementNS(NS,'line');
+  l1.setAttribute('x1',cx-sz*0.4);l1.setAttribute('y1',cy-sz*0.4);l1.setAttribute('x2',cx+sz*0.4);l1.setAttribute('y2',cy+sz*0.4);
+  l1.setAttribute('stroke','#e05050');l1.setAttribute('stroke-width',2.5);l1.setAttribute('stroke-linecap','round');
+  sv.appendChild(l1);
+  let l2=document.createElementNS(NS,'line');
+  l2.setAttribute('x1',cx+sz*0.4);l2.setAttribute('y1',cy-sz*0.4);l2.setAttribute('x2',cx-sz*0.4);l2.setAttribute('y2',cy+sz*0.4);
+  l2.setAttribute('stroke','#e05050');l2.setAttribute('stroke-width',2.5);l2.setAttribute('stroke-linecap','round');
+  sv.appendChild(l2);
+}
+
+function insertAnim(sv,x,y,cols,vals,color){
+  let totalW=cols.reduce((s,c)=>s+c.w,0);
+  let rowH=26;
+  let rx=x;
+  // Row highlight
+  let rh=document.createElementNS(NS,'rect');
+  rh.setAttribute('x',rx);rh.setAttribute('y',y);rh.setAttribute('width',totalW);rh.setAttribute('height',rowH);
+  rh.setAttribute('rx',4);rh.setAttribute('fill',color==='green'?'rgba(64,200,112,0.12)':'rgba(224,80,80,0.12)');
+  rh.setAttribute('stroke',color==='green'?'#40c870':'#e05050');rh.setAttribute('stroke-width',1.5);
+  sv.appendChild(rh);
+  vals.forEach((cell,colIdx)=>{
+    let ct=document.createElementNS(NS,'text');
+    ct.setAttribute('x',rx+cols[colIdx].w/2);ct.setAttribute('y',y+rowH-8);
+    ct.setAttribute('fill',color==='green'?'#40c870':'#e05050');
+    ct.setAttribute('font-size',10);ct.setAttribute('text-anchor','middle');ct.setAttribute('font-weight','bold');
+    ct.textContent=cell;sv.appendChild(ct);
+    rx+=cols[colIdx].w;
+  });
+  return {y:y+rowH,totalW:totalW};
+}
+
+function constraint0(sv){
+  while(sv.firstChild)sv.firstChild.remove();
+  grid(sv);
+  // Title
+  let ttl=document.createElementNS(NS,'text');
+  ttl.setAttribute('x',400);ttl.setAttribute('y',25);ttl.setAttribute('fill','#e05050');ttl.setAttribute('font-size',15);
+  ttl.setAttribute('font-weight','bold');ttl.setAttribute('text-anchor','middle');
+  ttl.textContent='NOT NULL 约束演示';sv.appendChild(ttl);
+  // Student table
+  let cols=[{w:55,label:'sid'},{w:60,label:'name'},{w:40,label:'age'},{w:60,label:'email'}];
+  let rows=[
+    ['S001','张三','20','zhang@u.cn'],
+    ['S002','李四','21','li@u.cn'],
+    ['S003','王五','19','wang@u.cn']
+  ];
+  // Draw table header
+  let trx=250,try=60,th=24,rh=26;
+  let totalW=cols.reduce((s,c)=>s+c.w,0);
+  let rx=trx;
+  // Table bg
+  let bg=document.createElementNS(NS,'rect');
+  bg.setAttribute('x',trx);bg.setAttribute('y',try);bg.setAttribute('width',totalW);bg.setAttribute('height',th+rows.length*rh);
+  bg.setAttribute('rx',6);bg.setAttribute('fill','rgba(64,192,176,0.08)');bg.setAttribute('stroke','#304038');bg.setAttribute('stroke-width',1.5);
+  sv.appendChild(bg);
+  // Header
+  rx=trx;
+  cols.forEach(col=>{
+    let h=document.createElementNS(NS,'rect');
+    h.setAttribute('x',rx);h.setAttribute('y',try);h.setAttribute('width',col.w);h.setAttribute('height',th);
+    h.setAttribute('fill','rgba(64,192,176,0.2)');h.setAttribute('stroke','#304038');h.setAttribute('stroke-width',0.5);
+    sv.appendChild(h);
+    let ht=document.createElementNS(NS,'text');
+    ht.setAttribute('x',rx+col.w/2);ht.setAttribute('y',try+th-8);ht.setAttribute('fill','#40c0b0');
+    ht.setAttribute('font-size',10);ht.setAttribute('font-weight','bold');ht.setAttribute('text-anchor','middle');
+    ht.textContent=col.label;sv.appendChild(ht);
+    rx+=col.w;
+  });
+  // Add NN badge on name column
+  let nnBadge=document.createElementNS(NS,'text');
+  nnBadge.setAttribute('x',trx+55+30);nnBadge.setAttribute('y',try-5);nnBadge.setAttribute('fill','#e05050');nnBadge.setAttribute('font-size',9);
+  nnBadge.setAttribute('font-weight','bold');nnBadge.textContent='NOT NULL';sv.appendChild(nnBadge);
+  // Draw data rows
+  rx=trx;
+  let dataY=try+th;
+  rows.forEach((row,ri)=>{
+    rx=trx;
+    row.forEach((cell,ci)=>{
+      let ct=document.createElementNS(NS,'text');
+      ct.setAttribute('x',rx+cols[ci].w/2);ct.setAttribute('y',dataY+ri*rh+rh-8);
+      ct.setAttribute('fill','#e0eee8');ct.setAttribute('font-size',10);ct.setAttribute('text-anchor','middle');
+      ct.textContent=cell;sv.appendChild(ct);
+      rx+=cols[ci].w;
+    });
+  });
+  // FAILED insert: NULL name
+  let failY=dataY+rows.length*rh+10;
+  let fi=insertAnim(sv,trx,failY,cols,['S004','NULL','22','zhao@u.cn'],'red');
+  xMark(sv,trx-16,failY+13,8);
+  // Gate icon
+  gate(sv,trx+totalW+15,failY-2,20,rh,'red','');
+  // Reason
+  let failReason=document.createElementNS(NS,'text');
+  failReason.setAttribute('x',trx+totalW+55);failReason.setAttribute('y',failY+rh-8);
+  failReason.setAttribute('fill','#e05050');failReason.setAttribute('font-size',10);failReason.setAttribute('font-weight','bold');
+  failReason.textContent='被拒绝：name 不能为 NULL';sv.appendChild(failReason);
+  // SUCCESS insert
+  let succY=failY+rh+14;
+  let si=insertAnim(sv,trx,succY,cols,['S005','孙七','23','sun@u.cn'],'green');
+  checkMark(sv,trx-16,succY+13,8);
+  gate(sv,trx+totalW+15,succY-2,20,rh,'green','');
+  let succReason=document.createElementNS(NS,'text');
+  succReason.setAttribute('x',trx+totalW+55);succReason.setAttribute('y',succY+rh-8);
+  succReason.setAttribute('fill','#40c870');succReason.setAttribute('font-size',10);succReason.setAttribute('font-weight','bold');
+  succReason.textContent='通过：所有字段非空';sv.appendChild(succReason);
+  // Summary label
+  let sl=document.createElementNS(NS,'text');
+  sl.setAttribute('x',trx+totalW+55);sl.setAttribute('y',succY+rh+20);sl.setAttribute('fill','#90a898');sl.setAttribute('font-size',11);
+  sl.textContent='CREATE TABLE 中声明 name VARCHAR(50) NOT NULL';sv.appendChild(sl);
+}
+
+function constraint1(sv){
+  while(sv.firstChild)sv.firstChild.remove();
+  grid(sv);
+  let ttl=document.createElementNS(NS,'text');
+  ttl.setAttribute('x',400);ttl.setAttribute('y',25);ttl.setAttribute('fill','#4898e0');ttl.setAttribute('font-size',15);
+  ttl.setAttribute('font-weight','bold');ttl.setAttribute('text-anchor','middle');
+  ttl.textContent='UNIQUE 约束演示';sv.appendChild(ttl);
+  let cols=[{w:55,label:'sid'},{w:60,label:'name'},{w:40,label:'age'},{w:80,label:'email UNIQUE'}];
+  let trx=230,try=55,th=24,rh=26,rows=[['S001','张三','20','zhang@u.cn'],['S002','李四','21','li@u.cn'],['S003','王五','19','wang@u.cn']];
+  let totalW=cols.reduce((s,c)=>s+c.w,0);
+  let bg=document.createElementNS(NS,'rect');
+  bg.setAttribute('x',trx);bg.setAttribute('y',try);bg.setAttribute('width',totalW);bg.setAttribute('height',th+rows.length*rh);
+  bg.setAttribute('rx',6);bg.setAttribute('fill','rgba(72,152,224,0.08)');bg.setAttribute('stroke','#304038');bg.setAttribute('stroke-width',1.5);
+  sv.appendChild(bg);
+  let rx=trx;
+  cols.forEach(col=>{
+    let h=document.createElementNS(NS,'rect');
+    h.setAttribute('x',rx);h.setAttribute('y',try);h.setAttribute('width',col.w);h.setAttribute('height',th);
+    h.setAttribute('fill','rgba(72,152,224,0.18)');h.setAttribute('stroke','#304038');h.setAttribute('stroke-width',0.5);
+    sv.appendChild(h);
+    let ht=document.createElementNS(NS,'text');
+    ht.setAttribute('x',rx+col.w/2);ht.setAttribute('y',try+th-8);ht.setAttribute('fill','#4898e0');
+    ht.setAttribute('font-size',10);ht.setAttribute('font-weight','bold');ht.setAttribute('text-anchor','middle');
+    ht.textContent=col.label;sv.appendChild(ht);
+    rx+=col.w;
+  });
+  let dataY=try+th;
+  rows.forEach((row,ri)=>{
+    rx=trx;
+    row.forEach((cell,ci)=>{
+      let ct=document.createElementNS(NS,'text');
+      ct.setAttribute('x',rx+cols[ci].w/2);ct.setAttribute('y',dataY+ri*rh+rh-8);
+      ct.setAttribute('fill','#e0eee8');ct.setAttribute('font-size',10);ct.setAttribute('text-anchor','middle');
+      ct.textContent=cell;sv.appendChild(ct);
+      rx+=cols[ci].w;
+    });
+  });
+  // FAILED: duplicate email
+  let failY=dataY+rows.length*rh+12;
+  let fi=insertAnim(sv,trx,failY,cols,['S004','赵六','22','zhang@u.cn'],'red');
+  xMark(sv,trx-16,failY+13,8);
+  gate(sv,trx+totalW+15,failY-2,20,rh,'red','');
+  let fr=document.createElementNS(NS,'text');
+  fr.setAttribute('x',trx+totalW+55);fr.setAttribute('y',failY+rh-8);
+  fr.setAttribute('fill','#e05050');fr.setAttribute('font-size',10);fr.setAttribute('font-weight','bold');
+  fr.textContent='被拒绝：zhang@u.cn 已存在！';sv.appendChild(fr);
+  let fr2=document.createElementNS(NS,'text');
+  fr2.setAttribute('x',trx+totalW+55);fr2.setAttribute('y',failY+rh+12);
+  fr2.setAttribute('fill','#90a898');fr2.setAttribute('font-size',10);
+  fr2.textContent='违反 UNIQUE(email) 约束';sv.appendChild(fr2);
+  // SUCCESS
+  let succY=failY+rh+28;
+  insertAnim(sv,trx,succY,cols,['S005','孙七','23','sun@u.cn'],'green');
+  checkMark(sv,trx-16,succY+13,8);
+  gate(sv,trx+totalW+15,succY-2,20,rh,'green','');
+  let sr=document.createElementNS(NS,'text');
+  sr.setAttribute('x',trx+totalW+55);sr.setAttribute('y',succY+rh-8);
+  sr.setAttribute('fill','#40c870');sr.setAttribute('font-size',10);sr.setAttribute('font-weight','bold');
+  sr.textContent='通过：sun@u.cn 唯一';sv.appendChild(sr);
+  // Highlight the existing matching row
+  let hl=document.createElementNS(NS,'rect');
+  hl.setAttribute('x',trx);hl.setAttribute('y',dataY+0*rh);hl.setAttribute('width',totalW);hl.setAttribute('height',rh);
+  hl.setAttribute('fill','none');hl.setAttribute('stroke','#e05050');hl.setAttribute('stroke-width',2);hl.setAttribute('rx',2);
+  hl.setAttribute('stroke-dasharray','4,2');
+  sv.appendChild(hl);
+  let hll=document.createElementNS(NS,'text');
+  hll.setAttribute('x',trx+totalW+55);hll.setAttribute('y',dataY+0*rh+rh-8);
+  hll.setAttribute('fill','#e05050');hll.setAttribute('font-size',9);
+  hll.textContent='← 已存在的邮箱';sv.appendChild(hll);
+}
+
+function constraint2(sv){
+  while(sv.firstChild)sv.firstChild.remove();
+  grid(sv);
+  let ttl=document.createElementNS(NS,'text');
+  ttl.setAttribute('x',400);ttl.setAttribute('y',22);ttl.setAttribute('fill','#40c870');ttl.setAttribute('font-size',15);
+  ttl.setAttribute('font-weight','bold');ttl.setAttribute('text-anchor','middle');
+  ttl.textContent='CHECK 约束演示';sv.appendChild(ttl);
+  // Student table with CHECK age BETWEEN 1 AND 120
+  let cols=[{w:55,label:'sid'},{w:60,label:'name'},{w:55,label:'age CHECK'},{w:70,label:'email'}];
+  let trx=200,try=50,th=24,rh=26,rows=[['S001','张三','20','zhang@u.cn'],['S002','李四','21','li@u.cn'],['S003','王五','19','wang@u.cn']];
+  let totalW=cols.reduce((s,c)=>s+c.w,0);
+  let bg=document.createElementNS(NS,'rect');
+  bg.setAttribute('x',trx);bg.setAttribute('y',try);bg.setAttribute('width',totalW);bg.setAttribute('height',th+rows.length*rh);
+  bg.setAttribute('rx',6);bg.setAttribute('fill','rgba(64,200,112,0.08)');bg.setAttribute('stroke','#304038');bg.setAttribute('stroke-width',1.5);
+  sv.appendChild(bg);
+  let rx=trx;
+  cols.forEach(col=>{
+    let h=document.createElementNS(NS,'rect');
+    h.setAttribute('x',rx);h.setAttribute('y',try);h.setAttribute('width',col.w);h.setAttribute('height',th);
+    h.setAttribute('fill','rgba(64,200,112,0.15)');h.setAttribute('stroke','#304038');h.setAttribute('stroke-width',0.5);
+    sv.appendChild(h);
+    let ht=document.createElementNS(NS,'text');
+    ht.setAttribute('x',rx+col.w/2);ht.setAttribute('y',try+th-8);ht.setAttribute('fill','#40c870');
+    ht.setAttribute('font-size',10);ht.setAttribute('font-weight','bold');ht.setAttribute('text-anchor','middle');
+    ht.textContent=col.label;sv.appendChild(ht);
+    rx+=col.w;
+  });
+  let dataY=try+th;
+  rows.forEach((row,ri)=>{
+    rx=trx;
+    row.forEach((cell,ci)=>{
+      let ct=document.createElementNS(NS,'text');
+      ct.setAttribute('x',rx+cols[ci].w/2);ct.setAttribute('y',dataY+ri*rh+rh-8);
+      ct.setAttribute('fill','#e0eee8');ct.setAttribute('font-size',10);ct.setAttribute('text-anchor','middle');
+      ct.textContent=cell;sv.appendChild(ct);
+      rx+=cols[ci].w;
+    });
+  });
+  // FAILED: age=200
+  let failY=dataY+rows.length*rh+12;
+  let fi=insertAnim(sv,trx,failY,cols,['S004','赵六','200','zhao@u.cn'],'red');
+  xMark(sv,trx-14,failY+13,8);
+  gate(sv,trx+totalW+15,failY-2,20,rh,'red','');
+  let fr=document.createElementNS(NS,'text');
+  fr.setAttribute('x',trx+totalW+55);fr.setAttribute('y',failY+rh-8);
+  fr.setAttribute('fill','#e05050');fr.setAttribute('font-size',10);fr.setAttribute('font-weight','bold');
+  fr.textContent='被拒绝：age=200 超出范围！';sv.appendChild(fr);
+  // Range bar visualization
+  let rbarY=failY+rh+10;
+  let rbarX=trx+55+60;
+  let rbarBg=document.createElementNS(NS,'rect');
+  rbarBg.setAttribute('x',rbarX-5);rbarBg.setAttribute('y',rbarY-5);rbarBg.setAttribute('width',110);rbarBg.setAttribute('height',28);
+  rbarBg.setAttribute('rx',4);rbarBg.setAttribute('fill','#0d1111');rbarBg.setAttribute('stroke','#304038');rbarBg.setAttribute('stroke-width',1);
+  sv.appendChild(rbarBg);
+  let rbarLine=document.createElementNS(NS,'line');
+  rbarLine.setAttribute('x1',rbarX);rbarLine.setAttribute('y1',rbarY+12);rbarLine.setAttribute('x2',rbarX+100);rbarLine.setAttribute('y2',rbarY+12);
+  rbarLine.setAttribute('stroke','#40c870');rbarLine.setAttribute('stroke-width',3);rbarLine.setAttribute('stroke-linecap','round');
+  sv.appendChild(rbarLine);
+  let rbarStart=document.createElementNS(NS,'text');
+  rbarStart.setAttribute('x',rbarX);rbarStart.setAttribute('y',rbarY+8);rbarStart.setAttribute('fill','#90a898');rbarStart.setAttribute('font-size',8);
+  rbarStart.setAttribute('text-anchor','middle');rbarStart.textContent='1';sv.appendChild(rbarStart);
+  let rbarEnd=document.createElementNS(NS,'text');
+  rbarEnd.setAttribute('x',rbarX+100);rbarEnd.setAttribute('y',rbarY+8);rbarEnd.setAttribute('fill','#90a898');rbarEnd.setAttribute('font-size',8);
+  rbarEnd.setAttribute('text-anchor','middle');rbarEnd.textContent='120';sv.appendChild(rbarEnd);
+  // 200 marker
+  let marker=document.createElementNS(NS,'text');
+  marker.setAttribute('x',rbarX+120);marker.setAttribute('y',rbarY+16);marker.setAttribute('fill','#e05050');marker.setAttribute('font-size',10);
+  marker.setAttribute('font-weight','bold');marker.textContent='← 200';sv.appendChild(marker);
+  let mLine=document.createElementNS(NS,'line');
+  mLine.setAttribute('x1',rbarX+115);mLine.setAttribute('y1',rbarY+12);mLine.setAttribute('x2',rbarX+100);mLine.setAttribute('y2',rbarY+12);
+  mLine.setAttribute('stroke','#e05050');mLine.setAttribute('stroke-width',1.5);mLine.setAttribute('stroke-dasharray','3,2');
+  sv.appendChild(mLine);
+  // SUCCESS
+  let succY=rbarY+32;
+  insertAnim(sv,trx,succY,cols,['S005','孙七','23','sun@u.cn'],'green');
+  checkMark(sv,trx-14,succY+13,8);
+  gate(sv,trx+totalW+15,succY-2,20,rh,'green','');
+  let sr=document.createElementNS(NS,'text');
+  sr.setAttribute('x',trx+totalW+55);sr.setAttribute('y',succY+rh-8);
+  sr.setAttribute('fill','#40c870');sr.setAttribute('font-size',10);sr.setAttribute('font-weight','bold');
+  sr.textContent='通过：23 在 [1, 120] 范围内';sv.appendChild(sr);
+  let constraintDef=document.createElementNS(NS,'text');
+  constraintDef.setAttribute('x',trx+totalW+55);constraintDef.setAttribute('y',succY+rh+16);
+  constraintDef.setAttribute('fill','#90a898');constraintDef.setAttribute('font-size',10);
+  constraintDef.textContent='CHECK (age >= 1 AND age <= 120)';sv.appendChild(constraintDef);
+}
+
+function constraint3(sv){
+  while(sv.firstChild)sv.firstChild.remove();
+  grid(sv);
+  let ttl=document.createElementNS(NS,'text');
+  ttl.setAttribute('x',400);ttl.setAttribute('y',22);ttl.setAttribute('fill','#4898e0');ttl.setAttribute('font-size',15);
+  ttl.setAttribute('font-weight','bold');ttl.setAttribute('text-anchor','middle');
+  ttl.textContent='FOREIGN KEY 约束演示';sv.appendChild(ttl);
+  // Department table (left, small)
+  let deptCols=[{w:55,label:'dept_id'},{w:80,label:'dept_name'}];
+  let dtx=40,dty=55,dth=22,drh=22,drows=[['D01','计算机学院'],['D02','数学学院']];
+  let dtw=deptCols.reduce((s,c)=>s+c.w,0);
+  let dbg=document.createElementNS(NS,'rect');
+  dbg.setAttribute('x',dtx);dbg.setAttribute('y',dty);dbg.setAttribute('width',dtw);dbg.setAttribute('height',dth+drows.length*drh);
+  dbg.setAttribute('rx',6);dbg.setAttribute('fill','rgba(64,192,176,0.08)');dbg.setAttribute('stroke','#304038');dbg.setAttribute('stroke-width',1.5);
+  sv.appendChild(dbg);
+  let drx=dtx;
+  deptCols.forEach(col=>{
+    let h=document.createElementNS(NS,'rect');
+    h.setAttribute('x',drx);h.setAttribute('y',dty);h.setAttribute('width',col.w);h.setAttribute('height',dth);
+    h.setAttribute('fill','rgba(64,192,176,0.2)');h.setAttribute('stroke','#304038');h.setAttribute('stroke-width',0.5);
+    sv.appendChild(h);
+    let ht=document.createElementNS(NS,'text');
+    ht.setAttribute('x',drx+col.w/2);ht.setAttribute('y',dty+dth-7);
+    ht.setAttribute('fill','#40c0b0');ht.setAttribute('font-size',9);ht.setAttribute('font-weight','bold');
+    ht.setAttribute('text-anchor','middle');ht.textContent=col.label;sv.appendChild(ht);
+    drx+=col.w;
+  });
+  let ddataY=dty+dth;
+  drows.forEach((row,ri)=>{
+    drx=dtx;
+    row.forEach((cell,ci)=>{
+      let ct=document.createElementNS(NS,'text');
+      ct.setAttribute('x',drx+deptCols[ci].w/2);ct.setAttribute('y',ddataY+ri*drh+drh-7);
+      ct.setAttribute('fill','#e0eee8');ct.setAttribute('font-size',9);ct.setAttribute('text-anchor','middle');
+      ct.textContent=cell;sv.appendChild(ct);
+      drx+=deptCols[ci].w;
+    });
+  });
+  let dtLabel=document.createElementNS(NS,'text');
+  dtLabel.setAttribute('x',dtx+dtw/2);dtLabel.setAttribute('y',dty-8);dtLabel.setAttribute('fill','#40c0b0');
+  dtLabel.setAttribute('font-size',11);dtLabel.setAttribute('font-weight','bold');dtLabel.setAttribute('text-anchor','middle');
+  dtLabel.textContent='Department';sv.appendChild(dtLabel);
+  // Student table (right, with FK)
+  let stuCols=[{w:55,label:'sid'},{w:55,label:'name'},{w:60,label:'dept_id FK'}];
+  let stx=400,sty=55,sth=22,srh=22,srows=[['S001','张三','D01'],['S002','李四','D01'],['S003','王五','D02']];
+  let stw=stuCols.reduce((s,c)=>s+c.w,0);
+  let sbg=document.createElementNS(NS,'rect');
+  sbg.setAttribute('x',stx);sbg.setAttribute('y',sty);sbg.setAttribute('width',stw);sbg.setAttribute('height',sth+srows.length*srh);
+  sbg.setAttribute('rx',6);sbg.setAttribute('fill','rgba(72,152,224,0.08)');sbg.setAttribute('stroke','#304038');sbg.setAttribute('stroke-width',1.5);
+  sv.appendChild(sbg);
+  let srx=stx;
+  stuCols.forEach(col=>{
+    let h=document.createElementNS(NS,'rect');
+    h.setAttribute('x',srx);h.setAttribute('y',sty);h.setAttribute('width',col.w);h.setAttribute('height',sth);
+    h.setAttribute('fill','rgba(72,152,224,0.18)');h.setAttribute('stroke','#304038');h.setAttribute('stroke-width',0.5);
+    sv.appendChild(h);
+    let ht=document.createElementNS(NS,'text');
+    ht.setAttribute('x',srx+col.w/2);ht.setAttribute('y',sty+sth-7);
+    ht.setAttribute('fill','#4898e0');ht.setAttribute('font-size',9);ht.setAttribute('font-weight','bold');
+    ht.setAttribute('text-anchor','middle');ht.textContent=col.label;sv.appendChild(ht);
+    srx+=col.w;
+  });
+  let sdataY=sty+sth;
+  srows.forEach((row,ri)=>{
+    srx=stx;
+    row.forEach((cell,ci)=>{
+      let ct=document.createElementNS(NS,'text');
+      ct.setAttribute('x',srx+stuCols[ci].w/2);ct.setAttribute('y',sdataY+ri*srh+srh-7);
+      ct.setAttribute('fill',ci===2?'#4898e0':'#e0eee8');ct.setAttribute('font-size',9);ct.setAttribute('text-anchor','middle');
+      ct.textContent=cell;sv.appendChild(ct);
+      srx+=stuCols[ci].w;
+    });
+  });
+  let stLabel=document.createElementNS(NS,'text');
+  stLabel.setAttribute('x',stx+stw/2);stLabel.setAttribute('y',sty-8);stLabel.setAttribute('fill','#4898e0');
+  stLabel.setAttribute('font-size',11);stLabel.setAttribute('font-weight','bold');stLabel.setAttribute('text-anchor','middle');
+  stLabel.textContent='Student';sv.appendChild(stLabel);
+  // FK arrow Student.dept_id -> Department.dept_id
+  let fkArrow=document.createElementNS(NS,'path');
+  fkArrow.setAttribute('d','M'+stx+' '+sdataY+20+' C'+(stx-80)+' '+(sdataY+20)+' '+(dtx+dtw+80)+' '+(ddataY+20)+' '+(dtx+dtw)+' '+ddataY+10);
+  fkArrow.setAttribute('fill','none');fkArrow.setAttribute('stroke','#4898e0');fkArrow.setAttribute('stroke-width',1.5);
+  fkArrow.setAttribute('stroke-dasharray','4,3');
+  sv.appendChild(fkArrow);
+  let fkL=document.createElementNS(NS,'text');
+  fkL.setAttribute('x',280);fkL.setAttribute('y',ddataY+drh+5);fkL.setAttribute('fill','#4898e0');fkL.setAttribute('font-size',9);
+  fkL.setAttribute('font-weight','bold');fkL.setAttribute('text-anchor','middle');
+  fkL.textContent='FK 引用 ↑';sv.appendChild(fkL);
+  // FAILED: insert with nonexistent dept_id
+  let failY=sty+sth+srows.length*srh+16;
+  let fi=insertAnim(sv,stx,failY,stuCols,['S004','赵六','D99'],'red');
+  xMark(sv,stx-14,failY+13,7);
+  let fr=document.createElementNS(NS,'text');
+  fr.setAttribute('x',stx+stw+15);fr.setAttribute('y',failY+srh-7);
+  fr.setAttribute('fill','#e05050');fr.setAttribute('font-size',9);fr.setAttribute('font-weight','bold');
+  fr.textContent='被拒绝：D99 在 Department 中不存在！';sv.appendChild(fr);
+  // Visual: show D99 not in dept table
+  let ghost=document.createElementNS(NS,'text');
+  ghost.setAttribute('x',dtx+dtw+20);ghost.setAttribute('y',ddataY+drh*2+drh-7);
+  ghost.setAttribute('fill','#e05050');ghost.setAttribute('font-size',9);ghost.setAttribute('font-weight','bold');
+  ghost.textContent='D99 = 不存在 ←';sv.appendChild(ghost);
+  // SUCCESS
+  let succY=failY+srh+12;
+  insertAnim(sv,stx,succY,stuCols,['S005','孙七','D02'],'green');
+  checkMark(sv,stx-14,succY+13,7);
+  let sr=document.createElementNS(NS,'text');
+  sr.setAttribute('x',stx+stw+15);sr.setAttribute('y',succY+srh-7);
+  sr.setAttribute('fill','#40c870');sr.setAttribute('font-size',9);sr.setAttribute('font-weight','bold');
+  sr.textContent='通过：D02 在 Department 中存在 ✅';sv.appendChild(sr);
+  // Constraint SQL
+  let csql=document.createElementNS(NS,'text');
+  csql.setAttribute('x',400);csql.setAttribute('y',succY+srh+22);csql.setAttribute('fill','#90a898');csql.setAttribute('font-size',10);
+  csql.setAttribute('text-anchor','middle');
+  csql.textContent='FOREIGN KEY (dept_id) REFERENCES Department(dept_id)';sv.appendChild(csql);
+}
+
+const S=[
+  {t:'NOT NULL 约束',l:'name VARCHAR(50) NOT NULL — 列值不能为空',d:'<p><span style="color:var(--danger)">NOT NULL</span> 约束确保该列必须包含<span style="color:var(--danger)">非空值</span>。</p><p>定义：<code>name VARCHAR(50) NOT NULL</code></p><p>拒绝：INSERT 中 name 为 NULL 时，数据库<span style="color:var(--danger)">拒绝</span>该行。</p><p>通过：name 提供有效值时，数据<span style="color:var(--success)">正常插入</span>。</p>',b:[{t:'NOT NULL',c:'warn'},{t:'实体完整性',c:'def'}],r:constraint0},
+  {t:'UNIQUE 约束',l:'email VARCHAR(100) UNIQUE — 列值不能重复',d:'<p><span style="color:var(--accent-2)">UNIQUE</span> 约束保证该列每行值<span style="color:var(--accent-2)">互不相同</span>。</p><p>定义：<code>email VARCHAR(100) UNIQUE</code></p><p>拒绝：插入重复邮箱时，数据库<span style="color:var(--danger)">拒绝</span>。</p><p style="color:var(--fg-dim);font-size:12px">UNIQUE 可应用于单列或列组合</p>',b:[{t:'UNIQUE',c:'def'},{t:'用户定义完整性',c:'tip'}],r:constraint1},
+  {t:'CHECK 约束',l:'CHECK (age >= 1 AND age <= 120) — 自定义条件',d:'<p><span style="color:var(--success)">CHECK</span> 约束验证每行的值满足<span style="color:var(--success)">指定条件</span>。</p><p>定义：<code>CHECK (age BETWEEN 1 AND 120)</code></p><p>拒绝：age=200 超出范围 → <span style="color:var(--danger)">被数据库拒绝</span></p><p style="color:var(--fg-dim);font-size:12px">CHECK 可验证任意布尔表达式</p>',b:[{t:'CHECK',c:'tip'},{t:'用户定义完整性',c:'def'}],r:constraint2},
+  {t:'FOREIGN KEY 约束',l:'FOREIGN KEY (dept_id) REFERENCES Department(dept_id)',d:'<p><span style="color:var(--accent-2)">外键 (FK)</span> 确保<span style="color:var(--accent-2)">引用完整性</span>：子表的值必须存在于父表中。</p><p>定义：<code>FOREIGN KEY (dept_id) REFERENCES Department(dept_id)</code></p><p>拒绝：dept_id=''D99'' 不存在 → <span style="color:var(--danger)">被拒绝</span></p><p style="color:var(--fg-dim);font-size:12px">外键是最重要的关系约束</p>',b:[{t:'FOREIGN KEY',c:'def'},{t:'引用完整性',c:'warn'}],r:constraint3}
+];
+let step=0,timer=null;
+const dotsEl=document.getElementById('dots'),svEl=document.getElementById('stage');
+svEl.innerHTML='<svg viewBox="0 0 800 340" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%"></svg>';
+const sv=svEl.querySelector('svg');
+for(let i=0;i<S.length;i++){let d=document.createElement('div');d.className='step-dot';d.onclick=()=>go(i);dotsEl.appendChild(d);}
+function render(){const s=S[step];document.getElementById('stepTitle').textContent=s.t;document.getElementById('infoLine').textContent=s.l;document.getElementById('stepDesc').innerHTML=s.d;let bd=document.getElementById('badges');bd.innerHTML='';s.b.forEach(b=>{let sp=document.createElement('span');sp.className='badge badge--'+b.c;sp.textContent=b.t;bd.appendChild(sp);});s.r(sv);document.querySelectorAll('.step-dot').forEach((d,i)=>{d.className='step-dot'+(i===step?' active':i<step?' done':'');});document.getElementById('btnPrev').disabled=step===0;document.getElementById('btnNext').disabled=step===S.length-1;}
+function go(n){step=Math.max(0,Math.min(n,S.length-1));render();}function changeStep(d){go(step+d);}function resetStep(){stop();go(0);}function toggleAuto(){timer?stop():start();}
+function start(){timer=setInterval(()=>{if(step<S.length-1)go(step+1);else stop();},1600);document.getElementById('btnAuto').textContent='⏸';}
+function stop(){clearInterval(timer);timer=null;document.getElementById('btnAuto').textContent='▶';}
+document.addEventListener('keydown',e=>{if(e.key==='ArrowLeft')changeStep(-1);if(e.key==='ArrowRight')changeStep(1);if(e.key===' ')e.preventDefault(),toggleAuto();if(e.key==='r'||e.key==='R')resetStep();});render();
+</script></body></html>

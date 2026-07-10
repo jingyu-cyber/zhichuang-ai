@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B+ 树索引查找</title>
+<style>
+:root{--bg:#1a1e1d;--bg-soft:#25302d;--bg-code:#0d1111;--fg:#e0eee8;--fg-dim:#90a898;--line:#304038;--accent:#40c0b0;--accent-2:#4898e0;--grad:#4898e0;--success:#40c870;--danger:#e05050}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(72,152,224,.18);color:var(--grad)}.badge--tip{background:rgba(64,200,112,.18);color:var(--success)}.badge--warn{background:rgba(224,80,80,.18);color:var(--danger)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+  <div class="demo-header">
+    <div>
+      <h1>B+ 树索引查找</h1>
+    </div>
+    <div class="breadcrumb">第三章 · 查询优化</div>
+  </div>
+  <div class="demo-main">
+    <div class="panel-explain" id="explainPanel">
+      <div class="step-title" id="stepTitle">步骤 1 / 4</div>
+      <div class="step-desc" id="stepDesc">B+ 树结构</div>
+      <div class="info-line" id="infoLine">B+Tree on student.age (order=3)<br>Keys: 10, 20, 30, 40, 50, 60, 70</div>
+      <div class="badge-row" id="badgeRow">
+        <span class="badge badge--def">B+Tree</span>
+        <span class="badge badge--def">Order=3</span>
+      </div>
+    </div>
+    <div class="panel-stage" id="svgp"></div>
+  </div>
+  <div class="demo-controls">
+    <button id="prevBtn" onclick="changeStep(-1)">&larr; 上一步</button>
+    <div class="step-dots" id="stepDots"></div>
+    <button id="nextBtn" onclick="changeStep(1)">下一步 &rarr;</button>
+    <button id="autoBtn" onclick="toggleAuto()">&#9654; 自动播放</button>
+  </div>
+</div>
+
+<script>
+(function(){
+var cur=-1,autoTimer=null;
+
+function arrow(x1,y1,x2,y2,color){
+  var dx=x2-x1,dy=y2-y1,len=Math.sqrt(dx*dx+dy*dy);
+  var ux=dx/len,uy=dy/len;
+  var x3=x2-ux*7-uy*4,y3=y2-uy*7+ux*4;
+  var x4=x2-ux*7+uy*4,y4=y2-uy*7-ux*4;
+  return '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="'+color+'" stroke-width="2"/><polygon points="'+x2+','+y2+' '+x3+','+y3+' '+x4+','+y4+'" fill="'+color+'"/>';
+}
+
+function drawBtNode(x,y,w,keys,color,highlight){
+  var klen=keys.length;
+  var cellW=w/(klen+1);
+  var h=40;
+  var fill=color||'rgba(72,152,224,0.12)';
+  var stroke=color||'#4898e0';
+  var hl=highlight===true;
+  var s='';
+  s+='<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="6" fill="'+fill+'" stroke="'+stroke+'" stroke-width="'+(hl?3:1.5)+'"/>';
+  for(var i=0;i<=klen;i++){
+    s+='<line x1="'+(x+i*cellW)+'" y1="'+y+'" x2="'+(x+i*cellW)+'" y2="'+(y+h)+'" stroke="'+stroke+'" stroke-width="0.8" stroke-dasharray="2,2"/>';
+  }
+  for(var i=0;i<klen;i++){
+    var kx=x+(i+0.5)*cellW;
+    s+='<circle cx="'+kx+'" cy="'+(y+h/2)+'" r="12" fill="'+(hl?'rgba(64,192,176,0.3)':'rgba(64,192,176,0.15))+'" stroke="'+(hl?'#40c0b0':stroke)+'" stroke-width="'+(hl?2:1)+'"/>';
+    s+='<text x="'+kx+'" y="'+(y+h/2+5)+'" text-anchor="middle" fill="'+(hl?'#40c0b0':'#e0eee8')+'" font-size="12" font-weight="700">'+keys[i]+'</text>';
+  }
+  s+='<rect x="'+x+'" y="'+y+'" width="'+cellW+'" height="'+h+'" rx="6" fill="transparent" stroke="transparent" stroke-width="0"/>';
+  s+='<rect x="'+(x+klen*cellW)+'" y="'+y+'" width="'+cellW+'" height="'+h+'" rx="6" fill="transparent" stroke="transparent" stroke-width="0"/>';
+  return s;
+}
+
+function leafNode(x,y,w,keys,pointers,color,highlight){
+  var klen=keys.length;
+  var cellW=w/(klen+1);
+  var h=40;
+  var fill=color||'rgba(64,200,112,0.1)';
+  var stroke=color||'#40c870';
+  var hl=highlight===true;
+  var s='';
+  s+='<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="6" fill="'+fill+'" stroke="'+stroke+'" stroke-width="'+(hl?3:1.5)+'"/>';
+  for(var i=0;i<=klen;i++){
+    s+='<line x1="'+(x+i*cellW)+'" y1="'+y+'" x2="'+(x+i*cellW)+'" y2="'+(y+h)+'" stroke="'+stroke+'" stroke-width="0.8" stroke-dasharray="2,2"/>';
+  }
+  for(var i=0;i<klen;i++){
+    var kx=x+(i+0.5)*cellW;
+    s+='<rect x="'+(kx-13)+'" y="'+(y+5)+'" width="26" height="14" rx="3" fill="rgba(64,200,112,0.2)" stroke="#40c870" stroke-width="1"/>';
+    s+='<text x="'+kx+'" y="'+(y+16)+'" text-anchor="middle" fill="#e0eee8" font-size="10" font-weight="600">'+pointers[i]+'</text>';
+    s+='<circle cx="'+kx+'" cy="'+(y+h/2+8)+'" r="12" fill="'+(hl?'rgba(64,200,112,0.35)':'rgba(64,200,112,0.12))+'" stroke="'+(hl?'#40c870':stroke)+'" stroke-width="'+(hl?2:1)+'"/>';
+    s+='<text x="'+kx+'" y="'+(y+h/2+13)+'" text-anchor="middle" fill="'+(hl?'#40c870':'#e0eee8')+'" font-size="11" font-weight="700">'+keys[i]+'</text>';
+  }
+  return s;
+}
+
+var S=[
+  {
+    title:"步骤 1 / 4 — B+ 树结构概览",
+    desc:"B+ 树是一种多路平衡搜索树，所有数据指针仅存在于叶子节点。内部节点仅存索引键用于导航。叶子节点之间通过链表相连，支持高效的范围查询。本示例展示一棵 order=3 的 B+ 树，索引列 student.age，包含键值 10~70。",
+    info:"B+Tree on student.age (order=3)<br>内部节点：仅存键，用于路由<br>叶子节点：存键 + 数据指针 + 链表<br>Keys: [10, 20, 30, 40, 50, 60, 70]",
+    badges:[{c:"badge--def",t:"B+Tree 结构"},{c:"badge--def",t:"Order=3"}],
+    svg:function(){
+      var svg='<svg viewBox="0 0 800 340" xmlns="http://www.w3.org/2000/svg">';
+      var rootKeys=["40"];
+      var leftKeys=["20"];
+      var rightKeys=["60"];
+      var l1keys=["10"],l1ptrs=["P1"];
+      var l2keys=["30"],l2ptrs=["P3"];
+      var l3keys=["50"],l3ptrs=["P5"];
+      var l4keys=["70"],l4ptrs=["P7"];
+      svg+=drawBtNode(310,15,140,rootKeys,'#40c0b0',false);
+      svg+=arrow(345,55,200,95,'#40c0b0');
+      svg+=arrow(415,55,530,95,'#40c0b0');
+      svg+=drawBtNode(130,98,140,leftKeys,'#40c0b0',false);
+      svg+=drawBtNode(490,98,140,rightKeys,'#40c0b0',false);
+      svg+=arrow(165,138,130,182,'#4898e0');
+      svg+=arrow(235,138,270,182,'#4898e0');
+      svg+=arrow(525,138,490,182,'#4898e0');
+      svg+=arrow(595,138,630,182,'#4898e0');
+      svg+=leafNode(60,185,140,l1keys,l1ptrs,'#40c870',false);
+      svg+=leafNode(200,185,140,l2keys,l2ptrs,'#40c870',false);
+      svg+=leafNode(420,185,140,l3keys,l3ptrs,'#40c870',false);
+      svg+=leafNode(560,185,140,l4keys,l4ptrs,'#40c870',false);
+      svg+='<line x1="200" y1="205" x2="420" y2="205" stroke="#40c870" stroke-width="1.5" stroke-dasharray="4,3"/>';
+      svg+='<line x1="420" y1="205" x2="560" y2="205" stroke="#40c870" stroke-width="1.5" stroke-dasharray="4,3"/>';
+      svg+='<polygon points="415,201 425,205 415,209" fill="#40c870"/>';
+      svg+='<polygon points="555,201 565,205 555,209" fill="#40c870"/>';
+      svg+='<circle cx="130" cy="268" r="5" fill="#40c0b0"/><text x="145" y="273" fill="#90a898" font-size="12">内部节点（索引层）— 仅存键值，用于路由</text>';
+      svg+='<circle cx="370" cy="268" r="5" fill="#40c870"/><text x="385" y="273" fill="#90a898" font-size="12">叶子节点（数据层）— 存键值 + 数据指针</text>';
+      svg+='<line x1="362" y1="290" x2="362" y2="315" stroke="#40c870" stroke-width="1.5" stroke-dasharray="4,3"/>';
+      svg+='<text x="362" y="330" text-anchor="middle" fill="#40c870" font-size="11">叶子层双向链表 → 支持范围扫描</text>';
+      svg+='</svg>';
+      return svg;
+    }
+  },
+  {
+    title:"步骤 2 / 4 — 点查询：查找 age=45",
+    desc:"查找 age=45 的过程：① 从根节点开始，45 > 40，走右指针；② 到达内部节点 [60]，45 < 60，走左指针；③ 到达叶子节点 [50] 及其之前的区域，发现 45 不存在于叶子节点中。总共访问 3 个节点（3 次磁盘 I/O）。",
+    info:"查找 age=45 的路径：<br>Root [40] → 45>40, 走右<br>Internal [60] → 45<60, 走左<br>Leaf [P5:50] → 45 不存在<br>I/O 次数：3 次",
+    badges:[{c:"badge--tip",t:"3 I/O"},{c:"badge--def",t:"点查询"}],
+    svg:function(){
+      var svg='<svg viewBox="0 0 800 340" xmlns="http://www.w3.org/2000/svg">';
+      svg+=drawBtNode(310,10,140,["40"],'#40c0b0',true);
+      svg+=arrow(415,50,530,95,'#e0b040');
+      svg+=drawBtNode(130,98,140,["20"],'#40c0b0',false);
+      svg+=drawBtNode(490,98,140,["60"],'#40c0b0',true);
+      svg+=arrow(525,138,490,182,'#e0b040');
+      svg+=arrow(165,138,130,182,'#4898e0');
+      svg+=arrow(235,138,270,182,'#4898e0');
+      svg+=leafNode(60,185,140,["10"],["P1"],'#40c870',false);
+      svg+=leafNode(200,185,140,["30"],["P3"],'#40c870',false);
+      svg+=leafNode(420,185,140,["50"],["P5"],'#40c870',true);
+      svg+=leafNode(560,185,140,["70"],["P7"],'#40c870',false);
+      svg+='<line x1="200" y1="205" x2="420" y2="205" stroke="#40c870" stroke-width="1.5" stroke-dasharray="4,3"/>';
+      svg+='<line x1="420" y1="205" x2="560" y2="205" stroke="#40c870" stroke-width="1.5" stroke-dasharray="4,3"/>';
+      svg+='<circle cx="375" cy="68" r="16" fill="none" stroke="#e0b040" stroke-width="2"/><text x="375" y="73" text-anchor="middle" fill="#e0b040" font-size="12" font-weight="700">1</text>';
+      svg+='<circle cx="555" cy="138" r="16" fill="none" stroke="#e0b040" stroke-width="2"/><text x="555" y="143" text-anchor="middle" fill="#e0b040" font-size="12" font-weight="700">2</text>';
+      svg+='<circle cx="485" cy="225" r="16" fill="none" stroke="#e0b040" stroke-width="2"/><text x="485" y="230" text-anchor="middle" fill="#e0b040" font-size="12" font-weight="700">3</text>';
+      svg+='<line x1="362" y1="62" x2="525" y2="130" stroke="#e0b040" stroke-width="1.5" stroke-dasharray="3,3"/>';
+      svg+='<line x1="542" y1="132" x2="478" y2="218" stroke="#e0b040" stroke-width="1.5" stroke-dasharray="3,3"/>';
+      svg+='<rect x="50" y="260" width="700" height="55" rx="8" fill="rgba(64,192,176,0.08)" stroke="rgba(64,192,176,0.3)" stroke-width="1"/>';
+      svg+='<text x="400" y="282" text-anchor="middle" fill="#40c0b0" font-size="13" font-weight="600">查找路径: 根 [40] → 右子 [60] → 左子叶子 [50]</text>';
+      svg+='<text x="400" y="305" text-anchor="middle" fill="#90a898" font-size="11">45 不在叶子 [50] 中 → 查找失败 | 仅需 3 次磁盘 I/O</text>';
+      svg+='</svg>';
+      return svg;
+    }
+  },
+  {
+    title:"步骤 3 / 4 — B+Tree vs 全表扫描",
+    desc:"B+ 树查找高度为 O(log n)，对于 100 万行数据，树高约 3-4 层，只需 3-4 次 I/O。而全表扫描需要读取所有数据页，100 万行可能需要数千次 I/O。对于本示例（7 个键值），B+ 树需 3 次 I/O，全表扫描需 7 次 I/O。",
+    info:"B+Tree 查找: 3 次 I/O (O(log n))<br>全表扫描: 7 次 I/O (O(n))<br>数据量越大，差距越显著<br>百万级: 4 I/O vs 10,000+ I/O",
+    badges:[{c:"badge--tip",t:"B+Tree: 3 I/O"},{c:"badge--warn",t:"扫描: 7 I/O"}],
+    svg:function(){
+      var svg='<svg viewBox="0 0 800 340" xmlns="http://www.w3.org/2000/svg">';
+      svg+='<text x="200" y="25" text-anchor="middle" fill="#40c870" font-size="15" font-weight="700">B+ 树索引查找</text>';
+      svg+='<text x="600" y="25" text-anchor="middle" fill="#e05050" font-size="15" font-weight="700">全表扫描</text>';
+      svg+='<rect x="40" y="40" width="320" height="120" rx="8" fill="rgba(64,200,112,0.08)" stroke="#40c870" stroke-width="1.5"/>';
+      svg+='<rect x="60" y="55" width="36" height="20" rx="3" fill="#40c870" opacity="0.7"/>';
+      svg+='<rect x="105" y="55" width="36" height="20" rx="3" fill="#40c870" opacity="0.7"/>';
+      svg+='<rect x="150" y="55" width="36" height="20" rx="3" fill="#40c870" opacity="0.7"/>';
+      for(var i=0;i<4;i++){svg+='<rect x="'+(195+i*45)+'" y="55" width="36" height="20" rx="3" fill="#304038"/>';}
+      svg+='<text x="40" y="100" fill="#e0eee8" font-size="12">访问节点: 根 → 内部 → 叶子</text>';
+      svg+='<text x="40" y="120" fill="#90a898" font-size="11">I/O 操作 = 树的高度 = 3</text>';
+      svg+='<text x="40" y="140" fill="#90a898" font-size="11">时间复杂度: O(logₘ n)</text>';
+      svg+='<rect x="440" y="40" width="320" height="120" rx="8" fill="rgba(224,80,80,0.08)" stroke="#e05050" stroke-width="1.5"/>';
+      for(var i=0;i<7;i++){svg+='<rect x="'+(460+i*42)+'" y="55" width="36" height="20" rx="3" fill="#e05050" opacity="0.6"/>';}
+      svg+='<text x="440" y="100" fill="#e0eee8" font-size="12">逐行读取全部 7 行数据</text>';
+      svg+='<text x="440" y="120" fill="#90a898" font-size="11">I/O 操作 = 数据页数 = 7（小表）</text>';
+      svg+='<text x="440" y="140" fill="#90a898" font-size="11">时间复杂度: O(n)</text>';
+      svg+='<rect x="100" y="185" width="600" height="65" rx="8" fill="rgba(72,152,224,0.08)" stroke="#4898e0" stroke-width="1"/>';
+      svg+='<text x="400" y="210" text-anchor="middle" fill="#4898e0" font-size="13" font-weight="600">扩展至 1,000,000 行数据时</text>';
+      svg+='<text x="400" y="235" text-anchor="middle" fill="#e0eee8" font-size="12">B+ 树（order=200, 高≈4）: <tspan fill="#40c870" font-weight="700">4 次 I/O</tspan> &nbsp;vs&nbsp; 全表扫描: <tspan fill="#e05050" font-weight="700">10,000+ 次 I/O</tspan></text>';
+      svg+='<rect x="220" y="270" width="360" height="45" rx="8" fill="rgba(64,200,112,0.1)" stroke="#40c870" stroke-width="1.5"/>';
+      svg+='<text x="400" y="292" text-anchor="middle" fill="#40c870" font-size="13" font-weight="700">结论：B+ 树将查找时间从 O(n) 降至 O(log n)</text>';
+      svg+='<text x="400" y="308" text-anchor="middle" fill="#90a898" font-size="11">索引的本质：用空间换时间，用树结构加速等值和范围查询</text>';
+      svg+='</svg>';
+      return svg;
+    }
+  },
+  {
+    title:"步骤 4 / 4 — 范围查询：age BETWEEN 30 AND 55",
+    desc:"B+ 树最大的优势之一是范围查询。查找 age BETWEEN 30 AND 55：① 先通过 B+ 树定位到起始叶子节点 30（3 次 I/O）；② 然后沿着叶子层链表向右扫描，依次访问 50（覆盖），直到遇到 70 > 55 停止。无需回到内部节点，效率极高。",
+    info:"范围扫描 age BETWEEN 30 AND 55<br>1. 定位起始键 30 → 3 次 I/O<br>2. 沿链表扫描: 30 → 50 → 70(停)<br>3. 返回匹配: 30, 50<br>无需回表扫描！",
+    badges:[{c:"badge--tip",t:"范围扫描"},{c:"badge--def",t:"链表遍历"}],
+    svg:function(){
+      var svg='<svg viewBox="0 0 800 340" xmlns="http://www.w3.org/2000/svg">';
+      svg+=drawBtNode(310,10,140,["40"],'#40c0b0',false);
+      svg+=arrow(345,50,200,95,'#40c0b0');
+      svg+=arrow(415,50,530,95,'#40c0b0');
+      svg+=drawBtNode(130,98,140,["20"],'#40c0b0',false);
+      svg+=drawBtNode(490,98,140,["60"],'#40c0b0',false);
+      svg+=arrow(165,138,130,182,'#4898e0');
+      svg+=arrow(235,138,270,182,'#4898e0');
+      svg+=arrow(525,138,490,182,'#4898e0');
+      svg+=arrow(595,138,630,182,'#4898e0');
+      svg+=leafNode(60,185,140,["10"],["P1"],'#40c870',false);
+      svg+=leafNode(200,185,140,["30"],["P3"],'#40c870',true);
+      svg+=leafNode(420,185,140,["50"],["P5"],'#40c870',true);
+      svg+=leafNode(560,185,140,["70"],["P7"],'#40c870',false);
+      svg+='<line x1="200" y1="205" x2="420" y2="205" stroke="#e0b040" stroke-width="3"/>';
+      svg+='<line x1="420" y1="205" x2="560" y2="205" stroke="#40c870" stroke-width="1.5" stroke-dasharray="4,3"/>';
+      svg+='<polygon points="415,201 425,205 415,209" fill="#e0b040"/>';
+      svg+='<rect x="195" y="162" width="230" height="18" rx="4" fill="rgba(224,176,64,0.2)" stroke="#e0b040" stroke-width="1"/>';
+      svg+='<text x="310" y="175" text-anchor="middle" fill="#e0b040" font-size="11" font-weight="600">范围扫描区间: 30 → 50</text>';
+      svg+='<rect x="50" y="255" width="700" height="70" rx="8" fill="rgba(64,192,176,0.08)" stroke="rgba(64,192,176,0.3)" stroke-width="1"/>';
+      svg+='<text x="400" y="278" text-anchor="middle" fill="#40c0b0" font-size="13" font-weight="600">范围查询流程: 定位起始键 → 沿叶子链表向右扫描 → 遇超界停止</text>';
+      svg+='<text x="400" y="300" text-anchor="middle" fill="#e0eee8" font-size="12">BETWEEN 30 AND 55: 定位到 30 (3 I/O) → 链表遍历至 50 (顺序读) → 70 > 55 停止</text>';
+      svg+='<text x="400" y="318" text-anchor="middle" fill="#90a898" font-size="11">关键优势: 叶子节点链表使范围查询无需反复回溯内部节点，I/O 效率远高于 B-树</text>';
+      svg+='</svg>';
+      return svg;
+    }
+  }
+];
+
+function render(i){
+  var s=S[i];
+  document.getElementById('stepTitle').textContent=s.title;
+  document.getElementById('stepDesc').textContent=s.desc;
+  document.getElementById('infoLine').innerHTML=s.info;
+  var br=document.getElementById('badgeRow');br.innerHTML='';
+  for(var j=0;j<s.badges.length;j++){var b=s.badges[j];var sp=document.createElement('span');sp.className='badge '+b.c;sp.textContent=b.t;br.appendChild(sp);}
+  document.getElementById('svgp').innerHTML=s.svg();
+  var dots=document.getElementById('stepDots');dots.innerHTML='';
+  for(var k=0;k<S.length;k++){var d=document.createElement('span');d.className='step-dot'+(k===i?' active':(k<i?' done':''));dots.appendChild(d);}
+  document.getElementById('prevBtn').disabled=i===0;
+  document.getElementById('nextBtn').disabled=i===S.length-1;
+  cur=i;
+}
+function changeStep(d){var n=cur+d;if(n>=0&&n<S.length){if(autoTimer){clearInterval(autoTimer);autoTimer=null;document.getElementById('autoBtn').innerHTML='&#9654; 自动播放';}render(n);}}
+function resetStep(){if(autoTimer){clearInterval(autoTimer);autoTimer=null;document.getElementById('autoBtn').innerHTML='&#9654; 自动播放';}render(0);}
+function toggleAuto(){if(autoTimer){clearInterval(autoTimer);autoTimer=null;document.getElementById('autoBtn').innerHTML='&#9654; 自动播放';}else{document.getElementById('autoBtn').innerHTML='&#9646;&#9646; 停止';autoTimer=setInterval(function(){if(cur<S.length-1)render(cur+1);else{toggleAuto();}},4000);}}
+document.addEventListener('keydown',function(e){if(e.key==='ArrowLeft'){e.preventDefault();changeStep(-1);}else if(e.key==='ArrowRight'){e.preventDefault();changeStep(1);}else if(e.key===' '){e.preventDefault();toggleAuto();}else if(e.key==='r'||e.key==='R'){e.preventDefault();resetStep();}});
+render(0);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>深度学习框架与编程 · 交互式开源课堂</title>
+<style>
+:root{--bg:#1e1a1a;--bg-soft:#2d2525;--bg-code:#141010;--fg:#f0e8e0;--fg-dim:#b0a090;--line:#3d3030;--accent:#ff9050;--accent-2:#ffc040;--grad:#7b8cff;--success:#50d890;--danger:#f05060;--shadow:0 10px 30px rgba(0,0,0,.35);--radius:14px;--radius-sm:8px}
+*{box-sizing:border-box}html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}
+.shell{max-width:1320px;margin:0 auto;padding:24px 24px 56px}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 0 18px;border-bottom:1px solid var(--line);margin-bottom:22px}
+.brand{display:flex;align-items:center;gap:12px}
+.logo{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;color:#1e1a1a;font-weight:800}
+.title{font-weight:700;letter-spacing:.3px}.subtitle{color:var(--fg-dim);font-size:12px;margin-top:2px}
+.badge{border:1px solid var(--line);border-radius:999px;padding:5px 10px;color:var(--fg-dim);font-size:12px;background:rgba(10,12,28,.55)}
+.hero{display:grid;grid-template-columns:1.35fr 1fr;gap:20px;border:1px solid var(--line);border-radius:var(--radius);padding:28px;background:radial-gradient(800px 360px at 0% 0%,rgba(255,144,80,.12),transparent 60%),radial-gradient(680px 360px at 100% 0%,rgba(123,140,255,.10),transparent 58%),linear-gradient(135deg,#2a2222,#352a2a)}
+.hero h1{margin:0 0 10px;font-size:31px;line-height:1.25}.hero p{margin:0;color:var(--fg-dim);line-height:1.8}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:5px 10px;color:var(--fg-dim);font-size:12px;background:rgba(10,12,28,.5)}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.stat{border:1px solid var(--line);border-radius:12px;background:rgba(20,16,16,.7);padding:14px}
+.stat b{display:block;font-family:"JetBrains Mono",monospace;font-size:23px;color:var(--accent)}
+.stat span{color:var(--fg-dim);font-size:12px}
+.pipeline{margin-top:20px;border:1px solid var(--line);border-radius:var(--radius);background:rgba(45,37,37,.7);padding:16px;overflow:auto}
+.pipe{display:grid;grid-template-columns:repeat(6,150px);gap:12px;min-width:940px}
+.pipe a,.pipe span{border:1px solid var(--line);border-radius:12px;background:var(--bg-code);padding:12px;text-align:center;font-size:13px;color:var(--fg-dim);text-decoration:none}
+.pipe a:hover{border-color:var(--accent);color:var(--accent)}
+.pipe span{opacity:.4}
+.pipe small{display:block;margin-top:4px;color:var(--fg-dim);font-family:"JetBrains Mono",monospace;font-size:10px}
+.chapter{margin-top:22px;border:1px solid var(--line);border-radius:var(--radius);background:rgba(45,37,37,.72);overflow:hidden}
+.chapter-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;padding:18px 20px;background:rgba(20,16,16,.55);border-bottom:1px solid var(--line)}
+.chapter-head h2{margin:0 0 6px;font-size:19px}.chapter-head p{margin:0;color:var(--fg-dim);font-size:13px;line-height:1.65}
+.lessons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;padding:16px}
+.lesson{display:grid;gap:10px;min-height:220px;border:1px solid var(--line);border-radius:12px;padding:16px;background:linear-gradient(180deg,rgba(50,40,40,.72),rgba(20,16,16,.64));transition:.15s;text-decoration:none;color:var(--fg)}
+.lesson:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:0 16px 36px rgba(0,0,0,.36)}
+.lesson .num{font-family:"JetBrains Mono",monospace;color:var(--accent);font-size:12px}
+.lesson h3{margin:0;font-size:17px}.lesson p{margin:0;color:var(--fg-dim);font-size:13px;line-height:1.65}
+.tags{display:flex;flex-wrap:wrap;gap:6px}.tag{border:1px solid var(--line);border-radius:999px;color:var(--fg-dim);padding:3px 8px;font-family:"JetBrains Mono",monospace;font-size:11px}
+.enter{align-self:end;color:var(--accent);font-size:13px;font-weight:700}
+.footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);color:var(--fg-dim);font-size:12px;text-align:center}
+@media(max-width:980px){.hero{grid-template-columns:1fr}.lessons{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="topbar">
+    <div class="brand"><div class="logo">DL</div><div><div class="title">深度学习框架与编程 · 交互式开源课堂</div><div class="subtitle">张量、计算图、自动求导、训练工程</div></div></div>
+    <span class="badge">12 个课节 · 首章 3 节已接入</span>
+  </div>
+
+  <section class="hero">
+    <div>
+      <h1>把训练代码和框架机制对应起来。</h1>
+      <p>这套课件面向深度学习框架实践课，从张量 shape 和计算图出发，到自动求导、优化器更新、训练循环和实验报告。每一节都是独立 HTML 页面，可直接投屏讲授，也可作为学生实验前的可视化预习材料。</p>
+      <div class="chips"><span class="chip">张量形状追踪</span><span class="chip">计算图可视化</span><span class="chip">梯度流向动画</span><span class="chip">训练时间线</span><span class="chip">单文件离线运行</span></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><b>4</b><span>课程章节</span></div>
+      <div class="stat"><b>12/12</b><span>已接入课节</span></div>
+      <div class="stat"><b>0</b><span>运行时网络依赖</span></div>
+      <div class="stat"><b>Tensor</b><span>核心可视化对象</span></div>
+    </div>
+  </section>
+
+  <section class="pipeline">
+    <div class="pipe">
+      <a href="pages/01-tensor-shape.html">张量 shape<small>scalar to tensor</small></a>
+      <a href="pages/02-operator-compose.html">计算图<small>build graph</small></a>
+      <a href="pages/03-forward-pass.html">前向传播<small>forward pass</small></a>
+      <a href="pages/10-linear-layer.html">线性层<small>handwritten</small></a>
+      <a href="pages/11-script-refactor.html">重构<small>refactor</small></a>
+      <a href="pages/12-experiment-report.html">报告<small>report</small></a>
+    </div>
+  </section>
+
+  <section class="chapter">
+    <div class="chapter-head"><div><h2>第一章 · 张量与计算图</h2><p>理解框架中数据如何从数组变成可计算、可求导的对象。</p></div><span class="badge">Tensor / Graph / Forward</span></div>
+    <div class="lessons">
+      <a class="lesson" href="pages/01-tensor-shape.html"><span class="num">01 · 40 min</span><h3>张量对象与 shape</h3><p>从标量到 4D batch 张量的维度递进动画，理解 shape、轴和广播规则。</p><div class="tags"><span class="tag">scalar</span><span class="tag">vector</span><span class="tag">matrix</span><span class="tag">tensor</span></div><span class="enter">进入课件 →</span></a>
+      <a class="lesson" href="pages/02-operator-compose.html"><span class="num">02 · 45 min</span><h3>算子组合与计算图</h3><p>逐步搭建三层 MLP 计算图，观察 Linear → ReLU → Softmax 的串联过程。</p><div class="tags"><span class="tag">DAG</span><span class="tag">Linear</span><span class="tag">ReLU</span><span class="tag">Softmax</span></div><span class="enter">进入课件 →</span></a>
+      <a class="lesson" href="pages/03-forward-pass.html"><span class="num">03 · 45 min</span><h3>前向传播可视化</h3><p>追踪数据流入输入到预测结果，每个算子显示当前激活值和 shape 变化。</p><div class="tags"><span class="tag">forward</span><span class="tag">activation</span><span class="tag">flow</span></div><span class="enter">进入课件 →</span></a>
+    </div>
+  </section>
+
+  <section class="chapter">
+    <div class="chapter-head"><div><h2>第二章 · 自动求导与优化</h2><p>理解 loss、backward 和 optimizer 的分工。</p></div><span class="badge">Loss / Grad / Optim</span></div>
+    <div class="lessons">
+      <a class="lesson" href="pages/04-loss-scalar.html"><span class="num">04 · 40 min</span><h3>loss 标量化</h3><p>MSE / CrossEntropy 对比，损失曲面可视化。</p><div class="tags"><span class="tag">MSE</span><span class="tag">CrossEntropy</span></div><span class="enter">进入课件 →</span></a>
+      <a class="lesson" href="pages/05-backward-grad.html"><span class="num">05 · 50 min</span><h3>backward 梯度链</h3><p>链式法则沿计算图反向传播，梯度范数可视化。</p><div class="tags"><span class="tag">chain rule</span><span class="tag">grad norm</span></div><span class="enter">进入课件 →</span></a>
+      <a class="lesson" href="pages/06-optimizer-update.html"><span class="num">06 · 45 min</span><h3>optimizer 参数更新</h3><p>SGD / Adam 在损失曲面上的路径对比。</p><div class="tags"><span class="tag">SGD</span><span class="tag">Adam</span><span class="tag">lr</span></div><span class="enter">进入课件 →</span></a>
+    </div>
+  </section>
+
+  <section class="chapter">
+    <div class="chapter-head"><div><h2>第三章 · 模型训练工程</h2><p>从可运行脚本走向可复现实验。</p></div><span class="badge">Data / Loop / Checkpoint</span></div>
+    <div class="lessons">
+      <a class="lesson" href="pages/07-data-loader.html"><span class="num">07 · 40 min</span><h3>数据加载与划分</h3><p>训练/验证集切分，batch 组成，数据泄漏检测。</p><div class="tags"><span class="tag">dataloader</span><span class="tag">split</span></div><span class="enter">进入课件 →</span></a>
+      <a class="lesson" href="pages/08-training-loop.html"><span class="num">08 · 45 min</span><h3>训练循环结构</h3><p>epoch / batch / zero_grad / backward / step 时间轴。</p><div class="tags"><span class="tag">epoch</span><span class="tag">step</span></div><span class="enter">进入课件 →</span></a>
+      <a class="lesson" href="pages/09-checkpoint.html"><span class="num">09 · 45 min</span><h3>checkpoint 与指标</h3><p>模型保存、验证指标、过拟合检测。</p><div class="tags"><span class="tag">save</span><span class="tag">overfit</span></div><span class="enter">进入课件 →</span></a>
+    </div>
+  </section>
+
+  <section class="chapter">
+    <div class="chapter-head"><div><h2>第四章 · 框架编程综合实验</h2><p>完成一次从代码到报告的框架实践闭环。</p></div><span class="badge">Practice / Report</span></div>
+    <div class="lessons">
+      <a class="lesson" href="pages/10-linear-layer.html"><span class="num">10 · 50 min</span><h3>手写线性层</h3><p>从矩阵乘法开始，用nn.Parameter实现MyLinear，Kaiming初始化，与PyTorch对比验证。</p><div class="tags"><span class="tag">matmul</span><span class="tag">weight</span><span class="tag">init</span></div><span class="enter">进入课件 →</span></a>
+      <a class="lesson" href="pages/11-script-refactor.html"><span class="num">11 · 50 min</span><h3>改造训练脚本</h3><p>单体→模块化演进：数据/模型/引擎分离、YAML配置、Trainer封装、回调机制。</p><div class="tags"><span class="tag">refactor</span><span class="tag">config</span><span class="tag">hydra</span></div><span class="enter">进入课件 →</span></a>
+      <a class="lesson" href="pages/12-experiment-report.html"><span class="num">12 · 40 min</span><h3>实验报告整理</h3><p>代码/曲线/结论汇总成报告结构。含训练曲线诊断、模型对比、过拟合量化指标。</p><div class="tags"><span class="tag">report</span><span class="tag">curves</span><span class="tag">metrics</span></div><span class="enter">进入课件 →</span></a>
+    </div>
+  </section>
+
+  <div class="footer">© 2026 · 深度学习框架与编程交互式开源课堂</div>
+</div>
+</body>
+</html>

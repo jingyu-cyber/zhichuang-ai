@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>API 到数据库调用链 — 数据库系统概论</title>
+<style>
+:root{--bg:#1a1e1d;--bg-soft:#25302d;--bg-code:#0d1111;--fg:#e0eee8;--fg-dim:#90a898;--line:#304038;--accent:#40c0b0;--accent-2:#4898e0;--grad:#4898e0;--success:#40c870;--danger:#e05050}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(72,152,224,.18);color:var(--grad)}.badge--tip{background:rgba(64,200,112,.18);color:var(--success)}.badge--warn{background:rgba(224,80,80,.18);color:var(--danger)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+  <div class="demo-header">
+    <div>
+      <h1>API 到数据库调用链</h1>
+      <div class="breadcrumb"><a href="#">第四章</a> · 事务与应用开发</div>
+    </div>
+    <div class="badge-row">
+      <span class="badge badge--def">HTTP</span>
+      <span class="badge badge--tip">Service</span>
+      <span class="badge badge--warn">Transaction</span>
+      <span class="badge badge--tip">Database</span>
+    </div>
+  </div>
+  <div class="demo-main">
+    <div class="panel-explain" id="explain">
+      <div class="step-title" id="stepTitle">请求到达</div>
+      <div class="step-desc" id="stepDesc">
+        客户端发送 POST /api/orders 请求，携带 JSON 订单数据。API 网关接收请求，解析 HTTP 报文，提取请求体和认证信息，准备传递给服务层处理。
+      </div>
+      <div class="badge-row" id="badges">
+        <span class="badge badge--def">HTTP POST</span>
+      </div>
+      <div class="info-line" id="infoLine">POST /api/orders — 创建订单请求</div>
+    </div>
+    <div class="panel-stage" id="stage">
+      <svg id="svg" viewBox="0 0 800 340" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+  </div>
+  <div class="demo-controls">
+    <button id="prevBtn" onclick="S.changeStep(-1)">上一步</button>
+    <div class="step-dots" id="dots"></div>
+    <button id="nextBtn" onclick="S.changeStep(1)">下一步</button>
+    <button id="autoBtn" onclick="S.toggleAuto()">自动播放</button>
+    <button id="resetBtn" onclick="S.resetStep()">重置</button>
+  </div>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const NS='http://www.w3.org/2000/svg';
+const E=(t,a={})=>{const e=document.createElementNS(NS,t);for(const[k,v]of Object.entries(a))e.setAttribute(k,v);return e;};
+const T=(x,y,t,c='var(--fg-dim)',s=12)=>{const e=E('text',{x,y,fill:c,'font-size':s,'text-anchor':'middle','font-family':'PingFang SC,Microsoft YaHei,sans-serif'});e.textContent=t;return e;};
+const L=(x1,y1,x2,y2,c='var(--line)',w=1,dash='')=>E('line',{x1,y1,x2,y2,stroke:c,'stroke-width':w,'stroke-dasharray':dash||'none'});
+const R=(x,y,w,h,rx=4,c='var(--bg-soft)',sw=1,sc='var(--line)')=>E('rect',{x,y,width:w,height:h,rx,fill:c,stroke:sc,'stroke-width':sw});
+const ARROW=(x1,y,x2,color='var(--line)')=>{const e=E('path',{d:`M${x1},${y} L${x2-10},${y} L${x2-18},${y-6} M${x2-10},${y} L${x2-18},${y+6}`,fill:'none',stroke:color,'stroke-width':2});return e;};
+const DANGER='#e05050', SUCCESS='#40c870', ACCENT='#40c0b0', ACC2='#4898e0', FGDIM='#90a898', FG='#e0eee8', BGCODE='#0d1111', BGS='#25302d', LINE='#304038';
+
+function clearSvg(svg){while(svg.firstChild)svg.removeChild(svg.firstChild);}
+
+function drawBox(x,y,w,h,lbl,fill,stroke,fc,fs){
+  const g=E('g',{});
+  g.appendChild(R(x,y,w,h,8,fill,2,stroke));
+  g.appendChild(T(x+w/2,y+22,lbl,fc,fs||13,'bold'));
+  g.appendChild(T(x+w/2,y+42,'',FGDIM,11));
+  return g;
+}
+
+function drawLayerBox(x,y,w,h,title,subtitle,fill,stroke,fc){
+  const g=E('g',{});
+  g.appendChild(R(x,y,w,h,8,fill,2,stroke));
+  g.appendChild(T(x+w/2,y+20,title,fc,13,'bold'));
+  if(subtitle)g.appendChild(T(x+w/2,y+40,subtitle,FGDIM,11));
+  return g;
+}
+
+// ── data ──
+const S={
+  step:0, total:4, autoId:null,
+  titles:[
+    '请求到达',
+    '服务层处理',
+    '事务边界',
+    '响应返回'
+  ],
+  descs:[
+    '客户端发送 POST /api/orders 请求，携带 JSON 订单数据：user_id=1001, items=[{product_id:42, qty:2}], total=199.00。API 网关接收请求，解析 HTTP 报文，提取请求体和 JWT 认证信息，准备传递给服务层处理。',
+    'OrderService 接收请求后执行参数校验（库存 > 0、价格合法）。通过业务规则检查后，调用 Repository 层开始数据库操作。参数校验失败则返回 400 错误。',
+    'Repository 层开启数据库事务：BEGIN TRANSACTION → UPDATE inventory SET stock=stock-2 WHERE product_id=42 → INSERT INTO orders → INSERT INTO order_items → COMMIT。事务保证原子性：要么全部成功，要么全部回滚。',
+    '事务成功提交后，数据库返回新生成的 order_id。Service 层构建响应 JSON：{"order_id": 8827, "status": "created", "total": 199.00}。API 网关封装 HTTP 201 Created 响应返回客户端。'
+  ],
+  badges:[
+    ['HTTP POST /api/orders','def'],
+    ['OrderService.validate()','tip'],
+    ['BEGIN → COMMIT','warn'],
+    ['HTTP 201 Created','tip']
+  ],
+  infoLines:[
+    'POST /api/orders — 客户端发起订单创建请求',
+    'OrderService — 参数校验 + 业务规则检查',
+    'Transaction — BEGIN → 扣库存 → 插订单 → 插明细 → COMMIT',
+    'Response — {"order_id": 8827, "status": "created"}'
+  ],
+  render(svg){
+    clearSvg(svg);
+    switch(this.step){
+      case 0: this.r0(svg); break;
+      case 1: this.r1(svg); break;
+      case 2: this.r2(svg); break;
+      case 3: this.r3(svg); break;
+    }
+  },
+  r0(svg){
+    // ── Step 1: Request Arrives ──
+    svg.appendChild(R(20,10,760,320,10,BGCODE,1.5,LINE));
+    svg.appendChild(T(400,36,'请求到达 — HTTP → API Gateway',ACCENT,16));
+
+    // Client box
+    svg.appendChild(drawLayerBox(40,60,120,60,'客户端','App / 浏览器','rgba(72,152,224,.15)',ACC2,ACC2));
+
+    // Arrow: Client → API Gateway
+    svg.appendChild(ARROW(160,90,220,ACC2));
+
+    // API Gateway box
+    svg.appendChild(drawLayerBox(230,60,140,60,'API 网关','解析 & 认证','rgba(64,200,112,.15)',SUCCESS,SUCCESS));
+
+    // JSON payload display
+    const jx=420, jy=55;
+    svg.appendChild(R(jx,jy,330,170,8,'rgba(72,152,224,.08)',1.5,ACC2));
+    svg.appendChild(T(jx+165,jy+20,'HTTP Request Payload',ACC2,12,'bold'));
+
+    // JSON lines
+    const jsonLines=[
+      ['POST /api/orders HTTP/1.1',FG],
+      ['Host: shop.example.com',FGDIM],
+      ['Authorization: Bearer eyJ...',FGDIM],
+      ['Content-Type: application/json',FGDIM],
+      ['',FG],
+      ['{',ACCENT],
+      ['  "user_id": 1001,',FG],
+      ['  "items": [',FG],
+      ['    {"product_id": 42, "qty": 2}',FG],
+      ['  ],',FG],
+      ['  "total": 199.00',FG],
+      ['}',ACCENT]
+    ];
+    jsonLines.forEach((l,i)=>{
+      svg.appendChild(T(jx+15,jy+38+i*11,l[0],l[1],11,'middle','monospace'));
+    });
+
+    // Flow indicator
+    svg.appendChild(T(400,260,'请求沿调用链向下传递',FGDIM,12));
+    svg.appendChild(ARROW(340,275,460,ACC2));
+  },
+  r1(svg){
+    // ── Step 2: Service Layer ──
+    svg.appendChild(R(20,10,760,320,10,BGCODE,1.5,LINE));
+    svg.appendChild(T(400,36,'服务层处理 — 验证 + 业务规则',ACCENT,16));
+
+    // Layer boxes vertically stacked
+    const lw=150, cx=400;
+    // Client
+    svg.appendChild(drawLayerBox(cx-lw/2,56,lw,40,'客户端',null,'rgba(72,152,224,.15)',ACC2,ACC2));
+    svg.appendChild(ARROW(cx,96,cx,112,ACC2));
+
+    // API Gateway
+    svg.appendChild(drawLayerBox(cx-lw/2,114,lw,40,'API 网关',null,'rgba(64,200,112,.15)',SUCCESS,SUCCESS));
+    svg.appendChild(ARROW(cx,154,cx,170,ACC2));
+
+    // Service (highlighted)
+    svg.appendChild(drawLayerBox(cx-lw/2,172,lw,55,'OrderService','校验 + 业务','rgba(64,200,112,.25)',SUCCESS,SUCCESS));
+    svg.appendChild(ARROW(cx,227,cx,243,ACC2));
+
+    // Repository (dimmed)
+    svg.appendChild(drawLayerBox(cx-lw/2,245,lw,40,'Repository',null,'rgba(72,152,224,.08)',LINE,FGDIM));
+    svg.appendChild(ARROW(cx,285,cx,301,ACC2));
+
+    // Database (dimmed)
+    svg.appendChild(drawLayerBox(cx-lw/2,303,lw,30,'Database',null,'rgba(72,152,224,.08)',LINE,FGDIM));
+
+    // Validation panel (right side)
+    const vx=580, vy=56;
+    svg.appendChild(R(vx,vy,185,280,8,'rgba(64,200,112,.12)',1.5,SUCCESS));
+    svg.appendChild(T(vx+92,vy+22,'校验规则',SUCCESS,13,'bold'));
+
+    const checks=[
+      ['✓ user_id 存在',SUCCESS],
+      ['✓ product_id=42 有货',SUCCESS],
+      ['✓ 库存 qty >= 2',SUCCESS],
+      ['✓ total 价格合法',SUCCESS],
+      ['✓ 不超过单笔限额',SUCCESS]
+    ];
+    checks.forEach((c,i)=>{
+      svg.appendChild(T(vx+28,vy+55+i*28,c[0],c[1],11,'start'));
+    });
+
+    // Highlight border around Service
+    svg.appendChild(R(cx-lw/2-4,168,lw+8,63,10,'transparent',2,SUCCESS));
+  },
+  r2(svg){
+    // ── Step 3: Transaction Boundary ──
+    svg.appendChild(R(20,10,760,320,10,BGCODE,1.5,LINE));
+    svg.appendChild(T(400,36,'事务边界 — BEGIN → 操作 → COMMIT',ACCENT,16));
+
+    // Transaction boundary box
+    svg.appendChild(R(30,55,740,225,10,'rgba(64,200,112,.06)',2,SUCCESS));
+    svg.appendChild(T(400,78,'事务 (Transaction)',SUCCESS,14,'bold'));
+
+    // BEGIN
+    svg.appendChild(drawLayerBox(55,88,100,45,'BEGIN','TX 开始','rgba(64,200,112,.18)',SUCCESS,SUCCESS));
+
+    // Arrow
+    svg.appendChild(ARROW(155,110,210,ACC2));
+
+    // UPDATE inventory
+    svg.appendChild(drawLayerBox(215,88,130,45,'UPDATE','inventory','rgba(72,152,224,.18)',ACC2,ACC2));
+    svg.appendChild(T(280,132,'stock = stock - 2',FGDIM,10));
+
+    // Arrow
+    svg.appendChild(ARROW(345,110,400,ACC2));
+
+    // INSERT orders
+    svg.appendChild(drawLayerBox(405,88,130,45,'INSERT','orders','rgba(72,152,224,.18)',ACC2,ACC2));
+    svg.appendChild(T(470,132,'新订单记录',FGDIM,10));
+
+    // Arrow
+    svg.appendChild(ARROW(535,110,590,ACC2));
+
+    // INSERT order_items
+    svg.appendChild(drawLayerBox(595,88,130,45,'INSERT','order_items','rgba(72,152,224,.18)',ACC2,ACC2));
+    svg.appendChild(T(660,132,'订单明细',FGDIM,10));
+
+    // SQL panel below
+    svg.appendChild(R(55,155,710,110,8,'rgba(72,152,224,.08)',1.5,ACC2));
+    svg.appendChild(T(410,175,'SQL 执行序列',ACC2,12,'bold'));
+
+    const sqls=[
+      ['BEGIN TRANSACTION;',SUCCESS],
+      ['UPDATE inventory SET stock = stock - 2 WHERE product_id = 42;',FG],
+      ['INSERT INTO orders (user_id, total, status) VALUES (1001, 199.00, \'pending\');',FG],
+      ['INSERT INTO order_items (order_id, product_id, quantity) VALUES (8827, 42, 2);',FG],
+      ['COMMIT;',SUCCESS]
+    ];
+    sqls.forEach((s,i)=>{
+      svg.appendChild(T(70,195+i*15,s[0],s[1],10,'start'));
+    });
+
+    // Atomicity note
+    svg.appendChild(R(55,275,710,0,0,'transparent',0,'transparent'));
+    svg.appendChild(T(400,295,'原子的(Atomic)：要么全部成功，要么全部回滚',SUCCESS,12));
+  },
+  r3(svg){
+    // ── Step 4: Response ──
+    svg.appendChild(R(20,10,760,320,10,BGCODE,1.5,LINE));
+    svg.appendChild(T(400,36,'响应返回 — Database → Client',ACCENT,16));
+
+    // Database
+    svg.appendChild(drawLayerBox(40,56,130,50,'Database','MySQL / Pg','rgba(72,152,224,.15)',ACC2,ACC2));
+
+    // Arrow up
+    svg.appendChild(ARROW(350,81,170,SUCCESS));
+
+    // Response JSON
+    svg.appendChild(R(360,50,400,120,8,'rgba(64,200,112,.12)',1.5,SUCCESS));
+    svg.appendChild(T(560,70,'HTTP 201 Created',SUCCESS,14,'bold'));
+
+    const resJson=[
+      ['{',ACCENT],
+      ['  "order_id": 8827,',FG],
+      ['  "status": "created",',SUCCESS],
+      ['  "total": 199.00,',FG],
+      ['  "items": [',FG],
+      ['    {"product_id": 42, "qty": 2}',FG],
+      ['  ]',FG],
+      ['}',ACCENT]
+    ];
+    resJson.forEach((l,i)=>{
+      svg.appendChild(T(375,88+i*11,l[0],l[1],10,'start','monospace'));
+    });
+
+    // Full chain summary below
+    svg.appendChild(T(400,200,'完整调用链',ACCENT,14,'bold'));
+
+    const layers=[
+      ['客户端',ACC2],
+      ['API 网关',SUCCESS],
+      ['OrderService',SUCCESS],
+      ['Repository',ACC2],
+      ['Database',ACC2]
+    ];
+
+    let lx=40;
+    layers.forEach((l,i)=>{
+      svg.appendChild(R(lx,212,120,40,6,'rgba(72,152,224,.15)',1.5,l[1]));
+      svg.appendChild(T(lx+60,235,l[0],l[1],12,'bold'));
+      if(i<layers.length-1){
+        svg.appendChild(ARROW(lx+120,232,lx+144,ACC2));
+      }
+      lx+=144;
+    });
+
+    // Latency info
+    svg.appendChild(R(230,270,340,60,8,'rgba(72,152,224,.08)',1.5,ACC2));
+    svg.appendChild(T(400,288,'响应延迟分布',ACC2,12,'bold'));
+    svg.appendChild(T(400,310,'Gateway 2ms → Service 5ms → DB TX 12ms → Total ~20ms',FGDIM,10));
+  },
+  go(s){
+    this.step=s;
+    $('#stepTitle').textContent=this.titles[s];
+    $('#stepDesc').textContent=this.descs[s];
+    $('#infoLine').textContent=this.infoLines[s];
+    const b=this.badges[s];
+    $('#badges').innerHTML=`<span class="badge badge--${b[1]}">${b[0]}</span>`;
+    this.render($('#svg'));
+    this.updateDots(); this.updateBtns();
+  },
+  changeStep(d){const ns=this.step+d;if(ns<0||ns>=this.total)return;this.go(ns);},
+  resetStep(){this.go(0);},
+  updateDots(){
+    let h='';
+    for(let i=0;i<this.total;i++){
+      let cls='';
+      if(i===this.step)cls='active';
+      else if(i<this.step)cls='done';
+      h+=`<span class="step-dot ${cls}"></span>`;
+    }
+    $('#dots').innerHTML=h;
+  },
+  updateBtns(){
+    $('#prevBtn').disabled=this.step===0;
+    $('#nextBtn').disabled=this.step===this.total-1;
+  },
+  toggleAuto(){
+    if(this.autoId){clearInterval(this.autoId);this.autoId=null;$('#autoBtn').textContent='自动播放';return;}
+    $('#autoBtn').textContent='停止';
+    this.autoId=setInterval(()=>{
+      if(this.step<this.total-1)this.go(this.step+1);
+      else{clearInterval(this.autoId);this.autoId=null;$('#autoBtn').textContent='自动播放';}
+    },3000);
+  },
+  init(){$('#svg').setAttribute('viewBox','0 0 800 340');this.go(0);}
+};
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight')S.changeStep(1);
+  else if(e.key==='ArrowLeft')S.changeStep(-1);
+  else if(e.key===' ') {e.preventDefault();S.toggleAuto();}
+  else if(e.key==='r'||e.key==='R')S.resetStep();
+});
+
+S.init();
+</script>
+</body>
+</html>

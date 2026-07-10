@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>运算符抽象 - AI基础设施</title>
+<style>
+:root{--bg:#0a0c14;--bg-soft:#141824;--bg-code:#080a10;--fg:#e0e8f0;--fg-dim:#8899aa;--line:#283040;--accent:#40a0ff;--accent2:#60d0ff;--success:#40d880;--danger:#f05060;--purple:#9080ff}
+*{box-sizing:border-box}html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;height:100%;overflow:hidden}
+.shell{display:flex;flex-direction:column;height:100vh}
+.bar{display:flex;align-items:center;gap:16px;padding:10px 22px;background:linear-gradient(90deg,#101520,#1a2030);border-bottom:1px solid var(--line)}
+.bar h1{font-size:17px;margin:0}.bar h1 span{color:var(--fg-dim);font-weight:400;margin-left:8px;font-size:13px}
+.bar a{color:var(--fg);text-decoration:none;padding:5px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg-soft);font-size:12px}
+.bar a:hover{border-color:var(--accent);color:var(--accent)}.spacer{flex:1}
+.badge-num{padding:5px 12px;background:var(--bg-code);border:1px solid var(--line);border-radius:6px;color:var(--accent);font-size:13px}
+.main{flex:1;display:flex;min-height:0}
+.left{width:420px;min-width:420px;padding:20px;overflow-y:auto;background:var(--bg-soft);border-right:1px solid var(--line)}
+.right{flex:1;position:relative;background:var(--bg);overflow:hidden}
+.tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;background:rgba(64,160,255,.12);color:var(--accent);border:1px solid rgba(64,160,255,.35);margin-bottom:10px}
+h2.step{font-size:18px;margin:0 0 8px;line-height:1.3;color:var(--fg)}
+.desc{font-size:13px;line-height:1.85;color:var(--fg)}.desc p{margin:6px 0}.desc code{background:var(--bg-code);padding:1px 5px;border-radius:3px;color:var(--accent);font-size:12px}
+.badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:3px;margin-right:4px;font-weight:600}
+.bd{background:rgba(144,128,255,.18);color:var(--purple);border:1px solid rgba(144,128,255,.4)}
+.bt{background:rgba(64,216,128,.15);color:var(--success);border:1px solid rgba(64,216,128,.4)}
+.bw{background:rgba(240,80,96,.15);color:var(--danger);border:1px solid rgba(240,80,96,.4)}
+.tip{border-left:3px solid var(--accent);padding:6px 10px;margin:8px 0;background:rgba(64,160,255,.06);border-radius:4px;font-size:12px;line-height:1.6}
+.stage-label{position:absolute;top:12px;left:20px;font-size:12px;color:var(--fg-dim);display:flex;align-items:center;gap:6px}
+.stage-label b{display:inline-block;padding:2px 6px;border-radius:3px;background:var(--accent);color:var(--bg);font-weight:800;font-size:10px}
+.ctrl{display:flex;align-items:center;gap:8px;padding:8px 20px;background:var(--bg-soft);border-top:1px solid var(--line)}
+.ctrl button{padding:5px 12px;font-size:12px;font-weight:600;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg-dim);cursor:pointer;transition:all .2s;font-family:inherit}
+.ctrl button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.ctrl button:disabled{opacity:.3;cursor:default}.ctrl button.go{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.dots{display:flex;gap:4px;flex:1;justify-content:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--line);transition:all .3s;cursor:pointer}
+.dot.on{background:var(--accent);box-shadow:0 0 8px var(--accent);transform:scale(1.3)}.dot.ok{background:var(--success)}
+@media(max-width:940px){.main{flex-direction:column}.left{width:100%;min-width:0;max-height:35vh}}
+</style></head>
+<body>
+<div class="shell">
+<div class="bar"><a href="../index.html">← Back</a><h1>Operator Abstraction<span>· MatMul · Activation · Normalization</span></h1><span class="spacer"></span><span class="badge-num" id="sn">1/8</span></div>
+<div class="main">
+<div class="left" id="panel"></div>
+<div class="right"><div class="stage-label"><b>OP</b> Operator Abstraction Layer</div><svg id="s" viewBox="0 0 720 480" preserveAspectRatio="xMidYMid meet" style="max-width:100%;max-height:100%"></svg></div>
+</div>
+<div class="ctrl"><button id="br">↺ Reset</button><button id="bp">◀ Prev</button><button class="go" id="bn">Next ▶</button><button id="ba">▶ Auto</button><div class="dots" id="dots"></div></div>
+</div>
+<script>
+var SVG_NS="http://www.w3.org/2000/svg", svgEl;
+function R(x,y,w,h,f,s,rx,sw){var e=document.createElementNS(SVG_NS,"rect");e.setAttribute("x",x);e.setAttribute("y",y);e.setAttribute("width",w);e.setAttribute("height",h);e.setAttribute("fill",f);e.setAttribute("rx",rx||4);if(s){e.setAttribute("stroke",s);e.setAttribute("stroke-width",sw||1.5)}svgEl.appendChild(e)}
+function TC(x,y,w,t,sz,c,pad){pad=pad||15;var mw=w-2*pad,ew=t.length*(sz||13)*0.85;if(ew>mw)sz=(sz||13)*mw/ew;if(sz<8)sz=8;var e=document.createElementNS(SVG_NS,"text");e.setAttribute("x",x+w/2);e.setAttribute("y",y);e.setAttribute("fill",c||"#e0e8f0");e.setAttribute("font-size",sz);e.setAttribute("text-anchor","middle");e.setAttribute("font-weight","bold");e.textContent=t;svgEl.appendChild(e)}
+function TL(x,y,w,t,sz,c,pad){pad=pad||15;var mw=w-2*pad,ew=t.length*(sz||12)*0.85;if(ew>mw){var mc=Math.floor(mw/((sz||12)*0.85))-2;if(mc<3)mc=3;t=t.substring(0,mc)+".."}var e=document.createElementNS(SVG_NS,"text");e.setAttribute("x",x+pad);e.setAttribute("y",y);e.setAttribute("fill",c||"#e0e8f0");e.setAttribute("font-size",sz);e.setAttribute("text-anchor","start");e.textContent=t;svgEl.appendChild(e)}
+function L(x1,y1,x2,y2,c,sw){var e=document.createElementNS(SVG_NS,"line");e.setAttribute("x1",x1);e.setAttribute("y1",y1);e.setAttribute("x2",x2);e.setAttribute("y2",y2);e.setAttribute("stroke",c||"#283040");e.setAttribute("stroke-width",sw||1);svgEl.appendChild(e)}
+
+var S=[
+{t:"What is an Operator?",p:"Foundation",
+b:'<p>In AI infrastructure, an <b>operator</b> is the fundamental unit of computation — analogous to an instruction in a CPU ISA. Each operator encapsulates a specific mathematical operation: matrix multiplication, activation functions, normalizations, convolutions.</p><p><span class="badge bd">Key insight</span> The operator abstraction layer sits between the high-level ML framework (PyTorch/TensorFlow) and low-level hardware (GPU/TPU). It enables <b>hardware-agnostic optimization</b> — write once, run anywhere.</p><p>Examples: <code>aten::matmul</code>, <code>aten::relu</code>, <code>aten::layer_norm</code> — these are the building blocks of every neural network.</p>',
+d:function(){var W=720,H=480,P=15;R(P,P,W-2*P,H-2*P,"#080a10","#40a0ff",8,2);
+TC(P,35,W-2*P,"Operator = Fundamental Unit of AI Computation",14,"#40a0ff",P);
+var layers=["PyTorch/TF: model(x) -> graph of operators","Operator Abstraction: aten::matmul, aten::relu, ...","Hardware Backend: CUDA kernels, Metal shaders, TPU ops","GPU Execution: parallel threads on thousands of cores"];
+var bx=60,by=70,bw=600,bh=42;
+for(var i=0;i<4;i++){R(bx,by+i*(bh+12),bw,bh,"rgba(64,160,255,.08)","#40a0ff",6,1);TC(bx,by+i*(bh+12)+28,bw,layers[i],12,i===0?"#e0e8f0":i===3?"#40d880":"#8899aa",P)}
+TC(P,300,W-2*P,"Operator = Write once, optimize once, run on any hardware",13,"#60d0ff",P);
+TC(P,345,W-2*P,"This is the foundation of all AI compiler stacks (XLA, TVM, Triton)",12,"#8899aa",P);
+}},
+
+{t:"Core Operators: MatMul",p:"Foundation",
+b:'<p><b>Matrix Multiplication (MatMul)</b> is the most compute-intensive operator in deep learning — consuming 60-90% of total FLOPs in Transformer models.</p><p>The operation: <code>C = A @ B</code> where A∈R^(M×K), B∈R^(K×N), C∈R^(M×N). Each output element requires K multiply-add operations — total <b>2×M×N×K FLOPs</b>.</p><p><span class="badge bw">Bottleneck</span> Memory bandwidth, not compute, is usually the limiter. MatMul optimization focuses on <b>tiling</b> — decomposing the large matrix into smaller blocks that fit in shared memory/SRAM.</p>',
+d:function(){var W=720,H=480,P=15;R(P,P,W-2*P,H-2*P,"#080a10","#9080ff",8,2);
+TC(P,35,W-2*P,"MatMul: C = A(MxK) @ B(KxN) -> C(MxN)",14,"#9080ff",P);
+var bx=50,by=70,cw=160;R(bx,by,cw,110,"rgba(144,128,255,.12)","#9080ff",6,1.5);TC(bx+cw/2,by+45,cw,"Matrix A",13,"#9080ff",P);TC(bx+cw/2,by+80,cw,"M x K",11,"#8899aa",P);
+TC(230,by+55,30,"@",16,"#40a0ff",0);
+R(260,by,cw,110,"rgba(64,160,255,.12)","#40a0ff",6,1.5);TC(260+cw/2,by+45,cw,"Matrix B",13,"#40a0ff",P);TC(260+cw/2,by+80,cw,"K x N",11,"#8899aa",P);
+TC(440,by+55,30,"=",16,"#40d880",0);
+R(470,by,cw,110,"rgba(64,216,128,.12)","#40d880",6,1.5);TC(470+cw/2,by+45,cw,"Matrix C",13,"#40d880",P);TC(470+cw/2,by+80,cw,"M x N",11,"#8899aa",P);
+TC(P,240,W-2*P,"FLOPs = 2 x M x N x K. For GPT-3: M=N=12288, K=12288 -> ~3.7T FLOPs per MatMul!",11,"#8899aa",P);
+TC(P,280,W-2*P,"Tiling: decompose into Bx128 blocks to fit in GPU shared memory (164KB on A100)",11,"#60d0ff",P);
+TC(P,320,W-2*P,"Memory is the bottleneck: compute is 100x faster than HBM bandwidth on modern GPUs",11,"#f05060",P);
+}},
+
+{t:"Core Operators: Activation Functions",p:"Foundation",
+b:'<p>Activation functions introduce <b>non-linearity</b> — without them, multi-layer networks collapse to a single linear transformation.</p><p><code>ReLU(x) = max(0, x)</code> — the workhorse. Simple, fast, sparse gradients. But suffers from "dying ReLU" when neurons permanently output 0.</p><p><b>GELU</b> (Gaussian Error Linear Unit) — the Transformer standard. Smooth approximation: <code>GELU(x) = x·Φ(x)</code> where Φ is the CDF of N(0,1). Better empirical performance at slightly higher compute cost.</p><p><b>SiLU/Swish</b> — <code>x·σ(x)</code>. Self-gated, used in EfficientNet and modern vision models.</p>',
+d:function(){var W=720,H=480,P=15;R(P,P,W-2*P,H-2*P,"#080a10","#40d880",8,2);
+TC(P,30,W-2*P,"Activation Functions: The Non-Linearity Engine",14,"#40d880",P);
+var acts=[{n:"ReLU",f:"max(0,x)",u:"CNN, MLP, fast, sparse",c:"#40a0ff"},{n:"GELU",f:"x*Phi(x)",u:"Transformers, BERT/GPT standard",c:"#9080ff"},{n:"SiLU/Swish",f:"x*sigmoid(x)",u:"EfficientNet, ViT, self-gated",c:"#40d880"}];
+var bx=60,by=65,bw=600,bh=55;
+for(var i=0;i<3;i++){var cy=by+i*(bh+10);R(bx,cy,bw,bh,acts[i].c+"10",acts[i].c,6,1.5);TL(bx,cy+22,bw,acts[i].n,14,acts[i].c,15);TL(bx+100,cy+22,bw-100,acts[i].f,13,"#e0e8f0",10);TL(bx,cy+46,bw,acts[i].u,11,"#8899aa",15)}
+TC(P,300,W-2*P,"ReLU: cheap, fast, most used in CNNs. GELU: standard for Transformers",12,"#60d0ff",P);
+TC(P,340,W-2*P,"The choice of activation significantly impacts training stability and final accuracy",11,"#8899aa",P);
+}},
+
+{t:"Core Operators: Normalization",p:"Foundation",
+b:'<p>Normalization layers stabilize training by keeping activations within a controlled range:</p><p><b>BatchNorm</b>: normalizes across the batch dimension. μ,σ² computed per-channel over (N,H,W). Problematic for small batches.</p><p><b>LayerNorm</b>: normalizes across the feature dimension. μ,σ² computed per-sample over (C,H,W) or (D_model). <b>Transformer standard</b> — batch-size independent.</p><p><b>RMSNorm</b>: simplified LayerNorm without mean centering. Used in LLaMA and modern LLMs — faster, equally effective.</p>',
+d:function(){var W=720,H=480,P=15;R(P,P,W-2*P,H-2*P,"#080a10","#60d0ff",8,2);
+TC(P,30,W-2*P,"Normalization: Stabilize Training via Controlled Activations",14,"#60d0ff",P);
+var norms=[{n:"BatchNorm",a:"Normalize across (N, H, W)",u:"CNN standard, needs batch>16",c:"#40a0ff"},{n:"LayerNorm",a:"Normalize across (C, H, W) per sample",u:"Transformer standard, batch-independent",c:"#9080ff"},{n:"RMSNorm",a:"LayerNorm without mean subtraction",u:"LLaMA, faster, equally effective",c:"#40d880"}];
+var bx=60,by=65,bw=600,bh=55;
+for(var i=0;i<3;i++){var cy=by+i*(bh+10);R(bx,cy,bw,bh,norms[i].c+"10",norms[i].c,6,1.5);TL(bx,cy+22,bw,norms[i].n,14,norms[i].c,15);TL(bx+100,cy+22,bw-100,norms[i].a,12,"#e0e8e0",10);TL(bx,cy+46,bw,norms[i].u,11,"#8899aa",15)}
+TC(P,300,W-2*P,"LLMs use RMSNorm: simpler, faster, and empirically indistinguishable from LayerNorm",12,"#60d0ff",P);
+TC(P,345,W-2*P,"Normalization = why we can train 1000-layer networks without exploding activations",11,"#8899aa",P);
+}},
+
+{t:"Operator Fusion: The Key Optimization",p:"Optimization",
+b:'<p>Running operators one-by-one incurs <b>memory round-trips</b>: each op reads from HBM, computes, writes back to HBM. For a chain like Conv→BN→ReLU, this means 3 reads + 3 writes to HBM.</p><p><b>Operator Fusion</b> merges multiple ops into a single GPU kernel: Conv+BN+ReLU becomes one kernel call. Intermediate results stay in registers/shared memory — <b>never touch HBM</b>.</p><p><span class="badge bt">Impact</span> 2-3x speedup for fused patterns. Memory bandwidth reduction of 60-80% for common CNN blocks.</p>',
+d:function(){var W=720,H=480,P=15;R(P,P,W-2*P,H-2*P,"#080a10","#40a0ff",8,2);
+TC(P,30,W-2*P,"Operator Fusion: Eliminate HBM Round-Trips",14,"#40a0ff",P);
+// Before fusion
+TC(180,65,280,"BEFORE: 3 Kernels, 6 HBM accesses",13,"#f05060",10);
+var ops=["Conv: read A -> compute -> write B (HBM)","BN: read B -> compute -> write C (HBM)","ReLU: read C -> compute -> write D (HBM)"];
+var bx=40,by=85;for(var i=0;i<3;i++){R(bx,by+i*28,320,24,"rgba(240,80,96,.08)","#f05060",4,1);TL(bx,by+i*28+17,320,ops[i],10,"#f05060",10)}
+// After fusion
+TC(540,65,280,"AFTER: 1 Kernel, 2 HBM accesses",13,"#40d880",10);
+var ops2=["FusedKernel: read A -> compute Conv+BN+ReLU in registers -> write D (HBM)"];
+for(var i=0;i<1;i++){R(380,85+i*28,320,24,"rgba(64,216,128,.08)","#40d880",4,1);TL(380,85+i*28+17,320,ops2[i],10,"#40d880",10)}
+TC(P,220,W-2*P,"Result: 6 HBM accesses -> 2 HBM accesses (67% reduction)",13,"#40d880",P);
+TC(P,270,W-2*P,"Fused kernel: intermediate tensors stay in GPU registers/shared memory",12,"#60d0ff",P);
+TC(P,320,W-2*P,"This is what XLA, TensorRT, and TVM do under the hood",11,"#8899aa",P);
+}},
+
+{t:"Tiling: Making MatMul Fit in SRAM",p:"Optimization",
+b:'<p>GPU HBM bandwidth (~2TB/s on A100) is 10-20x slower than shared memory bandwidth (~19TB/s). <b>Tiling</b> decomposes large matrix multiplication into smaller sub-problems that fit entirely in on-chip SRAM.</p><p>The outer dimensions (M, N) are split into tiles of size Tm×Tn. The inner dimension K is iterated, accumulating partial sums in registers. Each tile computes: <code>Ctile += Atile @ Btile</code>.</p><p><span class="badge bt">Result</span> Each element of A and B is loaded from HBM only once per complete K dimension — reducing HBM traffic from O(MNK) to O(MN + MK + KN).</p>',
+d:function(){var W=720,H=480,P=15;R(P,P,W-2*P,H-2*P,"#080a10","#9080ff",8,2);
+TC(P,30,W-2*P,"Tiling: Decompose MatMul to Fit On-Chip Memory",14,"#9080ff",P);
+// Big matrix
+R(40,60,200,140,"rgba(240,80,96,.15)","#f05060",6,1.5);TC(140,110,200,"Full Matrix",14,"#f05060",P);TC(140,145,200,"M x N (too big for SRAM)",11,"#8899aa",P);
+TC(260,130,30,"->",18,"#40a0ff",0);
+// Tiles
+for(var i=0;i<3;i++){for(var j=0;j<3;j++){R(310+j*55,55+i*45,50,40,"rgba(144,128,255,.12)","#9080ff",4,1);TC(335+j*55,80+i*45,50,"Tm",10,"#9080ff",5)}}
+TC(500,130,40,"->",18,"#40d880",0);
+// GPU diagram
+R(540,60,160,140,"rgba(64,216,128,.15)","#40d880",6,1.5);TC(620,90,160,"GPU SRAM",13,"#40d880",P);
+TC(620,120,160,"~164 KB (A100)",11,"#8899aa",P);TC(620,150,160,"Tile fits here!",11,"#40d880",P);
+TC(P,260,W-2*P,"Tile size Tm x Tn chosen to maximize SRAM utilization without overflow",12,"#60d0ff",P);
+TC(P,300,W-2*P,"Triton language automates tiling: @triton.jit + tl.dot = optimal tile sizes",11,"#8899aa",P);
+}},
+
+{t:"GPU Memory Hierarchy",p:"Hardware",
+b:'<p>Modern GPUs have a deep memory hierarchy — understanding it is essential for operator optimization:</p><p><b>HBM (80GB, 2TB/s)</b>: Main GPU memory. All tensors live here. ~100x slower than compute.</p><p><b>L2 Cache (40MB, 4TB/s)</b>: Shared across all SMs. Transparent to programmer.</p><p><b>Shared Memory / SRAM (164KB/SM, 19TB/s)</b>: Programmer-managed scratchpad. The key to tiling.</p><p><b>Registers (256KB/SM, >100TB/s)</b>: Fastest storage. 255 registers per thread on A100.</p><p><span class="badge bw">The Gap</span>: Compute is 100x faster than HBM. Optimizing = keeping data as close to compute as possible.</p>',
+d:function(){var W=720,H=480,P=15;R(P,P,W-2*P,H-2*P,"#080a10","#40d880",8,2);
+TC(P,30,W-2*P,"GPU Memory Hierarchy: The 100x Compute-Memory Gap",14,"#40d880",P);
+var mems=[{n:"Registers",s:"256KB/SM, 100+TB/s",d:"Fastest, 255/thread, tiling target",c:"#40d880",w:580},{n:"Shared Mem/SRAM",s:"164KB/SM, 19TB/s",d:"Programmer-managed, key to tiling",c:"#60d0ff",w:560},{n:"L2 Cache",s:"40MB, 4TB/s",d:"Shared across SMs, transparent",c:"#9080ff",w:520},{n:"HBM (Global Mem)",s:"80GB, 2TB/s",d:"Main memory, 100x slower than compute",c:"#f05060",w:480}];
+var bx=60,by=65,bh=60;
+for(var i=0;i<4;i++){var cy=by+i*(bh+12),w=mems[i].w;R(bx,cy,w,bh,mems[i].c+"10",mems[i].c,6,1.5);TL(bx,cy+22,w,mems[i].n,14,mems[i].c,15);TL(bx+130,cy+22,w-130,mems[i].s,11,"#e0e8e0",10);TL(bx,cy+46,w,mems[i].d,11,"#8899aa",15)}
+TC(P,380,W-2*P,"Optimization principle: keep data as close to compute as possible",12,"#60d0ff",P);
+TC(P,420,W-2*P,"Tiling = move data from HBM -> SRAM -> Registers for computation",11,"#8899aa",P);
+}},
+
+{t:"End-to-End: From PyTorch to GPU Kernel",p:"Integration",
+b:'<p>The complete operator pipeline: <code>torch.matmul(a,b)</code> → ATen dispatcher → cuBLAS/cuDNN → PTX assembly → GPU SMs executing in parallel.</p><p>Understanding this pipeline enables <b>performance debugging</b>: if your model is slow, trace whether the bottleneck is in the framework overhead, operator selection, kernel launch, memory bandwidth, or compute utilization.</p><p><span class="badge bt">Key takeaway</span> Operator abstraction is what makes PyTorch code portable across GPUs, TPUs, and CPUs — while still achieving near-peak hardware performance.</p>',
+d:function(){var W=720,H=480,P=15;R(P,P,W-2*P,H-2*P,"#080a10","#40a0ff",8,2);
+TC(P,30,W-2*P,"End-to-End: torch.matmul -> GPU Execution",14,"#40a0ff",P);
+var steps=["1. torch.matmul(a,b)  // Python API call","2. ATen dispatcher -> selects backend (CUDA/MPS/CPU)","3. cuBLAS/cuDNN kernel library -> optimized implementation","4. PTX assembly -> compiled for target GPU architecture","5. GPU SMs execute thousands of threads in parallel","6. Result tensor returned to Python, still on GPU"];
+var bx=60,by=65,bw=600,bh=36;
+for(var i=0;i<6;i++){R(bx,by+i*(bh+8),bw,bh,"rgba(64,160,255,.06)","#40a0ff",4,1);TL(bx,by+i*(bh+8)+24,bw,steps[i],11,i<2?"#e0e8e0":i<4?"#60d0ff":"#40d880",15)}
+TC(P,370,W-2*P,"This abstraction layer is what enables write once, run anywhere",13,"#60d0ff",P);
+TC(P,410,W-2*P,"Next: Memory Access Patterns — how data layout affects performance",12,"#8899aa",P);
+}},
+];
+
+var cs=0,at=null,ia=false,N=S.length;
+function init(){svgEl=document.getElementById("s");for(var i=0;i<N;i++){var d=document.createElement("div");d.className="dot";d.onclick=(function(j){return function(){go(j)}})(i);document.getElementById("dots").appendChild(d)}render()}
+function go(i){if(i<0||i>=N)return;cs=i;render()}
+function render(){while(svgEl.firstChild)svgEl.removeChild(svgEl.firstChild);var s=S[cs];document.getElementById("sn").textContent=(cs+1)+"/"+N;document.getElementById("panel").innerHTML='<div class="tag">'+s.p+'</div><h2 class="step">'+s.t+'</h2><div class="desc">'+s.b+'</div>';s.d();var dots=document.querySelectorAll(".dot");for(var i=0;i<dots.length;i++)dots[i].className="dot"+(i===cs?" on":i<cs?" ok":"");document.getElementById("bp").disabled=cs===0;document.getElementById("bn").disabled=cs===N-1}
+function next(){if(cs<N-1){cs++;render()}else sa()}
+function prev(){if(cs>0){cs--;render()}}
+function rst(){sa();cs=0;render()}
+function ta(){ia?sa():startA()}
+function startA(){ia=true;document.getElementById("ba").textContent="⏸ Pause";at=setInterval(next,2500)}
+function sa(){ia=false;if(at){clearInterval(at);at=null}document.getElementById("ba").textContent="▶ Auto"}
+document.addEventListener("keydown",function(e){if(e.key==="ArrowRight"){e.preventDefault();next()}else if(e.key==="ArrowLeft"){e.preventDefault();prev()}else if(e.key===" "){e.preventDefault();ta()}else if(e.key==="r"||e.key==="R"){e.preventDefault();rst()}});
+document.getElementById("bp").onclick=prev;document.getElementById("bn").onclick=next;document.getElementById("br").onclick=rst;document.getElementById("ba").onclick=ta;window.onload=init;
+</script></body></html>

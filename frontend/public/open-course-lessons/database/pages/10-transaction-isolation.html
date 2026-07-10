@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>事务隔离级别 — 数据库系统概论</title>
+<style>
+:root{--bg:#1a1e1d;--bg-soft:#25302d;--bg-code:#0d1111;--fg:#e0eee8;--fg-dim:#90a898;--line:#304038;--accent:#40c0b0;--accent-2:#4898e0;--grad:#4898e0;--success:#40c870;--danger:#e05050}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(72,152,224,.18);color:var(--grad)}.badge--tip{background:rgba(64,200,112,.18);color:var(--success)}.badge--warn{background:rgba(224,80,80,.18);color:var(--danger)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+  <div class="demo-header">
+    <div>
+      <h1>事务隔离级别</h1>
+      <div class="breadcrumb"><a href="#">第四章</a> · 事务与应用开发</div>
+    </div>
+    <div class="badge-row">
+      <span class="badge badge--warn">READ UNCOMMITTED</span>
+      <span class="badge badge--def">READ COMMITTED</span>
+      <span class="badge badge--tip">REPEATABLE READ</span>
+      <span class="badge badge--tip">SERIALIZABLE</span>
+    </div>
+  </div>
+  <div class="demo-main">
+    <div class="panel-explain" id="explain">
+      <div class="step-title" id="stepTitle">READ UNCOMMITTED — 脏读</div>
+      <div class="step-desc" id="stepDesc">
+        T2 将余额从 1000 改为 800（未提交），T1 读到 800 这个"脏数据"。随后 T2 回滚，T1 读到的数据是无效的。这是最低隔离级别。
+      </div>
+      <div class="badge-row" id="badges">
+        <span class="badge badge--warn">T2 更新未提交 → T1 脏读</span>
+      </div>
+      <div class="info-line" id="infoLine">隔离级别: READ UNCOMMITTED — 允许脏读</div>
+    </div>
+    <div class="panel-stage" id="stage">
+      <svg id="svg" viewBox="0 0 800 340" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+  </div>
+  <div class="demo-controls">
+    <button id="prevBtn" onclick="S.changeStep(-1)">上一步</button>
+    <div class="step-dots" id="dots"></div>
+    <button id="nextBtn" onclick="S.changeStep(1)">下一步</button>
+    <button id="autoBtn" onclick="S.toggleAuto()">自动播放</button>
+    <button id="resetBtn" onclick="S.resetStep()">重置</button>
+  </div>
+</div>
+<script>
+// ── utilities ──
+const $=s=>document.querySelector(s);
+const NS='http://www.w3.org/2000/svg';
+const E=(t,a={})=>{const e=document.createElementNS(NS,t);for(const[k,v]of Object.entries(a))e.setAttribute(k,v);return e;};
+const T=(x,y,t,c='var(--fg-dim)',s=12)=>{const e=E('text',{x,y,fill:c,'font-size':s,'text-anchor':'middle','font-family':'PingFang SC,Microsoft YaHei,sans-serif'});e.textContent=t;return e;};
+const L=(x1,y1,x2,y2,c='var(--line)',w=1,dash='')=>E('line',{x1,y1,x2,y2,stroke:c,'stroke-width':w,'stroke-dasharray':dash||'none'});
+const R=(x,y,w,h,rx=4,c='var(--bg-soft)',sw=1,sc='var(--line)')=>E('rect',{x,y,width:w,height:h,rx,fill:c,stroke:sc,'stroke-width':sw});
+const An=(el,kvs,dur='0.5s')=>{el.style.transition=`all ${dur} ease`;for(const[k,v]of Object.entries(kvs))el.setAttribute(k,v);};
+
+const DANGER='#e05050', SUCCESS='#40c870', ACCENT='#40c0b0', ACC2='#4898e0', FGDIM='#90a898', FG='#e0eee8', BGCODE='#0d1111', BGS='#25302d', LINE='#304038';
+const TX_LABEL=(x,y,t,c=ACCENT)=>T(x,y,t,c,11);
+const RECT_LABEL=(x,y,w,h,t,fill=BGS,stroke=LINE,fc=ACCENT)=>[R(x,y,w,h,6,fill,1.5,stroke),T(x+w/2,y+18,t,fc,13)];
+const ARROW=(x1,y,x2,color=LINE)=>{const e=E('path',{d:`M${x1},${y} L${x2-8},${y} L${x2-16},${y-6} M${x2-8},${y} L${x2-16},${y+6}`,fill:'none',stroke:color,'stroke-width':1.5});return e;};
+const DOT=(x,y,r,c)=>E('circle',{cx:x,cy:y,r,fill:c});
+const MARKER=(x,y,label,color)=>{const e=E('g',{});e.appendChild(DOT(x,y,7,color));e.appendChild(T(x,y-14,label,color,13,'bold'));return e;};
+
+function clearSvg(svg){while(svg.firstChild)svg.removeChild(svg.firstChild);}
+
+// ── data ──
+const S={
+  step:0, total:4, autoId:null,
+  titles:[
+    'READ UNCOMMITTED — 脏读',
+    'READ COMMITTED — 不可重复读',
+    'REPEATABLE READ — 可重复读',
+    'SERIALIZABLE — 幻读预防'
+  ],
+  descs:[
+    'T2 将余额从 1000 改为 800（未提交），T1 此时读取到 800（脏读）。随后 T2 回滚，800 这个值从未真正存在过。READ UNCOMMITTED 允许读取未提交数据，性能最高但一致性最差。',
+    'T1 第一次读取余额为 1000，T2 提交更新将余额改为 800，T1 再次读取得到 800。同一事务内两次读取结果不同——这就是不可重复读。READ COMMITTED 避免了脏读，但无法避免不可重复读。',
+    'T1 事务开始时创建快照（版本 v1），两次读取都从快照获取值 1000。T2 的并发更新被隔离，T1 始终看到 1000。REPEATABLE READ 通过多版本并发控制（MVCC）保证可重复读。',
+    'T1 第一次 COUNT 得到 10 行，T2 插入新行并提交，T1 再次 COUNT 仍然是 10 行。SERIALIZABLE 通过范围锁或快照隔离防止幻读，是最严格的隔离级别。'
+  ],
+  badges:[
+    ['脏读', 'warn'],
+    ['不可重复读', 'warn'],
+    ['MVCC 快照', 'tip'],
+    ['幻读预防', 'tip']
+  ],
+  infoLines:[
+    '隔离级别: READ UNCOMMITTED — 允许脏读、不可重复读、幻读',
+    '隔离级别: READ COMMITTED — 禁止脏读，允许不可重复读和幻读',
+    '隔离级别: REPEATABLE READ — 禁止脏读和不可重复读，允许幻读 (MySQL 中禁止)',
+    '隔离级别: SERIALIZABLE — 禁止脏读、不可重复读、幻读'
+  ],
+  render(svg){
+    clearSvg(svg);
+    switch(this.step){
+      case 0: this.r0(svg); break;
+      case 1: this.r1(svg); break;
+      case 2: this.r2(svg); break;
+      case 3: this.r3(svg); break;
+    }
+  },
+  r0(svg){
+    // ── READ UNCOMMITTED: Dirty Read ──
+    // Timeline header
+    svg.appendChild(R(20,10,760,320,10,BGCODE,1.5,LINE));
+    svg.appendChild(T(400,36,'READ UNCOMMITTED — 脏读演示',ACCENT,16));
+
+    // T1 row
+    svg.appendChild(T(60,72,'T1',ACC2,14,'bold'));
+    svg.appendChild(L(90,70,740,70,LINE,1,'6,3'));
+    // T1 operations: R(B=?)
+    svg.appendChild(MARKER(180,70,'R',ACC2));
+    svg.appendChild(T(180,90,'读取余额',FGDIM,9));
+    svg.appendChild(T(180,102,'→ 800 ?!',DANGER,9,'bold'));
+
+    svg.appendChild(MARKER(580,70,'R',ACC2));
+    svg.appendChild(T(580,90,'再次读取',FGDIM,9));
+
+    // T2 row
+    svg.appendChild(L(90,140,740,140,LINE,1,'6,3'));
+    svg.appendChild(T(60,138,'T2',DANGER,14,'bold'));
+
+    svg.appendChild(MARKER(260,140,'W',DANGER));
+    svg.appendChild(T(260,160,'UPDATE 1000→800',DANGER,9));
+    svg.appendChild(T(260,172,'(未提交)',DANGER,8));
+
+    svg.appendChild(MARKER(460,140,'R',DANGER));
+    svg.appendChild(T(460,160,'ROLLBACK',DANGER,9,'bold'));
+
+    // Arrows for dirty read
+    svg.appendChild(L(260,150,180,90,DANGER,1.5,'4,2'));
+    svg.appendChild(T(210,118,'← 脏读',DANGER,10,'bold'));
+
+    // Account state boxes
+    const boxY=210;
+    svg.appendChild(R(120,boxY,100,50,6,'rgba(224,80,80,.15)',1,DANGER));
+    svg.appendChild(T(170,boxY+20,'脏数据',DANGER,11));
+    svg.appendChild(T(170,boxY+40,'800',DANGER,15,'bold'));
+
+    svg.appendChild(R(320,boxY,100,50,6,'rgba(64,200,112,.15)',1,SUCCESS));
+    svg.appendChild(T(370,boxY+20,'真实数据',SUCCESS,11));
+    svg.appendChild(T(370,boxY+40,'1000',SUCCESS,15,'bold'));
+
+    svg.appendChild(R(520,boxY,100,50,6,'rgba(224,80,80,.15)',1,DANGER));
+    svg.appendChild(T(570,boxY+20,'T2 回滚',DANGER,11));
+    svg.appendChild(T(570,boxY+40,'撤销',DANGER,13,'bold'));
+
+    // Arrow between boxes
+    svg.appendChild(ARROW(220,boxY+25,315,LINE));
+    svg.appendChild(T(268,boxY+15,'≠',DANGER,15,'bold'));
+
+    // Anomaly indicator
+    svg.appendChild(R(250,280,300,36,8,'rgba(224,80,80,.18)',1.5,DANGER));
+    svg.appendChild(T(400,303,'⚠ 脏读：读到未提交的数据',DANGER,13,'bold'));
+  },
+  r1(svg){
+    // ── READ COMMITTED: Non-Repeatable Read ──
+    svg.appendChild(R(20,10,760,320,10,BGCODE,1.5,LINE));
+    svg.appendChild(T(400,36,'READ COMMITTED — 不可重复读',ACCENT,16));
+
+    // T1 timeline
+    svg.appendChild(T(60,68,'T1',ACC2,14,'bold'));
+    svg.appendChild(L(90,66,740,66,LINE,1,'6,3'));
+
+    svg.appendChild(MARKER(150,66,'R',ACC2));
+    svg.appendChild(T(150,86,'SELECT balance',FGDIM,9));
+    svg.appendChild(T(150,98,'→ 1000 ✓',SUCCESS,10,'bold'));
+
+    svg.appendChild(MARKER(550,66,'R',ACC2));
+    svg.appendChild(T(550,86,'SELECT balance',FGDIM,9));
+    svg.appendChild(T(550,98,'→ 800 ?!',DANGER,10,'bold'));
+
+    // T2 timeline
+    svg.appendChild(L(90,136,740,136,LINE,1,'6,3'));
+    svg.appendChild(T(60,134,'T2',ACCENT,14,'bold'));
+
+    svg.appendChild(MARKER(300,136,'W',ACCENT));
+    svg.appendChild(T(300,156,'UPDATE SET',FGDIM,9));
+    svg.appendChild(T(300,168,'balance=800',FGDIM,9));
+
+    svg.appendChild(MARKER(450,136,'C',SUCCESS));
+    svg.appendChild(T(450,156,'COMMIT ✓',SUCCESS,10,'bold'));
+
+    // Snapshots
+    const sy=205;
+    // Snapshot 1
+    svg.appendChild(R(100,sy,140,60,8,'rgba(64,200,112,.12)',1.5,SUCCESS));
+    svg.appendChild(T(170,sy+20,'快照 1 (第1次读)',SUCCESS,11));
+    svg.appendChild(T(170,sy+43,'balance = 1000',FG,14,'bold'));
+
+    // Snapshot 2
+    svg.appendChild(R(360,sy,140,60,8,'rgba(224,80,80,.12)',1.5,DANGER));
+    svg.appendChild(T(430,sy+20,'快照 2 (第2次读)',DANGER,11));
+    svg.appendChild(T(430,sy+43,'balance = 800',DANGER,14,'bold'));
+
+    // Arrow between snapshots
+    svg.appendChild(L(240,sy+30,355,sy+30,DANGER,2));
+    svg.appendChild(T(298,sy+20,'≠ 不同!',DANGER,12,'bold'));
+
+    // Commit marker
+    svg.appendChild(R(440,140,470,200,8,'rgba(64,200,112,.08)',1,SUCCESS));
+    svg.appendChild(T(675,160,'T2 已提交',SUCCESS,10));
+    svg.appendChild(T(675,178,'T1 读到新值',DANGER,10));
+
+    // Anomaly box
+    svg.appendChild(R(200,280,400,36,8,'rgba(224,80,80,.18)',1.5,DANGER));
+    svg.appendChild(T(400,303,'⚠ 不可重复读：同一事务内两次读取结果不同',DANGER,13,'bold'));
+  },
+  r2(svg){
+    // ── REPEATABLE READ: MVCC ──
+    svg.appendChild(R(20,10,760,320,10,BGCODE,1.5,LINE));
+    svg.appendChild(T(400,36,'REPEATABLE READ — MVCC 快照隔离',ACCENT,16));
+
+    // T1 with version v1
+    svg.appendChild(T(60,68,'T1 (快照 v1)',ACC2,14,'bold'));
+    svg.appendChild(L(90,66,740,66,LINE,1,'6,3'));
+
+    svg.appendChild(MARKER(140,66,'R',ACC2));
+    svg.appendChild(T(140,86,'读 balance',FGDIM,9));
+    svg.appendChild(T(140,98,'v1→ 1000 ✓',SUCCESS,10,'bold'));
+
+    svg.appendChild(MARKER(560,66,'R',ACC2));
+    svg.appendChild(T(560,86,'读 balance',FGDIM,9));
+    svg.appendChild(T(560,98,'v1→ 1000 ✓',SUCCESS,10,'bold'));
+
+    // T2 with version v2
+    svg.appendChild(L(90,136,740,136,LINE,1,'6,3'));
+    svg.appendChild(T(60,134,'T2 (创建 v2)',ACCENT,14,'bold'));
+
+    svg.appendChild(MARKER(300,136,'W',ACCENT));
+    svg.appendChild(T(300,156,'UPDATE 1000→800',FGDIM,9));
+    svg.appendChild(T(300,168,'创建版本 v2',FGDIM,9));
+
+    svg.appendChild(MARKER(460,136,'C',SUCCESS));
+    svg.appendChild(T(460,156,'COMMIT ✓',SUCCESS,10,'bold'));
+    svg.appendChild(T(460,168,'v2 生效',SUCCESS,9));
+
+    // Blocked indicator
+    svg.appendChild(L(300,136,560,86,LINE,1.5,'4,3'));
+    svg.appendChild(T(430,106,'T1 看不到 v2',FGDIM,10));
+
+    // MVCC version boxes
+    const vy=200;
+    // v1 box
+    svg.appendChild(R(100,vy,180,80,8,'rgba(64,200,112,.15)',1.5,SUCCESS));
+    svg.appendChild(T(190,vy+22,'版本 v1 (T1 快照)',SUCCESS,12,'bold'));
+    svg.appendChild(T(190,vy+46,'balance = 1000',FG,14,'bold'));
+    svg.appendChild(T(190,vy+68,'T1 始终读取此版本',FGDIM,10));
+
+    // v2 box
+    svg.appendChild(R(360,vy,180,80,8,'rgba(72,152,224,.15)',1.5,ACC2));
+    svg.appendChild(T(450,vy+22,'版本 v2 (T2 创建)',ACC2,12,'bold'));
+    svg.appendChild(T(450,vy+46,'balance = 800',ACC2,14,'bold'));
+    svg.appendChild(T(450,vy+68,'T1 不可见此版本',FGDIM,10));
+
+    // Divider
+    svg.appendChild(L(280,vy+40,355,vy+40,LINE,2));
+    svg.appendChild(T(318,vy+30,'MVCC 隔离',SUCCESS,11,'bold'));
+
+    // Result
+    svg.appendChild(R(200,295,400,30,8,'rgba(64,200,112,.18)',1.5,SUCCESS));
+    svg.appendChild(T(400,315,'✓ 可重复读：T1 两次读取结果一致 (均为 1000)',SUCCESS,13,'bold'));
+  },
+  r3(svg){
+    // ── SERIALIZABLE: Phantom Read Prevention ──
+    svg.appendChild(R(20,10,760,320,10,BGCODE,1.5,LINE));
+    svg.appendChild(T(400,36,'SERIALIZABLE — 幻读预防',ACCENT,16));
+
+    // T1 timeline
+    svg.appendChild(T(60,68,'T1',ACC2,14,'bold'));
+    svg.appendChild(L(90,66,740,66,LINE,1,'6,3'));
+
+    svg.appendChild(MARKER(140,66,'R',ACC2));
+    svg.appendChild(T(140,86,'COUNT(*)',FGDIM,9));
+    svg.appendChild(T(140,98,'→ 10 行 ✓',SUCCESS,10,'bold'));
+
+    svg.appendChild(MARKER(560,66,'R',ACC2));
+    svg.appendChild(T(560,86,'COUNT(*)',FGDIM,9));
+    svg.appendChild(T(560,98,'→ 10 行 ✓',SUCCESS,10,'bold'));
+
+    // T2 timeline
+    svg.appendChild(L(90,136,740,136,LINE,1,'6,3'));
+    svg.appendChild(T(60,134,'T2',DANGER,14,'bold'));
+
+    svg.appendChild(MARKER(300,136,'W',DANGER));
+    svg.appendChild(T(300,156,'INSERT 新行',DANGER,9));
+    svg.appendChild(T(300,168,'(被阻塞)',DANGER,9));
+
+    // Block arrow
+    svg.appendChild(L(300,130,300,80,DANGER,1.5,'4,2'));
+    svg.appendChild(T(320,106,'等待 T1 释放',DANGER,9));
+
+    // Range lock illustration
+    const ry=200;
+    svg.appendChild(R(70,ry,200,32,6,'rgba(64,200,112,.15)',1.5,SUCCESS));
+    svg.appendChild(T(170,ry+21,'T1 范围锁 (Range Lock)',SUCCESS,12,'bold'));
+
+    svg.appendChild(R(340,ry,200,32,6,'rgba(224,80,80,.15)',1.5,DANGER));
+    svg.appendChild(T(440,ry+21,'T2 等待间隙锁释放',DANGER,12,'bold'));
+
+    svg.appendChild(L(270,ry+16,335,ry+16,DANGER,2));
+    svg.appendChild(T(303,ry+8,'阻塞',DANGER,10,'bold'));
+
+    // Table representation
+    const ty=255;
+    svg.appendChild(R(100,ty,260,60,6,'rgba(72,152,224,.12)',1.5,ACC2));
+    svg.appendChild(T(230,ty+20,'accounts 表',ACC2,12,'bold'));
+    // row indicators
+    for(let i=0;i<10;i++){
+      svg.appendChild(R(115+i*22,ty+28,18,18,3,'rgba(64,200,112,.2)',0.5,SUCCESS));
+    }
+    svg.appendChild(T(230,ty+55,'共 10 行 (T1 始终看到 10 行)',FGDIM,9));
+
+    // Phantom row (blocked)
+    svg.appendChild(R(420,ty,200,60,6,'rgba(224,80,80,.12)',1.5,DANGER));
+    svg.appendChild(T(520,ty+20,'幻影行 (被阻止)',DANGER,12,'bold'));
+    svg.appendChild(R(500,ty+35,40,18,3,'rgba(224,80,80,.3)',1,DANGER));
+    svg.appendChild(T(520,ty+55,'T2 必须等待 T1 完成',FGDIM,9));
+
+    // Result
+    svg.appendChild(R(200,325,400,10,0,'transparent',0,'transparent')); // spacer
+  },
+  go(s){
+    this.step=s;
+    $('#stepTitle').textContent=this.titles[s];
+    $('#stepDesc').textContent=this.descs[s];
+    $('#infoLine').textContent=this.infoLines[s];
+    const b=this.badges[s];
+    $('#badges').innerHTML=`<span class="badge badge--${b[1]}">${b[0]}</span>`;
+    this.render($('#svg'));
+    this.updateDots();
+    this.updateBtns();
+  },
+  changeStep(d){
+    const ns=this.step+d;
+    if(ns<0||ns>=this.total)return;
+    this.go(ns);
+  },
+  resetStep(){this.go(0);},
+  updateDots(){
+    let h='';
+    for(let i=0;i<this.total;i++){
+      let cls='';
+      if(i===this.step)cls='active';
+      else if(i<this.step)cls='done';
+      h+=`<span class="step-dot ${cls}"></span>`;
+    }
+    $('#dots').innerHTML=h;
+  },
+  updateBtns(){
+    $('#prevBtn').disabled=this.step===0;
+    $('#nextBtn').disabled=this.step===this.total-1;
+  },
+  toggleAuto(){
+    if(this.autoId){clearInterval(this.autoId);this.autoId=null;$('#autoBtn').textContent='自动播放';return;}
+    $('#autoBtn').textContent='停止';
+    this.autoId=setInterval(()=>{
+      if(this.step<this.total-1)this.go(this.step+1);
+      else{clearInterval(this.autoId);this.autoId=null;$('#autoBtn').textContent='自动播放';}
+    },3000);
+  },
+  init(){
+    $('#svg').setAttribute('viewBox','0 0 800 340');
+    this.go(0);
+  }
+};
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight')S.changeStep(1);
+  else if(e.key==='ArrowLeft')S.changeStep(-1);
+  else if(e.key===' ') {e.preventDefault();S.toggleAuto();}
+  else if(e.key==='r'||e.key==='R')S.resetStep();
+});
+
+S.init();
+</script>
+</body>
+</html>

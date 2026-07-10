@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>08 BFS vs DFS 对比 — 计算思维</title>
+<style>
+:root{--bg:#f5f5f8;--bg-soft:#ffffff;--bg-code:#f0f0f4;--fg:#2c2c38;--fg-dim:#6c6c80;--line:#dcdce4;--accent:#5b6abf;--accent-2:#36a2b8;--grad:#f09840;--success:#40c878;--danger:#e04860;--shadow:0 2px 12px rgba(0,0,0,.06)}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:"Noto Sans SC","PingFang SC",-apple-system,sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(91,106,191,.12);color:var(--accent)}.badge--tip{background:rgba(64,200,120,.12);color:var(--success)}.badge--warn{background:rgba(240,152,64,.15);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--accent);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px;box-shadow:var(--shadow)}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 8px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>08 BFS vs DFS 对比</h1>
+<div class="breadcrumb"><a href="../index.html">计算思维</a> / 第3章 / BFS vs DFS</div>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="explain">
+<div class="step-title" id="stepTitle"></div>
+<div class="step-desc" id="stepDesc"></div>
+<div class="badge-row" id="badges"></div>
+<div class="info-line" id="codeLine"></div>
+</div>
+<div class="panel-stage" id="stage"></div>
+</div>
+<div class="demo-controls">
+<button id="btnPrev" aria-label="上一步">&larr; 上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btnNext" aria-label="下一步">下一步 &rarr;</button>
+<button id="btnAuto" aria-label="自动播放">&#9654; 自动播放</button>
+<span style="font-size:12px;color:var(--fg-dim)">键盘 &larr; &rarr;</span>
+</div>
+</div>
+<script>
+const S=[{
+t:"核心区别：队列 vs 栈",
+l:"BFS: queue = deque([start])  // FIFO, 逐层扩散\nDFS: stack = [start]          // LIFO, 先走到底",
+d:"BFS 用<strong>队列</strong>，先进先出——同时代的节点先处理，逐层扩展。DFS 用<strong>栈</strong>，后进先出——新发现的节点先处理，一条路走到底。",
+b:[{t:"队列 FIFO",c:"def"},{t:"栈 LIFO",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// Same graph on left, two data structures on right
+const graphNodes=[
+{cx:100,cy:60,r:16,label:"A",id:0},{cx:200,cy:30,r:16,label:"B",id:1},{cx:200,cy:90,r:16,label:"C",id:2},
+{cx:300,cy:15,r:16,label:"D",id:3},{cx:300,cy:60,r:16,label:"E",id:4},{cx:300,cy:105,r:16,label:"F",id:5},
+{cx:400,cy:60,r:16,label:"G",id:6},
+];
+// edges
+[{f:0,t:1},{f:0,t:2},{f:1,t:3},{f:1,t:4},{f:2,t:5},{f:4,t:6},{f:5,t:6}].forEach(e=>{
+const a=graphNodes[e.f],b=graphNodes[e.t];
+const l=document.createElementNS("http://www.w3.org/2000/svg","line");
+l.setAttribute("x1",a.cx);l.setAttribute("y1",a.cy);l.setAttribute("x2",b.cx);l.setAttribute("y2",b.cy);
+l.setAttribute("stroke","var(--line)");l.setAttribute("stroke-width","1.5");
+svg.appendChild(l);
+});
+graphNodes.forEach(n=>{
+const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+c.setAttribute("cx",n.cx);c.setAttribute("cy",n.cy);c.setAttribute("r",n.r);
+c.setAttribute("fill",n.id===0?"var(--accent)":"var(--bg-soft)");
+c.setAttribute("fill-opacity",n.id===0?"0.15":"1");
+c.setAttribute("stroke",n.id===0?"var(--accent)":"var(--line)");c.setAttribute("stroke-width","2");
+svg.appendChild(c);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",n.cx);t.setAttribute("y",n.cy+5);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","11");t.setAttribute("font-weight","700");t.setAttribute("fill","var(--fg)");
+t.textContent=n.label;
+svg.appendChild(t);
+});
+// right side: queue vs stack
+// Queue (BFS)
+const qr=document.createElementNS("http://www.w3.org/2000/svg","rect");
+qr.setAttribute("x","460");qr.setAttribute("y","15");qr.setAttribute("width","210");qr.setAttribute("height","70");
+qr.setAttribute("rx","6");qr.setAttribute("fill","var(--bg-soft)");qr.setAttribute("stroke","var(--accent-2)");qr.setAttribute("stroke-width","2");
+svg.appendChild(qr);
+const qt=document.createElementNS("http://www.w3.org/2000/svg","text");
+qt.setAttribute("x","565");qt.setAttribute("y","40");qt.setAttribute("text-anchor","middle");qt.setAttribute("font-size","13");qt.setAttribute("font-weight","700");qt.setAttribute("fill","var(--accent-2)");
+qt.textContent="BFS: 队列 (FIFO)";
+svg.appendChild(qt);
+const qd=document.createElementNS("http://www.w3.org/2000/svg","text");
+qd.setAttribute("x","565");qd.setAttribute("y","60");qd.setAttribute("text-anchor","middle");qd.setAttribute("font-size","10");qd.setAttribute("fill","var(--fg-dim)");
+qd.textContent="deque → 先进先出，逐层扩展";
+svg.appendChild(qd);
+// Stack (DFS)
+const sr=document.createElementNS("http://www.w3.org/2000/svg","rect");
+sr.setAttribute("x","460");sr.setAttribute("y","95");sr.setAttribute("width","210");sr.setAttribute("height","70");
+sr.setAttribute("rx","6");sr.setAttribute("fill","var(--bg-soft)");sr.setAttribute("stroke","var(--grad)");sr.setAttribute("stroke-width","2");
+svg.appendChild(sr);
+const st=document.createElementNS("http://www.w3.org/2000/svg","text");
+st.setAttribute("x","565");st.setAttribute("y","120");st.setAttribute("text-anchor","middle");st.setAttribute("font-size","13");st.setAttribute("font-weight","700");st.setAttribute("fill","var(--grad)");
+st.textContent="DFS: 栈 (LIFO)";
+svg.appendChild(st);
+const sd=document.createElementNS("http://www.w3.org/2000/svg","text");
+sd.setAttribute("x","565");sd.setAttribute("y","140");sd.setAttribute("text-anchor","middle");sd.setAttribute("font-size","10");sd.setAttribute("fill","var(--fg-dim)");
+sd.textContent="list → 后进先出，一路到底";
+svg.appendChild(sd);
+// visit order comparison
+const vo=document.createElementNS("http://www.w3.org/2000/svg","text");
+vo.setAttribute("x","100");vo.setAttribute("y","155");vo.setAttribute("font-size","11");vo.setAttribute("fill","var(--accent-2)");vo.setAttribute("font-weight","600");
+vo.textContent="BFS 顺序: A→B→C→D→E→F→G (逐层)";
+svg.appendChild(vo);
+const vo2=document.createElementNS("http://www.w3.org/2000/svg","text");
+vo2.setAttribute("x","100");vo2.setAttribute("y","175");vo2.setAttribute("font-size","11");vo2.setAttribute("fill","var(--grad)");vo2.setAttribute("font-weight","600");
+vo2.textContent="DFS 顺序: A→B→D→E→G→F→C (深度优先)";
+svg.appendChild(vo2);
+// key insight
+const ki=document.createElementNS("http://www.w3.org/2000/svg","text");
+ki.setAttribute("x","350");ki.setAttribute("y","220");ki.setAttribute("text-anchor","middle");ki.setAttribute("font-size","13");ki.setAttribute("fill","var(--fg)");
+ki.textContent="相同的图，不同的遍历顺序，源于数据结构的不同行为";
+svg.appendChild(ki);
+}},
+{
+t:"BFS 逐层扩展动画",
+l:"while queue: node = queue.popleft(); for neighbor in graph[node]: if not visited[neighbor]: visited[neighbor]=True; queue.append(neighbor)",
+d:"BFS 像<strong>水波扩散</strong>：先访问距离为 1 的所有节点，再距离为 2 的，依次类推。天然找到<strong>最短路径</strong>（无权图）。",
+b:[{t:"最短路径",c:"def"},{t:"水波扩散",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// BFS level circles
+const levels=[
+{cx:350,cy:30,r:22,label:"A",level:0,color:"var(--accent)"},
+// level 1
+{cx:150,cy:110,r:18,label:"B",level:1,color:"var(--accent-2)"},
+{cx:550,cy:110,r:18,label:"C",level:1,color:"var(--accent-2)"},
+// level 2
+{cx:50,cy:200,r:16,label:"D",level:2,color:"var(--success)"},
+{cx:170,cy:200,r:16,label:"E",level:2,color:"var(--success)"},
+{cx:530,cy:200,r:16,label:"F",level:2,color:"var(--success)"},
+// level 3
+{cx:170,cy:285,r:14,label:"G",level:3,color:"var(--grad)"},
+];
+// draw concentric rings
+[{cx:350,cy:30,rx:162,ry:88},{cx:350,cy:30,rx:310,ry:180},{cx:350,cy:30,rx:310,ry:270}].forEach((ring,i)=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","ellipse");
+r.setAttribute("cx",ring.cx);r.setAttribute("cy","30");r.setAttribute("rx",ring.rx);r.setAttribute("ry",ring.ry);
+r.setAttribute("fill","none");r.setAttribute("stroke","var(--line)");r.setAttribute("stroke-width","1");r.setAttribute("stroke-dasharray","6,4");
+r.setAttribute("opacity","0.6");
+svg.appendChild(r);
+});
+levels.forEach(n=>{
+const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+c.setAttribute("cx",n.cx);c.setAttribute("cy",n.cy);c.setAttribute("r",n.r);
+c.setAttribute("fill","var(--bg-soft)");c.setAttribute("stroke",n.color);c.setAttribute("stroke-width","2.5");
+svg.appendChild(c);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",n.cx);t.setAttribute("y",n.cy+5);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","11");t.setAttribute("font-weight","700");t.setAttribute("fill",n.color);
+t.textContent=n.label;
+svg.appendChild(t);
+});
+// level labels
+const ll=document.createElementNS("http://www.w3.org/2000/svg","text");
+ll.setAttribute("x","620");ll.setAttribute("y","30");ll.setAttribute("font-size","11");ll.setAttribute("fill","var(--accent)");ll.setAttribute("font-weight","600");
+ll.textContent="第0层 (距离0)";
+svg.appendChild(ll);
+const ll2=document.createElementNS("http://www.w3.org/2000/svg","text");
+ll2.setAttribute("x","620");ll2.setAttribute("y","110");ll2.setAttribute("font-size","11");ll2.setAttribute("fill","var(--accent-2)");
+ll2.textContent="第1层 (距离1)";
+svg.appendChild(ll2);
+const ll3=document.createElementNS("http://www.w3.org/2000/svg","text");
+ll3.setAttribute("x","620");ll3.setAttribute("y","200");ll3.setAttribute("font-size","11");ll3.setAttribute("fill","var(--success)");
+ll3.textContent="第2层 (距离2)";
+svg.appendChild(ll3);
+const ll4=document.createElementNS("http://www.w3.org/2000/svg","text");
+ll4.setAttribute("x","620");ll4.setAttribute("y","285");ll4.setAttribute("font-size","11");ll4.setAttribute("fill","var(--grad)");
+ll4.textContent="第3层 (距离3)";
+svg.appendChild(ll4);
+}},
+{
+t:"DFS 走到底再回溯",
+l:"while stack: node = stack.pop(); for neighbor in reversed(graph[node]): if not visited[neighbor]: stack.append(neighbor)",
+d:"DFS 像<strong>迷宫探索</strong>：遇到分叉选一条路走到尽头，走不通就退回来换另一条。适合查找<strong>所有路径</strong>、<strong>拓扑排序</strong>等。",
+b:[{t:"回溯",c:"def"},{t:"所有路径",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// DFS path visualization - a path with backtracking
+const dfspath=[
+{x:60,y:250,label:"A(入)",col:"var(--accent)"},
+{x:140,y:200,label:"B↓",col:"var(--accent-2)"},
+{x:220,y:140,label:"D↓",col:"var(--success)"},
+{x:300,y:100,label:"E↓",col:"var(--success)"},
+{x:380,y:80,label:"G(底)",col:"var(--grad)"},
+{x:300,y:160,label:"回溯↑",col:"var(--grad)"},
+{x:380,y:200,label:"F↓",col:"var(--accent-2)"},
+{x:460,y:250,label:"C↓",col:"var(--accent-2)"},
+{x:540,y:280,label:"(完成)",col:"var(--accent)"},
+];
+// draw path line
+let pathD="M 60 250";
+const pts=[];
+dfspath.forEach((n,i)=>{
+if(i>0){
+pathD+=` L ${n.x} ${n.y}`;
+}
+pts.push(`(${n.x},${n.y})`);
+const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+c.setAttribute("cx",n.x);c.setAttribute("cy",n.y);c.setAttribute("r","16");
+c.setAttribute("fill","var(--bg-soft)");c.setAttribute("stroke",n.col);c.setAttribute("stroke-width","2");
+svg.appendChild(c);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",n.x);t.setAttribute("y",n.y+5);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","10");t.setAttribute("fill",n.col);t.setAttribute("font-weight","600");
+t.textContent=n.label;
+svg.appendChild(t);
+});
+const pa=document.createElementNS("http://www.w3.org/2000/svg","path");
+pa.setAttribute("d",pathD);
+pa.setAttribute("fill","none");pa.setAttribute("stroke","var(--line)");pa.setAttribute("stroke-width","2");pa.setAttribute("stroke-dasharray","6,3");
+svg.appendChild(pa);
+// annotation
+const an=document.createElementNS("http://www.w3.org/2000/svg","text");
+an.setAttribute("x","350");an.setAttribute("y","30");an.setAttribute("text-anchor","middle");an.setAttribute("font-size","14");an.setAttribute("font-weight","700");an.setAttribute("fill","var(--grad)");
+an.textContent="DFS: 深入优先 + 回溯";
+svg.appendChild(an);
+const an2=document.createElementNS("http://www.w3.org/2000/svg","text");
+an2.setAttribute("x","350");an.setAttribute("y","55");an.setAttribute("text-anchor","middle");an.setAttribute("font-size","11");an.setAttribute("fill","var(--fg-dim)");
+an2.textContent="走到 G(底) → 发现无路 → 回溯到分叉点 → 走另一分支(C-F)";
+svg.appendChild(an2);
+}},
+{
+t:"应用场景对比总结",
+l:"# BFS: 最短路径、层序遍历、社交网络\"二度好友\"\n# DFS: 拓扑排序、连通分量、迷宫所有路径、回溯算法",
+d:"选 BFS 还是 DFS 取决于你要什么：<strong>最短距离</strong>选 BFS，<strong>全部可能性</strong>选 DFS。<em>没有绝对的优劣，只有适合的场景。</em>",
+b:[{t:"场景选择",c:"def"},{t:"没有银弹",c:"warn"}],
+r(svg){
+svg.innerHTML='';
+// comparison table
+const colW=150,rowH=36,ox=30,oy=30;
+const headers=["维度","BFS","DFS"];
+const data=[
+["数据结构","队列 (FIFO)","栈 (LIFO)"],
+["空间复杂度","O(w) 最大宽度","O(h) 最大深度"],
+["最短路径","✅ 天然支持","❌ 不保证"],
+["适用图","更适用于宽图","更适用于深图"],
+["典型应用","最短路径、层序遍历","拓扑排序、回溯"],
+];
+headers.forEach((h,i)=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",ox+(i===0?0:i===1?colW:colW+170));r.setAttribute("y",oy);r.setAttribute("width",i===0?colW:170);r.setAttribute("height","28");
+r.setAttribute("fill","var(--accent)");r.setAttribute("opacity","0.12");r.setAttribute("stroke","var(--accent)");r.setAttribute("stroke-width","1");
+svg.appendChild(r);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",ox+(i===0?colW/2:i===1?colW+85:colW+255));t.setAttribute("y",oy+19);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","11");t.setAttribute("font-weight","700");t.setAttribute("fill","var(--accent)");
+t.textContent=h;
+svg.appendChild(t);
+});
+data.forEach((row,ri)=>{
+row.forEach((cell,ci)=>{
+const cx=ox+(ci===0?0:ci===1?colW:colW+170);
+const cw=(ci===0?colW:170);
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",cx);r.setAttribute("y",oy+28+ri*rowH);r.setAttribute("width",cw);r.setAttribute("height",rowH);
+r.setAttribute("fill","var(--bg-soft)");r.setAttribute("stroke","var(--line)");r.setAttribute("stroke-width","1");
+svg.appendChild(r);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",cx+cw/2);t.setAttribute("y",oy+28+ri*rowH+22);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","11");t.setAttribute("fill","var(--fg)");
+t.textContent=cell;
+svg.appendChild(t);
+});
+});
+// bottom insight
+const bi=document.createElementNS("http://www.w3.org/2000/svg","text");
+bi.setAttribute("x","350");bi.setAttribute("y",270);bi.setAttribute("text-anchor","middle");bi.setAttribute("font-size","13");bi.setAttribute("fill","var(--accent)");bi.setAttribute("font-weight","700");
+bi.textContent="BFS = 广度 → 知道\"谁离我最近\" | DFS = 深度 → 探索\"有多少种可能\"";
+svg.appendChild(bi);
+const bi2=document.createElementNS("http://www.w3.org/2000/svg","text");
+bi2.setAttribute("x","350");bi2.setAttribute("y","295");bi2.setAttribute("text-anchor","middle");bi2.setAttribute("font-size","11");bi2.setAttribute("fill","var(--fg-dim)");
+bi2.textContent="大部分图算法（Dijkstra、A*）都是 BFS 的变体与扩展";
+svg.appendChild(bi2);
+}}
+];
+
+let step=0,autoTimer=null,autoOn=false;
+const stepTitle=document.getElementById("stepTitle");
+const stepDesc=document.getElementById("stepDesc");
+const badges=document.getElementById("badges");
+const codeLine=document.getElementById("codeLine");
+const stage=document.getElementById("stage");
+const dots=document.getElementById("dots");
+const btnPrev=document.getElementById("btnPrev");
+const btnNext=document.getElementById("btnNext");
+const btnAuto=document.getElementById("btnAuto");
+
+function renderDots(){
+dots.innerHTML='';
+S.forEach((_,i)=>{
+const d=document.createElement("span");
+d.className="step-dot"+(i===step?" active":i<step?" done":"");
+d.onclick=()=>goTo(i);
+dots.appendChild(d);
+});
+}
+function goTo(i){
+step=Math.max(0,Math.min(S.length-1,i));
+const s=S[step];
+stepTitle.textContent=s.t;
+stepDesc.innerHTML=s.d;
+badges.innerHTML=s.b.map(b=>`<span class="badge badge--${b.c}">${b.t}</span>`).join('');
+codeLine.textContent=s.l;
+const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+svg.setAttribute("viewBox","0 0 700 340");
+svg.setAttribute("preserveAspectRatio","xMidYMid meet");
+stage.innerHTML='';
+stage.appendChild(svg);
+s.r(svg);
+btnPrev.disabled=step===0;
+btnNext.disabled=step===S.length-1;
+renderDots();
+}
+btnPrev.onclick=()=>goTo(step-1);
+btnNext.onclick=()=>{if(step<S.length-1)goTo(step+1);else{autoOn=false;btnAuto.innerHTML="&#9654; 自动播放";clearInterval(autoTimer);}};
+btnAuto.onclick=()=>{autoOn=!autoOn;btnAuto.innerHTML=autoOn?"&#9632; 停止":"&#9654; 自动播放";if(autoOn){autoTimer=setInterval(()=>{if(step<S.length-1)goTo(step+1);else goTo(0);},3500);}else clearInterval(autoTimer);};
+document.addEventListener("keydown",e=>{if(e.key==="ArrowLeft")goTo(step-1);if(e.key==="ArrowRight"){if(step<S.length-1)goTo(step+1);}});
+goTo(0);
+</script>
+</body>
+</html>

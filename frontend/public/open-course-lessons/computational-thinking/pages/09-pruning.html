@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>09 剪枝策略 — 计算思维</title>
+<style>
+:root{--bg:#f5f5f8;--bg-soft:#ffffff;--bg-code:#f0f0f4;--fg:#2c2c38;--fg-dim:#6c6c80;--line:#dcdce4;--accent:#5b6abf;--accent-2:#36a2b8;--grad:#f09840;--success:#40c878;--danger:#e04860;--shadow:0 2px 12px rgba(0,0,0,.06)}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:"Noto Sans SC","PingFang SC",-apple-system,sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(91,106,191,.12);color:var(--accent)}.badge--tip{background:rgba(64,200,120,.12);color:var(--success)}.badge--warn{background:rgba(240,152,64,.15);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--accent);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px;box-shadow:var(--shadow)}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 8px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>09 剪枝策略</h1>
+<div class="breadcrumb"><a href="../index.html">计算思维</a> / 第3章 / 剪枝策略</div>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="explain">
+<div class="step-title" id="stepTitle"></div>
+<div class="step-desc" id="stepDesc"></div>
+<div class="badge-row" id="badges"></div>
+<div class="info-line" id="codeLine"></div>
+</div>
+<div class="panel-stage" id="stage"></div>
+</div>
+<div class="demo-controls">
+<button id="btnPrev" aria-label="上一步">&larr; 上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btnNext" aria-label="下一步">下一步 &rarr;</button>
+<button id="btnAuto" aria-label="自动播放">&#9654; 自动播放</button>
+<span style="font-size:12px;color:var(--fg-dim)">键盘 &larr; &rarr;</span>
+</div>
+</div>
+<script>
+const S=[{
+t:"什么是剪枝？提前排除不可能的分支",
+l:"if current_cost + lower_bound >= best_known: return  // Prune!",
+d:"在搜索过程中，如果发现当前分支<strong>不可能</strong>产生比已有解更好的结果，就<strong>剪掉</strong>它，不再继续探索。这就是剪枝的核心思想。",
+b:[{t:"剪枝",c:"def"},{t:"搜索优化",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// Full search tree with pruned branches greyed out
+// Root
+const r=document.createElementNS("http://www.w3.org/2000/svg","circle");
+r.setAttribute("cx","350");r.setAttribute("cy","25");r.setAttribute("r","18");
+r.setAttribute("fill","var(--accent)");r.setAttribute("opacity","0.15");r.setAttribute("stroke","var(--accent)");r.setAttribute("stroke-width","2.5");
+svg.appendChild(r);
+const rt=document.createElementNS("http://www.w3.org/2000/svg","text");
+rt.setAttribute("x","350");rt.setAttribute("y","30");rt.setAttribute("text-anchor","middle");rt.setAttribute("font-size","11");rt.setAttribute("fill","var(--accent)");rt.setAttribute("font-weight","700");
+rt.textContent="根";
+svg.appendChild(rt);
+// Level 1
+[{cx:180,cy:75,label:"A",active:true},{cx:350,cy:75,label:"B",active:true},{cx:520,cy:75,label:"C",active:true}].forEach(n=>{
+const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+c.setAttribute("cx",n.cx);c.setAttribute("cy",n.cy);c.setAttribute("r","16");
+c.setAttribute("fill",n.active?"var(--bg-soft)":"#e0e0e0");
+c.setAttribute("stroke",n.active?"var(--accent)":"var(--line)");c.setAttribute("stroke-width","1.5");
+svg.appendChild(c);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",n.cx);t.setAttribute("y",n.cy+5);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","10");t.setAttribute("fill",n.active?"var(--fg)":"var(--fg-dim)");
+t.textContent=n.label;
+svg.appendChild(t);
+const l=document.createElementNS("http://www.w3.org/2000/svg","line");
+l.setAttribute("x1","350");l.setAttribute("y1","43");l.setAttribute("x2",n.cx);l.setAttribute("y2",n.cy-16);
+l.setAttribute("stroke","var(--line)");l.setAttribute("stroke-width","1");
+svg.appendChild(l);
+});
+// Level 2 - some pruned
+[
+{cx:100,cy:135,label:"A1",active:true},{cx:160,cy:135,label:"A2",active:true},{cx:240,cy:135,label:"A3",prune:true},
+{cx:310,cy:135,label:"B1",active:true},{cx:390,cy:135,label:"B2",prune:true},
+{cx:480,cy:135,label:"C1",prune:true},{cx:560,cy:135,label:"C2",prune:true},
+].forEach(n=>{
+const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+c.setAttribute("cx",n.cx);c.setAttribute("cy",n.cy);c.setAttribute("r","14");
+c.setAttribute("fill",n.prune?"#e8e8ec":"var(--bg-soft)");
+c.setAttribute("stroke",n.prune?"var(--danger)":"var(--accent-2)");c.setAttribute("stroke-width",n.prune?"1":"1.5");
+c.setAttribute("stroke-dasharray",n.prune?"4,2":"none");
+c.setAttribute("opacity",n.prune?"0.5":"1");
+svg.appendChild(c);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",n.cx);t.setAttribute("y",n.cy+4);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","9");t.setAttribute("fill",n.prune?"var(--danger)":"var(--fg)");
+t.textContent=n.label+(n.prune?"✂":"");
+svg.appendChild(t);
+});
+// Level 3 leaves
+[{cx:70,cy:195,label:"A1a",active:true},{cx:130,cy:195,label:"A1b",active:true},{cx:150,cy:195,label:"A2a",active:true},{cx:190,cy:195,label:"A2b",active:true},{cx:285,cy:195,label:"B1a",active:true},{cx:335,cy:195,label:"B1b",active:true},
+].forEach(n=>{
+const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+c.setAttribute("cx",n.cx);c.setAttribute("cy",n.cy);c.setAttribute("r","12");
+c.setAttribute("fill",n.active?"var(--success)":"#e8e8ec");
+c.setAttribute("fill-opacity",n.active?"0.12":"1");
+c.setAttribute("stroke",n.active?"var(--success)":"var(--line)");c.setAttribute("stroke-width","1");
+svg.appendChild(c);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",n.cx);t.setAttribute("y",n.cy+4);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","8");t.setAttribute("fill",n.active?"var(--success)":"var(--fg-dim)");
+t.textContent=n.label;
+svg.appendChild(t);
+});
+// Cut markers
+[{x:270,y:135,label:"✂ 剪枝!"},{x:410,y:135,label:"✂ 剪枝!"},{x:525,y:135,label:"✂ 剪枝!"}].forEach(m=>{
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",m.x);t.setAttribute("y",m.y+4);t.setAttribute("font-size","11");t.setAttribute("fill","var(--danger)");t.setAttribute("font-weight","700");
+t.textContent=m.label;
+svg.appendChild(t);
+});
+// annotation
+const an=document.createElementNS("http://www.w3.org/2000/svg","text");
+an.setAttribute("x","350");an.setAttribute("y","250");an.setAttribute("text-anchor","middle");an.setAttribute("font-size","13");an.setAttribute("fill","var(--fg)");
+an.textContent="不剪枝：需探索全部 15 个节点  →  剪枝后：只需探索 10 个节点";
+svg.appendChild(an);
+const an2=document.createElementNS("http://www.w3.org/2000/svg","text");
+an2.setAttribute("x","350");an2.setAttribute("y","275");an2.setAttribute("text-anchor","middle");an.setAttribute("y","250");an2.setAttribute("font-size","11");an2.setAttribute("fill","var(--success)");
+an2.textContent="减少 33% 的搜索量，结果完全正确";
+svg.appendChild(an2);
+}},
+{
+t:"可行性剪枝：违反约束就停",
+l:"# N皇后问题：如果当前行放置导致冲突，不再继续放下一行\nif conflict(row, col, board): continue  # 剪掉这个位置",
+d:"<strong>可行性剪枝</strong>：如果当前状态已经违反问题约束（如 N 皇后中两皇后冲突），继续下去也只会产生无效解，直接剪掉。",
+b:[{t:"N皇后",c:"def"},{t:"约束检查",c:"warn"}],
+r(svg){
+svg.innerHTML='';
+// 4-Queens visualization
+const boardX=80,boardY=30,cell=35;
+// Draw board
+for(let r=0;r<4;r++){
+for(let c=0;c<4;c++){
+const rc=document.createElementNS("http://www.w3.org/2000/svg","rect");
+rc.setAttribute("x",boardX+c*cell);rc.setAttribute("y",boardY+r*cell);rc.setAttribute("width",cell);rc.setAttribute("height",cell);
+rc.setAttribute("fill",(r+c)%2===0?"var(--bg-soft)":"var(--bg-code)");rc.setAttribute("stroke","var(--line)");rc.setAttribute("stroke-width","1");
+svg.appendChild(rc);
+}
+}
+// placed queens (safe)
+[{r:0,c:1},{r:1,c:3},{r:2,c:0},{r:3,c:2}].forEach(q=>{
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",boardX+q.c*cell+cell/2);t.setAttribute("y",boardY+q.r*cell+cell/2+6);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","18");
+t.textContent="♛";
+svg.appendChild(t);
+});
+// show a pruned position with X
+[{r:2,c:1},{r:2,c:2}].forEach(p=>{
+const x=document.createElementNS("http://www.w3.org/2000/svg","text");
+x.setAttribute("x",boardX+p.c*cell+cell/2);x.setAttribute("y",boardY+p.r*cell+cell/2+6);x.setAttribute("text-anchor","middle");x.setAttribute("font-size","16");x.setAttribute("fill","var(--danger)");
+x.textContent="✖";
+svg.appendChild(x);
+});
+// Right panel: prune explanation
+const pe=document.createElementNS("http://www.w3.org/2000/svg","rect");
+pe.setAttribute("x","250");pe.setAttribute("y","30");pe.setAttribute("width","410");pe.setAttribute("height","170");
+pe.setAttribute("rx","8");pe.setAttribute("fill","var(--bg-soft)");pe.setAttribute("stroke","var(--accent)");pe.setAttribute("stroke-width","1.5");
+svg.appendChild(pe);
+const pet=document.createElementNS("http://www.w3.org/2000/svg","text");
+pet.setAttribute("x","455");pet.setAttribute("y","55");pet.setAttribute("text-anchor","middle");pet.setAttribute("font-size","13");pet.setAttribute("font-weight","700");pet.setAttribute("fill","var(--accent)");
+pet.textContent="4-皇后剪枝过程";
+svg.appendChild(pet);
+[
+"第1行Q放(0,1) → 检查第2行：",
+"  (1,0)空? → 列冲突 ✂ (同列有Q)",
+"  (1,1)空? → 对角冲突 ✂",
+"  (1,2)空? → 对角冲突 ✂",
+"  (1,3)空? → ✅ 放置(1,3)",
+"第2行Q(1,3) → 检查第3行...",
+"  继续递归判断 → 找到解!"
+].forEach((l,i)=>{
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x","260");t.setAttribute("y",80+i*18);t.setAttribute("font-size","11");t.setAttribute("fill","var(--fg-dim)");
+t.textContent=l;
+svg.appendChild(t);
+});
+// bottom count
+const bc=document.createElementNS("http://www.w3.org/2000/svg","text");
+bc.setAttribute("x","350");bc.setAttribute("y","240");bc.setAttribute("text-anchor","middle");bc.setAttribute("font-size","13");bc.setAttribute("fill","var(--grad)");
+bc.textContent="不剪枝: 4⁴=256种可能 | 剪枝后: 仅探索 ~30个节点 → 找到2个解";
+svg.appendChild(bc);
+}},
+{
+t:"最优性剪枝：不如已知解就停",
+l:"if current_length + heuristic_remain >= best_length: return  # 不可能更好",
+d:"<strong>最优性剪枝</strong>（A* / 分支定界）：如果当前路径长度 + 预估剩余长度 >= 已知最优解长度，则剪枝。常用于<em>最短路径</em>、<em>TSP</em>等问题。",
+b:[{t:"A*",c:"def"},{t:"分支定界",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// TSP example
+const cities=[{cx:100,cy:100,label:"A"},{cx:280,cy:60,label:"B"},{cx:450,cy:110,label:"C"},{cx:380,cy:220,label:"D"},{cx:180,cy:200,label:"E"}];
+cities.forEach(c=>{
+const cr=document.createElementNS("http://www.w3.org/2000/svg","circle");
+cr.setAttribute("cx",c.cx);cr.setAttribute("cy",c.cy);cr.setAttribute("r","14");
+cr.setAttribute("fill","var(--bg-soft)");cr.setAttribute("stroke","var(--accent)");cr.setAttribute("stroke-width","2");
+svg.appendChild(cr);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",c.cx);t.setAttribute("y",c.cy+5);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","11");t.setAttribute("font-weight","700");t.setAttribute("fill","var(--accent)");
+t.textContent=c.label;
+svg.appendChild(t);
+});
+// partial tour (A→B→C) in solid
+[{f:0,t:1,col:"var(--accent)",w:"5"},{f:1,t:2,col:"var(--accent-2)",w:"3"}].forEach(e=>{
+const l=document.createElementNS("http://www.w3.org/2000/svg","line");
+l.setAttribute("x1",cities[e.f].cx);l.setAttribute("y1",cities[e.f].cy);l.setAttribute("x2",cities[e.t].cx);l.setAttribute("y2",cities[e.t].cy);
+l.setAttribute("stroke",e.col);l.setAttribute("stroke-width","2.5");
+svg.appendChild(l);
+const midX=(cities[e.f].cx+cities[e.t].cx)/2,midY=(cities[e.f].cy+cities[e.t].cy)/2;
+const wt=document.createElementNS("http://www.w3.org/2000/svg","text");
+wt.setAttribute("x",midX-10);wt.setAttribute("y",midY-6);wt.setAttribute("font-size","10");wt.setAttribute("fill",e.col);wt.setAttribute("font-weight","600");
+wt.textContent=e.w;
+svg.appendChild(wt);
+});
+// possible continuations
+[{f:2,t:3,col:"var(--line)",w:"6"},{f:2,t:4,col:"var(--line)",w:"4"}].forEach(e=>{
+const l=document.createElementNS("http://www.w3.org/2000/svg","line");
+l.setAttribute("x1",cities[e.f].cx);l.setAttribute("y1",cities[e.f].cy);l.setAttribute("x2",cities[e.t].cx);l.setAttribute("y2",cities[e.t].cy);
+l.setAttribute("stroke",e.col);l.setAttribute("stroke-width","1");
+l.setAttribute("stroke-dasharray","4,3");
+svg.appendChild(l);
+});
+// Right side: bounding calculation
+const bb=document.createElementNS("http://www.w3.org/2000/svg","rect");
+bb.setAttribute("x","470");bb.setAttribute("y","155");bb.setAttribute("width","200");bb.setAttribute("height","130");
+bb.setAttribute("rx","6");bb.setAttribute("fill","var(--bg-soft)");bb.setAttribute("stroke","var(--grad)");bb.setAttribute("stroke-width","1.5");
+svg.appendChild(bb);
+const bbt=document.createElementNS("http://www.w3.org/2000/svg","text");
+bbt.setAttribute("x","570");bbt.setAttribute("y","180");bbt.setAttribute("text-anchor","middle");bbt.setAttribute("font-size","12");bbt.setAttribute("font-weight","700");bbt.setAttribute("fill","var(--grad)");
+bbt.textContent="分支定界计算";
+svg.appendChild(bbt);
+["已知最优: 16","当前部分: A→B→C = 8","去D后最小剩余 ≥ 10","8+10=18 > 16 → 剪掉C→D!"].forEach((l,i)=>{
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x","480");t.setAttribute("y",205+i*18);t.setAttribute("font-size","10");t.setAttribute("fill","var(--fg-dim)");
+t.textContent=l;
+svg.appendChild(t);
+});
+// bottom explanation
+const be=document.createElementNS("http://www.w3.org/2000/svg","text");
+be.setAttribute("x","350");be.setAttribute("y","300");be.setAttribute("text-anchor","middle");be.setAttribute("font-size","12");be.setAttribute("fill","var(--fg)");
+be.textContent="下界估计 (Lower Bound) = 当前已走路程 + 剩余最少路程";
+svg.appendChild(be);
+const be2=document.createElementNS("http://www.w3.org/2000/svg","text");
+be2.setAttribute("x","350");be2.setAttribute("y","322");be2.setAttribute("text-anchor","middle");be2.setAttribute("font-size","11");be2.setAttribute("fill","var(--fg-dim)");
+be2.textContent="下界 ≥ 已知最优 → 不可能更好 → 剪枝";
+svg.appendChild(be2);
+}},
+{
+t:"剪枝三原则总结",
+l:"# 1. 可行性剪枝: 违反约束就停\n# 2. 最优性剪枝: 不如已知解就停\n# 3. 对称性剪枝: 等价状态只算一次",
+d:"三大剪枝策略：<strong>可行性</strong>（约束不成立就停）、<strong>最优性</strong>（不可能更好就停）、<strong>对称性</strong>（旋转/镜像等同只算一次）。掌握它们，回溯算法效率翻倍。",
+b:[{t:"三大剪枝",c:"def"},{t:"回溯优化",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// Three cards
+const cards=[
+{x:20,y:30,w:200,h:120,title:"可行性剪枝",sub:"Feasibility Pruning",col:"var(--danger)",desc:"当前状态不满足约束\n直接回溯，不再深入\n\n例：N皇后列冲突、\n数独格子无合法数字"},
+{x:250,y:30,w:200,h:120,title:"最优性剪枝",sub:"Optimality Pruning",col:"var(--grad)",desc:"下界 ≥ 已知最优解\n不可能找到更好的\n\n例：TSP 分支定界、\nA* 算法 f=g+h"},
+{x:480,y:30,w:200,h:120,title:"对称性剪枝",sub:"Symmetry Pruning",col:"var(--accent)",desc:"相同结构只算一次\n排除旋转/镜像/置换\n\n例：N皇后首行只放\n左半，避免对称重复"},
+];
+cards.forEach(cd=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",cd.x);r.setAttribute("y",cd.y);r.setAttribute("width",cd.w);r.setAttribute("height",cd.h);
+r.setAttribute("rx","10");r.setAttribute("fill","var(--bg-soft)");r.setAttribute("stroke",cd.col);r.setAttribute("stroke-width","2");
+svg.appendChild(r);
+const th=document.createElementNS("http://www.w3.org/2000/svg","rect");
+th.setAttribute("x",cd.x);th.setAttribute("y",cd.y);th.setAttribute("width",cd.w);th.setAttribute("height","26");
+th.setAttribute("rx","10");th.setAttribute("fill",cd.col);th.setAttribute("opacity","0.12");
+svg.appendChild(th);
+const tt=document.createElementNS("http://www.w3.org/2000/svg","text");
+tt.setAttribute("x",cd.x+cd.w/2);tt.setAttribute("y",cd.y+19);tt.setAttribute("text-anchor","middle");tt.setAttribute("font-size","12");tt.setAttribute("font-weight","700");tt.setAttribute("fill",cd.col);
+tt.textContent=cd.title;
+svg.appendChild(tt);
+const st=document.createElementNS("http://www.w3.org/2000/svg","text");
+st.setAttribute("x",cd.x+cd.w/2);st.setAttribute("y",cd.y+48);st.setAttribute("text-anchor","middle");st.setAttribute("font-size","9");st.setAttribute("fill","var(--fg-dim)");
+st.setAttribute("font-style","italic");
+st.textContent=cd.sub;
+svg.appendChild(st);
+cd.desc.split("\n").forEach((l,i)=>{
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",cd.x+cd.w/2);t.setAttribute("y",cd.y+68+i*16);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","10");t.setAttribute("fill","var(--fg-dim)");
+t.textContent=l;
+svg.appendChild(t);
+});
+});
+// bottom summary
+const bs=document.createElementNS("http://www.w3.org/2000/svg","rect");
+bs.setAttribute("x","30");bs.setAttribute("y","175");bs.setAttribute("width","640");bs.setAttribute("height","55");
+bs.setAttribute("rx","8");bs.setAttribute("fill","var(--accent)");bs.setAttribute("opacity","0.06");bs.setAttribute("stroke","var(--accent)");bs.setAttribute("stroke-width","1");
+svg.appendChild(bs);
+const bst=document.createElementNS("http://www.w3.org/2000/svg","text");
+bst.setAttribute("x","350");bst.setAttribute("y","200");bst.setAttribute("text-anchor","middle");bst.setAttribute("font-size","14");bst.setAttribute("fill","var(--accent)");bst.setAttribute("font-weight","700");
+bst.textContent="剪枝 = 用已知信息减少搜索空间 = 不做无用功";
+svg.appendChild(bst);
+const bst2=document.createElementNS("http://www.w3.org/2000/svg","text");
+bst2.setAttribute("x","350");bst2.setAttribute("y","222");bst2.setAttribute("text-anchor","middle");bst2.setAttribute("font-size","11");bst2.setAttribute("fill","var(--fg-dim)");
+bst2.textContent="好的剪枝策略是将指数级搜索降到多项式级别的关键";
+svg.appendChild(bst2);
+}}
+];
+
+let step=0,autoTimer=null,autoOn=false;
+const stepTitle=document.getElementById("stepTitle");
+const stepDesc=document.getElementById("stepDesc");
+const badges=document.getElementById("badges");
+const codeLine=document.getElementById("codeLine");
+const stage=document.getElementById("stage");
+const dots=document.getElementById("dots");
+const btnPrev=document.getElementById("btnPrev");
+const btnNext=document.getElementById("btnNext");
+const btnAuto=document.getElementById("btnAuto");
+
+function renderDots(){
+dots.innerHTML='';
+S.forEach((_,i)=>{
+const d=document.createElement("span");
+d.className="step-dot"+(i===step?" active":i<step?" done":"");
+d.onclick=()=>goTo(i);
+dots.appendChild(d);
+});
+}
+function goTo(i){
+step=Math.max(0,Math.min(S.length-1,i));
+const s=S[step];
+stepTitle.textContent=s.t;
+stepDesc.innerHTML=s.d;
+badges.innerHTML=s.b.map(b=>`<span class="badge badge--${b.c}">${b.t}</span>`).join('');
+codeLine.textContent=s.l;
+const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+svg.setAttribute("viewBox","0 0 700 340");
+svg.setAttribute("preserveAspectRatio","xMidYMid meet");
+stage.innerHTML='';
+stage.appendChild(svg);
+s.r(svg);
+btnPrev.disabled=step===0;
+btnNext.disabled=step===S.length-1;
+renderDots();
+}
+btnPrev.onclick=()=>goTo(step-1);
+btnNext.onclick=()=>{if(step<S.length-1)goTo(step+1);else{autoOn=false;btnAuto.innerHTML="&#9654; 自动播放";clearInterval(autoTimer);}};
+btnAuto.onclick=()=>{autoOn=!autoOn;btnAuto.innerHTML=autoOn?"&#9632; 停止":"&#9654; 自动播放";if(autoOn){autoTimer=setInterval(()=>{if(step<S.length-1)goTo(step+1);else goTo(0);},3500);}else clearInterval(autoTimer);};
+document.addEventListener("keydown",e=>{if(e.key==="ArrowLeft")goTo(step-1);if(e.key==="ArrowRight"){if(step<S.length-1)goTo(step+1);}});
+goTo(0);
+</script>
+</body>
+</html>

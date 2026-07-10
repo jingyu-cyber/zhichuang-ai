@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>改造训练脚本 · 深度学习框架</title>
+<style>
+:root{
+  --bg:#1e1a1a; --bg-soft:#2d2525; --bg-code:#141010;
+  --fg:#f0e8e0; --fg-dim:#b0a090; --line:#3d3030;
+  --accent:#ff9050; --accent-2:#ffc040;
+  --success:#50d890; --danger:#f05060; --purple:#7b8cff;
+  --shadow:0 10px 30px rgba(0,0,0,0.35);
+  --radius:14px; --radius-sm:8px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);
+  font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  height:100%;overflow:hidden}
+code,.mono{font-family:"JetBrains Mono","Fira Code",Menlo,Consolas,monospace}
+.demo-shell{display:flex;flex-direction:column;height:100vh}
+.demo-header{display:flex;align-items:center;gap:16px;padding:12px 22px;
+  background:linear-gradient(90deg,#2a2222,#352a2a);border-bottom:1px solid var(--line);box-shadow:var(--shadow)}
+.demo-header h1{font-size:18px;margin:0;letter-spacing:.5px}
+.demo-header h1 .sub{color:var(--fg-dim);font-weight:400;margin-left:8px;font-size:13px}
+.back-btn{color:var(--fg);text-decoration:none;padding:6px 12px;border:1px solid var(--line);
+  border-radius:var(--radius-sm);background:var(--bg-soft);font-size:13px;transition:all .2s}
+.back-btn:hover{border-color:var(--accent);color:var(--accent)}
+.header-spacer{flex:1}
+.shape-badge{padding:6px 14px;background:var(--bg-code);border:1px solid var(--line);
+  border-radius:var(--radius-sm);color:var(--accent);font-size:14px}
+.demo-main{flex:1;display:flex;min-height:0}
+.panel-explain{width:32%;min-width:340px;padding:18px 20px;overflow-y:auto;
+  background:var(--bg-soft);border-right:1px solid var(--line)}
+.panel-stage{flex:1;position:relative;background:var(--bg);overflow:hidden}
+.phase-tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;
+  background:rgba(255,144,80,.12);color:var(--accent);border:1px solid rgba(255,144,80,.35);margin-bottom:10px}
+.step-title{font-size:20px;margin:0 0 10px;line-height:1.4}
+.step-body{font-size:14px;line-height:1.75;color:var(--fg)}
+.step-body p{margin:8px 0}
+.step-body code{background:var(--bg-code);padding:1px 6px;border-radius:4px;color:var(--accent);font-size:13px}
+.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:4px;margin-right:6px;font-weight:600}
+.badge--def{background:rgba(123,140,255,.18);color:var(--purple);border:1px solid rgba(123,140,255,.4)}
+.badge--tip{background:rgba(80,216,144,.15);color:var(--success);border:1px solid rgba(80,216,144,.4)}
+.badge--warn{background:rgba(240,80,96,.15);color:var(--danger);border:1px solid rgba(240,80,96,.4)}
+.tip-block{border-left:3px solid var(--accent);padding:8px 12px;margin:10px 0;
+  background:rgba(255,144,80,.06);border-radius:4px;font-size:13px;line-height:1.7}
+.stage-title{position:absolute;top:14px;left:24px;font-size:13px;color:var(--fg-dim);z-index:2;display:flex;align-items:center;gap:6px}
+.stage-title .num{display:inline-block;padding:2px 8px;border-radius:4px;background:var(--accent);color:var(--bg);font-weight:800;font-size:12px}
+.stage-svg{width:100%;height:100%}
+.demo-controls{display:flex;align-items:center;gap:10px;padding:10px 22px;
+  background:var(--bg-soft);border-top:1px solid var(--line);box-shadow:var(--shadow)}
+.ctrl-btn{padding:6px 14px;font-size:13px;font-weight:600;border:1px solid var(--line);
+  border-radius:var(--radius-sm);background:var(--bg);color:var(--fg-dim);cursor:pointer;transition:all .2s;font-family:inherit}
+.ctrl-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.ctrl-btn:disabled{opacity:.3;cursor:default}
+.ctrl-btn.primary{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.ctrl-btn.primary:hover:not(:disabled){background:var(--accent-2)}
+.step-indicator{display:flex;gap:5px;flex:1;justify-content:center;align-items:center;overflow-x:auto}
+.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:all .3s;cursor:pointer;flex-shrink:0}
+.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent);transform:scale(1.3)}
+.step-dot.done{background:var(--success)}
+@media(max-width:860px){.demo-main{flex-direction:column}.panel-explain{width:100%;min-width:0;max-height:40vh}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<header class="demo-header">
+  <a class="back-btn" href="../index.html">← 返回目录</a>
+  <h1>改造训练脚本<span class="sub">从单体到模块</span></h1>
+  <span class="header-spacer"></span>
+  <span class="shape-badge" id="stepBadge">1/14</span>
+</header>
+<div class="demo-main">
+<section class="panel-explain" id="explainPanel"></section>
+<section class="panel-stage">
+  <div class="stage-title"><span class="num">脚本重构</span> 可视化区域</div>
+  <svg class="stage-svg" id="stageSvg" viewBox="0 0 800 520"></svg>
+</section>
+</div>
+<footer class="demo-controls">
+  <button class="ctrl-btn" id="btnReset" title="R">↺ 重置</button>
+  <button class="ctrl-btn" id="btnPrev" title="←">◀ 上一步</button>
+  <button class="ctrl-btn primary" id="btnNext" title="→">下一步 ▶</button>
+  <button class="ctrl-btn" id="btnAuto" title="Space">▶ 自动</button>
+  <div class="step-indicator" id="stepDots"></div>
+</footer>
+</div>
+<script>
+const steps = [
+  {phase:"问题诊断",title:"单体脚本的痛苦",body:`<p>一个典型的"学生项目"训练脚本往往是这样的：</p>
+  <p>❌ 一个 <code>train.py</code> 包含所有逻辑（800+行）</p>
+  <p>❌ 换模型要修改几十行代码</p>
+  <p>❌ 调参靠修改源码，容易引入 bug</p>
+  <p><span class="badge badge--warn">后果</span> 不可复现、不可测试、不可扩展</p>`,
+   draw(g){g.monolithProblem()}},
+  {phase:"问题诊断",title:"代码异味清单",body:`<p>检查你的脚本是否有这些"坏味道"：</p>
+  <p>🔴 <b>硬编码</b>：lr=0.001 写在代码中部</p>
+  <p>🔴 <b>重复代码</b>：train/val 循环几乎一样</p>
+  <p>🔴 <b>紧耦合</b>：模型、数据、优化器纠缠在一起</p>
+  <p>🔴 <b>无测试</b>：改了数据预处理不知道会不会崩</p>`,
+   draw(g){g.codeSmells()}},
+  {phase:"模块拆分",title:"目标架构：关注点分离",body:`<p>将单体脚本拆分为独立模块：</p>
+  <p><code>data_setup.py</code> — 数据加载与预处理</p>
+  <p><code>model_builder.py</code> — 模型架构定义</p>
+  <p><code>engine.py</code> — 训练/验证循环逻辑</p>
+  <p><code>train.py</code> — 入口脚本，仅负责编排</p>
+  <div class="tip-block">💡 核心原则：每个文件只做一件事，做好封装。</div>`,
+   draw(g){g.targetArch()}},
+  {phase:"模块拆分",title:"拆分步骤 1: 提取数据模块",body:`<p>将数据相关代码移入 <code>data_setup.py</code>：</p>
+  <p>✅ <code>create_dataloaders()</code> — 返回 train/val/test loader</p>
+  <p>✅ 数据增强、归一化参数集中管理</p>
+  <p>✅ 外部只需调用一个函数</p>
+  <p><span class="badge badge--tip">收益</span> 换数据集时只改这一个文件</p>`,
+   draw(g){g.dataModule()}},
+  {phase:"模块拆分",title:"拆分步骤 2: 提取模型模块",body:`<p>将模型定义移入 <code>model_builder.py</code>：</p>
+  <p>✅ <code>build_model(name, **kwargs)</code> — 工厂函数</p>
+  <p>✅ 支持从配置名称创建不同模型</p>
+  <p><code>build_model("mlp", hidden=[256,128], num_classes=10)</code></p>
+  <p><span class="badge badge--tip">收益</span> 换模型架构不影响其他代码</p>`,
+   draw(g){g.modelModule()}},
+  {phase:"模块拆分",title:"拆分步骤 3: 提取训练引擎",body:`<p>将训练循环移入 <code>engine.py</code>：</p>
+  <p>✅ <code>train_step(model, batch, loss_fn, optimizer)</code></p>
+  <p>✅ <code>val_step(model, batch, loss_fn)</code></p>
+  <p>✅ <code>train(model, train_dl, val_dl, epochs, ...)</code></p>
+  <p>✅ 训练逻辑可独立测试，不依赖具体模型/数据</p>`,
+   draw(g){g.engineModule()}},
+  {phase:"模块拆分",title:"拆分步骤 4: 精简入口脚本",body:`<p>重构后的 <code>train.py</code> 变成纯粹的编排层：</p>
+  <p><code>1. 解析配置 → 2. 加载数据 → 3. 构建模型 → 4. 设置优化器 → 5. 调用engine.train()</code></p>
+  <p>整个过程 <b>~50行</b>，功能全部委托给各模块。</p>`,
+   draw(g){g.entryScript()}},
+  {phase:"配置管理",title:"引入 YAML 配置文件",body:`<p>将硬编码的超参数提取到 <code>config.yaml</code>：</p>
+  <p><code>model: {name: cnn, hidden: [128,64]}</code></p>
+  <p><code>training: {lr: 0.001, batch_size: 64, epochs: 50}</code></p>
+  <p><code>data: {dataset: cifar10, val_split: 0.15}</code></p>
+  <p><span class="badge badge--tip">收益</span> 调参不需要改代码，只需编辑 YAML</p>`,
+   draw(g){g.yamlConfig()}},
+  {phase:"配置管理",title:"使用 Hydra 管理实验",body:`<p><code>Hydra</code> 是 Facebook 开源的配置管理库：</p>
+  <p>✅ <code>python train.py model=resnet optimizer.lr=1e-4</code></p>
+  <p>✅ 自动创建实验目录保存日志和配置快照</p>
+  <p>✅ 支持多实验并行扫描（multirun）</p>`,
+   draw(g){g.hydraConfig()}},
+  {phase:"训练器模式",title:"Class-based Trainer 封装",body:`<p>将训练逻辑封装为 <code>Trainer</code> 类：</p>
+  <p><code>trainer = Trainer(model, device, optimizer, loss_fn)</code></p>
+  <p><code>trainer.fit(epochs, train_dl, val_dl)</code></p>
+  <p><span class="badge badge--tip">优势</span> 依赖注入、可扩展回调、易于测试</p>`,
+   draw(g){g.trainerClass()}},
+  {phase:"训练器模式",title:"回调 (Callback) 机制",body:`<p>Trainer 通过回调实现可扩展性：</p>
+  <p>✅ <code>LogMetrics</code> — 记录 loss/acc</p>
+  <p>✅ <code>SaveCheckpoint</code> — 保存最佳模型</p>
+  <p>✅ <code>EarlyStopping</code> — 验证不提升时停止</p>
+  <p>✅ <code>LRScheduler</code> — 学习率调度</p>
+  <p>每种功能独立，可以自由组合。</p>`,
+   draw(g){g.callbacks()}},
+  {phase:"性能优化",title:"内置性能模式",body:`<p>模块化让性能优化变得无痛：</p>
+  <p>✅ <code>torch.compile(model)</code> — 图优化加速</p>
+  <p>✅ <code>autocast + GradScaler</code> — 混合精度训练</p>
+  <p>✅ <code>persistent_workers=True</code> — DataLoader 加速</p>
+  <p>这些只需要加一个配置开关。</p>`,
+   draw(g){g.perfModes()}},
+  {phase:"总结",title:"重构的价值",body:`<p>从 800 行单体脚本 → 5 个模块化文件：</p>
+  <p>✅ <b>可复现</b>：配置文件锁定了所有参数</p>
+  <p>✅ <b>可测试</b>：每个模块可独立单测</p>
+  <p>✅ <b>可扩展</b>：加新模型/数据/优化器只需加文件</p>
+  <p>✅ <b>可复用</b>：核心训练引擎可用于不同项目</p>`,
+   draw(g){g.refactorValue()}},
+  {phase:"总结",title:"毕业检查清单",body:`<p>你的训练脚本合格了吗？</p>
+  <p>☐ 换模型不需要改训练循环？</p>
+  <p>☐ 换数据集只需改 1 个文件？</p>
+  <p>☐ 超参数全部在 YAML 中？</p>
+  <p>☐ 训练/验证/测试流程可独立运行？</p>
+  <p>☐ 有 callback 机制支持扩展？</p>
+  <p><span class="badge badge--tip">目标</span> 任何新任务能在 5 分钟内启动训练</p>`,
+   draw(g){g.checklist()}},
+];
+
+const g={
+  svg:null,
+  clear(){while(this.svg.firstChild)this.svg.removeChild(this.svg.firstChild)},
+  t(x,y,tx,o={}){const e=document.createElementNS("http://www.w3.org/2000/svg","text");e.setAttribute("x",x);e.setAttribute("y",y);e.setAttribute("fill",o.f||"#f0e8e0");e.setAttribute("font-size",o.s||14);e.setAttribute("text-anchor",o.a||"start");if(o.w)e.setAttribute("font-weight",o.w);if(o.m)e.setAttribute("font-family",o.m);e.textContent=tx;this.svg.appendChild(e);return e},
+  r(x,y,w,h,o={}){const e=document.createElementNS("http://www.w3.org/2000/svg","rect");e.setAttribute("x",x);e.setAttribute("y",y);e.setAttribute("width",w);e.setAttribute("height",h);e.setAttribute("fill",o.f||"#2d2525");e.setAttribute("rx",o.rx||4);if(o.s){e.setAttribute("stroke",o.s);e.setAttribute("stroke-width",o.sw||1)}if(o.d)e.setAttribute("stroke-dasharray",o.d);this.svg.appendChild(e);return e},
+  l(x1,y1,x2,y2,o={}){const e=document.createElementNS("http://www.w3.org/2000/svg","line");e.setAttribute("x1",x1);e.setAttribute("y1",y1);e.setAttribute("x2",x2);e.setAttribute("y2",y2);e.setAttribute("stroke",o.s||"#3d3030");e.setAttribute("stroke-width",o.sw||1.5);if(o.d)e.setAttribute("stroke-dasharray",o.d);this.svg.appendChild(e);return e},
+  c(cx,cy,r,o={}){const e=document.createElementNS("http://www.w3.org/2000/svg","circle");e.setAttribute("cx",cx);e.setAttribute("cy",cy);e.setAttribute("r",r);e.setAttribute("fill",o.f||"#ff9050");this.svg.appendChild(e);return e},
+
+  monolithProblem(){
+    this.r(50,60,700,420,{f:"#141010",s:"#f05060",rx:8,sw:2});
+    this.t(70,90,"train.py (812 行) — 什么东西都往里塞",{s:15,w:"700",f:"#f05060"});
+    const items=["数据加载 (80行)","数据增强 (30行)","模型定义 (120行)","损失函数 (15行)","优化器+Scheduler (25行)","训练循环 (200行)","验证循环 (90行)","测试循环 (60行)","日志/保存 (70行)","主函数入口 (122行)"];
+    items.forEach((it,i)=>{const x=70+(i%2)*330,y=120+Math.floor(i/2)*55;this.r(x,y,310,45,{f:"rgba(240,80,96,.1)",s:"#f05060",rx:4});this.t(x+12,y+29,"❌ "+it,{s:12,f:"#f05060"})});
+    this.t(50,475,"一个文件 = 全部逻辑粥在一起 → 牵一发而动全身",{s:13,f:"#ffc040",w:"700"});
+  },
+
+  codeSmells(){
+    const smells=[{icon:"🔴",t:"硬编码值",d:"lr=0.001 散布在代码各处",c:"#f05060",y:100},{icon:"🔄",t:"重复代码",d:"train/val循环几乎一模一样",c:"#ff9050",y:200},{icon:"🔗",t:"紧耦合",d:"模型、数据、优化器纠缠",c:"#ffc040",y:300},{icon:"🧪",t:"无测试",d:"改预处理不知道会不会崩",c:"#7b8cff",y:400}];
+    smells.forEach(s=>{this.r(80,s.y,640,75,{f:s.c+"10",s:s.c,rx:8,sw:1.5});this.t(100,s.y+28,s.icon+" "+s.t,{s:16,w:"700",f:s.c});this.t(100,s.y+55,s.d,{s:13,f:"#b0a090"})});
+    this.l(390,130,390,440,{s:"#f05060",d:"4,3",sw:1});
+  },
+
+  targetArch(){
+    const mods=[{n:"data_setup.py",d:"数据加载\n预处理\nDataLoader",c:"#7b8cff"},{n:"model_builder.py",d:"模型架构\n工厂函数\n参数计算",c:"#50d890"},{n:"engine.py",d:"train_step\nval_step\ntrain()",c:"#ff9050"},{n:"train.py",d:"编排入口\n~50行\n纯胶水代码",c:"#ffc040"}];
+    mods.forEach((m,i)=>{const x=30+i*190,y=160;this.r(x,y,175,110,{f:m.c+"15",s:m.c,rx:8,sw:2});this.t(x+10,y+25,m.n,{s:13,w:"700",f:m.c,m:"JetBrains Mono"});this.t(x+10,y+50,m.d,{s:11,f:"#b0a090",m:"JetBrains Mono"});if(i<3){this.l(x+180,y+55,x+190,y+55,{s:m.c,sw:2});this.c(x+190,y+55,4,{f:m.c})}});
+    this.t(30,130,"模块化架构：每个文件有明确的单一职责",{s:15,w:"700"});
+    this.r(30,310,740,180,{f:"#141010",s:"#3d3030",rx:8});
+    this.t(50,340,"📁 project/",{s:13,m:"JetBrains Mono",f:"#ffc040"});
+    ["├── data_setup.py          ← 数据相关","├── model_builder.py        ← 模型相关","├── engine.py               ← 训练/验证逻辑","├── utils.py                ← 工具函数","├── config.yaml             ← 超参数配置","└── train.py                ← 入口(纯编排)"].forEach((l,i)=>{this.t(60,365+i*22,l,{s:12,m:"JetBrains Mono",f:l.includes("←")?"#b0a090":"#f0e8e0"})});
+  },
+
+  dataModule(){
+    this.r(50,80,700,120,{f:"#141010",s:"#7b8cff",rx:8,sw:2});
+    this.t(70,110,"data_setup.py",{s:16,w:"700",f:"#7b8cff",m:"JetBrains Mono"});
+    this.t(70,140,"def create_dataloaders(dataset_name, batch_size, val_split):",{s:12,m:"JetBrains Mono",f:"#f0e8e0"});
+    this.t(90,160,"train_transforms = transforms.Compose([...])",{s:11,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(90,178,"return train_loader, val_loader, test_loader",{s:11,m:"JetBrains Mono",f:"#50d890"});
+    this.t(50,250,"✅ 换数据集：改一行",{s:14,w:"700",f:"#50d890"});
+    this.t(50,280,"只需调用 create_dataloaders('mnist', 64, 0.15)",{s:12,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(50,320,"外部不需要知道 transforms、Dataset 类的细节",{s:12,f:"#b0a090"});
+    this.t(50,470,"⭐ 封装原则：暴露最小接口，隐藏实现细节",{s:12,w:"700",f:"#ffc040"});
+  },
+
+  modelModule(){
+    this.r(50,60,700,130,{f:"#141010",s:"#50d890",rx:8,sw:2});
+    this.t(70,90,"model_builder.py",{s:16,w:"700",f:"#50d890",m:"JetBrains Mono"});
+    this.t(70,120,"def build_model(name, num_classes=10, **kwargs):",{s:12,m:"JetBrains Mono",f:"#f0e8e0"});
+    this.t(90,142,"if name == 'mlp': return MLP(hidden=kwargs.get('hidden',[256,128]))",{s:11,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(90,162,"elif name == 'cnn': return CNN(channels=kwargs.get('channels',[32,64]))",{s:11,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(90,182,"else: raise ValueError(f'Unknown model: {name}')",{s:11,m:"JetBrains Mono",f:"#f05060"});
+    this.t(50,240,"✅ 换模型：改一行",{s:14,w:"700",f:"#50d890"});
+    this.t(50,270,"model = build_model('resnet', num_classes=100)",{s:13,m:"JetBrains Mono",f:"#f0e8e0"});
+    this.t(50,310,"添加新模型只需在 build_model 中加一个分支",{s:12,f:"#b0a090"});
+    this.t(50,430,"⭐ 工厂模式：用一个函数统一所有模型的创建入口",{s:12,w:"700",f:"#ffc040"});
+  },
+
+  engineModule(){
+    this.r(50,50,700,90,{f:"#141010",s:"#ff9050",rx:8,sw:2});
+    this.t(70,80,"engine.py — train_step / val_step / train",{s:15,w:"700",f:"#ff9050",m:"JetBrains Mono"});
+    // train_step box
+    this.r(50,170,330,130,{f:"rgba(80,216,144,.1)",s:"#50d890",rx:6});
+    this.t(70,195,"train_step(model, batch, loss_fn, opt)",{s:12,w:"700",f:"#50d890",m:"JetBrains Mono"});
+    this.t(70,220,"1. opt.zero_grad()",{s:11,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(70,240,"2. loss = loss_fn(model(X), y)",{s:11,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(70,260,"3. loss.backward() → opt.step()",{s:11,m:"JetBrains Mono",f:"#b0a090"});
+    // val_step box
+    this.r(420,170,330,130,{f:"rgba(123,140,255,.1)",s:"#7b8cff",rx:6});
+    this.t(440,195,"val_step(model, batch, loss_fn)",{s:12,w:"700",f:"#7b8cff",m:"JetBrains Mono"});
+    this.t(440,220,"with torch.no_grad():",{s:11,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(440,240,"  preds = model(X)",{s:11,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(440,260,"  return loss, accuracy",{s:11,m:"JetBrains Mono",f:"#b0a090"});
+    // train() orchestrator
+    this.r(120,330,560,130,{f:"rgba(255,144,80,.1)",s:"#ff9050",rx:8,sw:2});
+    this.t(140,358,"def train(model, train_dl, val_dl, epochs, optimizer, loss_fn, device):",{s:12,w:"700",f:"#ff9050",m:"JetBrains Mono"});
+    this.t(140,385,"for epoch in range(epochs):",{s:11,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(160,408,"train_loss = sum(train_step(...) for batch in train_dl) / len(train_dl)",{s:11,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(160,430,"val_loss, val_acc = sum(val_step(...) for batch in val_dl) / len(val_dl)",{s:11,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(140,452,"print(f'Epoch {epoch}: train_loss={train_loss:.3f}, val_acc={val_acc:.2%}')",{s:11,m:"JetBrains Mono",f:"#50d890"});
+  },
+
+  entryScript(){
+    this.r(40,60,720,400,{f:"#141010",s:"#ffc040",rx:8,sw:2});
+    this.t(60,90,"train.py — 精简入口（~50行）",{s:16,w:"700",f:"#ffc040",m:"JetBrains Mono"});
+    const code=["1  config = yaml.safe_load(open('config.yaml'))","2  device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')","3  train_dl, val_dl, test_dl = create_dataloaders(**config['data'])","4  model = build_model(**config['model']).to(device)","5  optimizer = torch.optim.Adam(model.parameters(), lr=config['training']['lr'])","6  loss_fn = nn.CrossEntropyLoss()","7  engine.train(model, train_dl, val_dl,","8      epochs=config['training']['epochs'],","9      optimizer=optimizer, loss_fn=loss_fn, device=device)","10 torch.save(model.state_dict(), 'model_final.pt')"];
+    code.forEach((l,i)=>{this.t(70,120+i*28,l,{s:11,m:"JetBrains Mono",f:i<2?"#b0a090":i>=7?"#b0a090":"#f0e8e0"})});
+    this.t(60,460,"每行都是调用，没有业务逻辑 — 纯粹的编排",{s:12,f:"#50d890"});
+    this.t(60,485,"修改任何模块都不影响这个入口脚本",{s:12,f:"#ffc040",w:"700"});
+  },
+
+  yamlConfig(){
+    this.r(40,60,350,400,{f:"#141010",s:"#ffc040",rx:8,sw:2});
+    this.t(60,90,"config.yaml",{s:16,w:"700",f:"#ffc040",m:"JetBrains Mono"});
+    const y=["model:","  name: cnn","  hidden: [128, 64]","  num_classes: 10","","training:","  lr: 0.001","  batch_size: 64","  epochs: 50","  weight_decay: 1e-4","","data:","  dataset: cifar10","  val_split: 0.15"];
+    y.forEach((l,i)=>{this.t(60,120+i*21,l,{s:11,m:"JetBrains Mono",f:l.startsWith("  ")?"#b0a090":l.endsWith(":")?"#ffc040":"#f0e8e0"})});
+    // Arrow
+    this.t(430,250,"→",{s:48,f:"#ff9050",a:"middle"});
+    // train command
+    this.r(470,180,290,140,{f:"#141010",s:"#50d890",rx:8,sw:2});
+    this.t(490,210,"$ python train.py",{s:13,m:"JetBrains Mono",f:"#50d890"});
+    this.t(490,240,"调参只需编辑 YAML",{s:12,f:"#b0a090"});
+    this.t(490,270,"无需改 Python 代码",{s:12,f:"#b0a090"});
+    this.t(490,300,"git diff 一眼可读",{s:12,f:"#50d890"});
+    this.t(60,485,"⭐ 配置即文档：一套 YAML = 一次实验的完整记录",{s:12,w:"700",f:"#ffc040"});
+  },
+
+  hydraConfig(){
+    this.r(40,80,720,120,{f:"#141010",s:"#7b8cff",rx:8,sw:2});
+    this.t(60,110,"Hydra — 配置管理框架",{s:16,w:"700",f:"#7b8cff"});
+    this.t(60,140,"$ python train.py model=resnet optimizer.lr=1e-4 training.epochs=100",{s:12,m:"JetBrains Mono",f:"#f0e8e0"});
+    this.t(60,168,"$ python train.py --multirun optimizer.lr=1e-4,1e-3,1e-2",{s:12,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(60,190,"自动扫描3个学习率，分别保存结果到不同目录",{s:11,f:"#50d890"});
+    const feats=["命令行覆盖配置","多实验并行扫描","自动实验目录+日志","配置分层继承(group/model)","Tab补全配置项"];
+    feats.forEach((f,i)=>{const x=60+(i%3)*240,y=240+Math.floor(i/3)*65;this.r(x,y,220,50,{f:"rgba(123,140,255,.1)",s:"#7b8cff",rx:6});this.t(x+10,y+32,"✅ "+f,{s:11,f:"#7b8cff"})});
+    this.t(60,460,"⭐ 2024年 PyTorch 生态的事实标准",{s:12,w:"700",f:"#ffc040"});
+  },
+
+  trainerClass(){
+    this.r(40,60,720,160,{f:"#141010",s:"#ff9050",rx:8,sw:2});
+    this.t(60,90,"class Trainer:",{s:16,w:"700",f:"#ff9050",m:"JetBrains Mono"});
+    const code=["def __init__(self, model, device, optimizer, loss_fn,","             scheduler=None, callbacks=None, grad_clip=None):","    self.model = model; self.device = device; ...","    self.callbacks = callbacks or []","","def fit(self, epochs, train_dl, val_dl):","    for epoch in range(epochs):","        self._run_callbacks('on_epoch_start', epoch)","        train_loss = self.train_epoch(train_dl)","        val_metrics = self.validate(val_dl)","        self._run_callbacks('on_epoch_end', epoch, train_loss, val_metrics)"];
+    code.forEach((l,i)=>{this.t(70,120+i*24,l,{s:11,m:"JetBrains Mono",f:"#b0a090"})});
+    this.t(40,260,"依赖注入：所有依赖通过构造函数传入 → 易于测试",{s:12,f:"#50d890"});
+    this.t(40,290,"回调系统：通过 callbacks 列表自由扩展功能",{s:12,f:"#50d890"});
+  },
+
+  callbacks(){
+    const cbs=[{n:"LogMetrics",d:"每epoch记录\nloss/acc到文件",c:"#7b8cff"},{n:"SaveCheckpoint",d:"验证最佳时\n保存模型权重",c:"#50d890"},{n:"EarlyStopping",d:"验证指标连续N轮\n不提升→停止训练",c:"#ff9050"},{n:"LRScheduler",d:"按epoch或metric\n调整学习率",c:"#ffc040"}];
+    cbs.forEach((cb,i)=>{const x=30+i*190,y=120;this.r(x,y,175,150,{f:cb.c+"12",s:cb.c,rx:8,sw:2});this.t(x+87,y+35,cb.n,{s:15,w:"700",f:cb.c,a:"middle"});this.l(x+20,y+55,x+155,y+55,{s:"#3d3030"});this.t(x+10,y+80,cb.d,{s:12,f:"#b0a090"})});
+    this.t(180,310,"⬆ 自由组合",{s:14,w:"700",f:"#ffc040",a:"middle"});
+    this.r(40,340,720,70,{f:"rgba(255,144,80,.08)",s:"#ff9050",rx:6});
+    this.t(60,365,"trainer = Trainer(model, device, opt, loss_fn,",{s:12,m:"JetBrains Mono",f:"#f0e8e0"});
+    this.t(60,390,"    callbacks=[LogMetrics(), SaveCheckpoint(), EarlyStopping(patience=5)])",{s:12,m:"JetBrains Mono",f:"#50d890"});
+    this.t(40,460,"⭐ 每个 callback 只做一件事，组合使用 → 开闭原则",{s:12,w:"700",f:"#ffc040"});
+  },
+
+  perfModes(){
+    const modes=[{icon:"⚡",n:"torch.compile",d:"图优化，JIT编译\n训练加速20-50%",c:"#50d890"},{icon:"🎯",n:"AMP 混合精度",d:"autocast+GradScaler\n显存减半，速度翻倍",c:"#7b8cff"},{icon:"🚀",n:"DataLoader优化",d:"num_workers>0\npin_memory=True",c:"#ff9050"},{icon:"📦",n:"梯度检查点",d:"用计算换显存\n大batch成为可能",c:"#ffc040"}];
+    modes.forEach((m,i)=>{const x=30+i*190,y=160;this.r(x,y,175,90,{f:m.c+"10",s:m.c,rx:8,sw:2});this.t(x+87,y+25,m.icon,{s:28,a:"middle"});this.t(x+87,y+50,m.n,{s:13,w:"700",f:m.c,a:"middle"});this.t(x+10,y+75,m.d,{s:10,f:"#b0a090"})});
+    this.t(30,110,"在 Trainer 中加一个配置开关即可启用",{s:14,w:"700"});
+    this.t(30,480,"⭐ 模块化让你在 5 分钟内给所有模型加上混合精度训练",{s:12,w:"700",f:"#ffc040"});
+  },
+
+  refactorValue(){
+    const before={x:30,y:80,w:350,h:320,t:"重构前",items:["800行单体脚本","硬编码超参数","模型与数据紧耦合","换模型=改几十行","无法独立测试","不可复现"],c:"#f05060"};
+    const after={x:420,y:80,w:350,h:320,t:"重构后",items:["5个模块化文件","YAML配置管理","依赖注入+接口隔离","换模型=改1行","模块独立可测试","可复现可扩展"],c:"#50d890"};
+    [before,after].forEach(s=>{
+      this.r(s.x,s.y,s.w,s.h,{f:s.c+"08",s:s.c,rx:8,sw:2});
+      this.t(s.x+s.w/2,s.y+35,s.t,{s:18,w:"700",f:s.c,a:"middle"});
+      this.l(s.x+30,s.y+55,s.x+s.w-30,s.y+55,{s:"#3d3030"});
+      s.items.forEach((it,i)=>{this.t(s.x+15,s.y+80+i*38,it,{s:13,f:s.c})});
+    });
+    this.t(200,435,"→",{s:48,f:"#ffc040",a:"middle"});
+    this.t(30,490,"重构不是一次做完，而是每次添加功能时逐步改进",{s:13,w:"700",f:"#ffc040"});
+  },
+
+  checklist(){
+    const items=["换模型不用改训练循环","换数据集只改1个文件","超参数全部在YAML中","训练/验证/测试可独立运行","有callback机制支持扩展","新任务5分钟内启动训练"];
+    items.forEach((it,i)=>{const x=50+(i%2)*375,y=80+Math.floor(i/2)*65;this.r(x,y,350,50,{f:"rgba(80,216,144,.08)",s:"#50d890",rx:6});this.t(x+12,y+33,"☐ "+it,{s:14,f:"#f0e8e0"})});
+    this.t(50,310,"🎯 最终目标",{s:18,w:"700",f:"#ffc040"});
+    this.r(50,340,700,140,{f:"rgba(255,144,80,.08)",s:"#ff9050",rx:8,sw:2});
+    this.t(70,370,"$ python train.py config=exp-003",{s:16,m:"JetBrains Mono",f:"#50d890"});
+    this.t(70,400,"→ 自动加载配置、数据、模型、优化器",{s:13,f:"#b0a090"});
+    this.t(70,425,"→ 自动记录日志、保存最佳模型、生成报告",{s:13,f:"#b0a090"});
+    this.t(70,450,"→ 实验可100%复现，无需人工操作",{s:13,f:"#ffc040",w:"700"});
+    this.t(70,480,"任何人不看代码，只读config.yaml + metrics.jsonl就能复现",{s:12,f:"#b0a090"});
+  },
+};
+
+let cs=0,at=null,ia=false;
+const ts=steps.length;
+function init(){
+  g.svg=document.getElementById("stageSvg");
+  const dots=document.getElementById("stepDots");
+  for(let i=0;i<ts;i++){const d=document.createElement("div");d.className="step-dot";d.onclick=()=>goTo(i);dots.appendChild(d)}
+  render();
+}
+function goTo(i){if(i<0||i>=ts)return;cs=i;render()}
+function render(){
+  g.clear();const s=steps[cs];
+  document.getElementById("stepBadge").textContent=(cs+1)+"/"+ts;
+  document.getElementById("explainPanel").innerHTML='<div class="phase-tag">'+s.phase+'</div><h2 class="step-title">'+s.title+'</h2><div class="step-body">'+s.body+'</div>';
+  s.draw(g);
+  document.querySelectorAll(".step-dot").forEach((d,i)=>{d.className="step-dot"+(i===cs?" active":i<cs?" done":"")});
+  document.getElementById("btnPrev").disabled=cs===0;
+  document.getElementById("btnNext").disabled=cs===ts-1;
+}
+function next(){if(cs<ts-1){cs++;render()}else stopAuto()}
+function prev(){if(cs>0){cs--;render()}}
+function reset(){stopAuto();cs=0;render()}
+function toggleAuto(){ia?stopAuto():startAuto()}
+function startAuto(){ia=true;document.getElementById("btnAuto").textContent="⏸ 暂停";document.getElementById("btnAuto").classList.add("primary");at=setInterval(next,2200)}
+function stopAuto(){ia=false;if(at){clearInterval(at);at=null}document.getElementById("btnAuto").textContent="▶ 自动";document.getElementById("btnAuto").classList.remove("primary")}
+document.addEventListener("keydown",(e)=>{
+  if(e.key==="ArrowRight"){e.preventDefault();next()}
+  else if(e.key==="ArrowLeft"){e.preventDefault();prev()}
+  else if(e.key===" "||e.key==="Spacebar"){e.preventDefault();toggleAuto()}
+  else if(e.key==="r"||e.key==="R"){e.preventDefault();reset()}
+});
+document.getElementById("btnPrev").onclick=prev;
+document.getElementById("btnNext").onclick=next;
+document.getElementById("btnReset").onclick=reset;
+document.getElementById("btnAuto").onclick=toggleAuto;
+window.onload=init;
+</script>
+</body>
+</html>

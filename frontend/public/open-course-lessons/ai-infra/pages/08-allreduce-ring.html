@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>AllReduce 环算法 — AI基础设施</title>
+<style>
+:root{--bg:#0a0e14;--bg-soft:#141b22;--bg-code:#06080c;--fg:#d0e0e8;--fg-dim:#607888;--line:#1c2836;--accent:#00e5a0;--accent-2:#b050ff;--grad:#40a0ff;--success:#30d060;--danger:#ff8020}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(176,80,255,.18);color:var(--accent-2)}.badge--tip{background:rgba(0,229,160,.15);color:var(--accent)}.badge--warn{background:rgba(255,128,32,.18);color:var(--danger)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.code-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 12px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+  <div class="demo-header">
+    <div>
+      <div class="breadcrumb"><a href="../index.html">AI基础设施</a> / 第3章 /</div>
+      <h1>3.2 AllReduce 环算法</h1>
+    </div>
+    <div class="badge-row">
+      <span class="badge badge--def">分布式通信</span>
+      <span class="badge badge--tip">Ring AllReduce</span>
+    </div>
+  </div>
+  <div class="demo-main">
+    <div class="panel-explain" id="explain"></div>
+    <div class="panel-stage" id="stage"></div>
+  </div>
+  <div class="demo-controls">
+    <button id="btn-prev">&larr; 上一步</button>
+    <div class="step-dots" id="dots"></div>
+    <button id="btn-next">下一步 &rarr;</button>
+  </div>
+</div>
+<script>
+const S=[{
+  t:"Ring AllReduce 拓扑",
+  l:"4 GPUs in ring: 0→1→2→3→0",
+  d:"Ring AllReduce 将 GPU 排列成逻辑环，每个 GPU 向其右邻发送数据、从左邻接收数据。梯度被切分为 N 个块(chunks)，在 N-1 步 Scatter-Reduce 后每个 GPU 持有部分聚合结果，再经 N-1 步 AllGather 使所有 GPU 获得全部结果。",
+  b:["Ring Topology","Bandwidth Optimal","2(N-1)"],
+  r:function(svg){
+    function E(t,a,tx){let e=document.createElementNS("http://www.w3.org/2000/svg",t);for(let k in a)e.setAttribute(k,a[k]);if(tx)e.textContent=tx;return e;}
+    svg.setAttribute("viewBox","0 0 800 420");svg.style.background="#06080c";
+    let defs=E("defs");let ar=E("marker",{id:"ar",viewBox:"0 0 10 10",refX:"9",refY:"5",markerWidth:"5",markerHeight:"5",orient:"auto"});ar.append(E("path",{d:"M0,0 L10,5 L0,10 Z",fill:"#40a0ff"}));defs.append(ar);svg.append(defs);
+
+    // Ring topology: 4 GPUs in a circle
+    let ring=[
+      {x:350,y:60,c:"#00e5a0",l:"GPU 0"},
+      {x:620,y:180,c:"#b050ff",l:"GPU 1"},
+      {x:350,y:300,c:"#40a0ff",l:"GPU 2"},
+      {x:80,y:180,c:"#ff8020",l:"GPU 3"}
+    ];
+
+    ring.forEach(g=>{
+      svg.append(E("rect",{x:g.x-60,y:g.y-20,width:120,height:50,rx:10,fill:"rgba(0,229,160,0.06)",stroke:g.c,"stroke-width":"2.5"}));
+      svg.append(E("text",{x:g.x,y:g.y+7,fill:g.c,"font-size":"13","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},g.l));
+    });
+
+    // Ring connections (arrows in circle)
+    for(let i=0;i<4;i++){
+      let j=(i+1)%4;
+      let ax=ring[i].x,ay=ring[i].y,bx=ring[j].x,by=ring[j].y;
+      // Curved arrow
+      let cx=(ax+bx)/2+(by-ay)*0.3,cy=(ay+by)/2+(ax-bx)*0.3;
+      svg.append(E("path",{d:`M${ax},${ay} Q${cx},${cy} ${bx},${by}`,stroke:"#40a0ff",fill:"none","stroke-width":"2","marker-end":"url(#ar)"}));
+    }
+
+    // Gradient chunks visualization inside GPUs
+    let chunks=["C₀","C₁","C₂","C₃"];
+    ring.forEach((g,i)=>{
+      let cs=[];
+      for(let j=0;j<4;j++){
+        cs.push(E("rect",{x:g.x-45+j*22,y:g.y+30,width:20,height:20,rx:3,fill:"rgba(64,160,255,0.15)",stroke:"#40a0ff","stroke-width":"1"}));
+        cs.push(E("text",{x:g.x-45+j*22+10,y:g.y+44,fill:"#d0e0e8","font-size":"8","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},chunks[j]));
+      }
+      cs.forEach(c=>svg.append(c));
+    });
+
+    // Chunk ownership note
+    svg.append(E("text",{x:400,y:370,fill:"#607888","font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Gradient W cut into 4 chunks — each GPU initially owns all 4 chunks of its local gradient"));
+  }
+},{
+  t:"Phase 1: Scatter-Reduce (N-1 steps)",
+  l:"Step k: each GPU sends chunk (rank-k) and receives chunk (rank-k-1) → reduce",
+  d:"Scatter-Reduce 阶段：经 N-1=3 步后，每个 GPU 有一个完整的聚合 chunk。Step k 时，GPU[i] 向 GPU[(i+1)%N] 发送 chunk[(i-k)%N]，同时从 GPU[(i-1+N)%N] 接收 chunk[(i-k-1)%N] 并累加。最终 GPU[i] 持有第 i 个 chunk 的完全聚合结果。",
+  b:["Scatter-Reduce","Ring Exchange","Accumulate"],
+  r:function(svg){
+    function E(t,a,tx){let e=document.createElementNS("http://www.w3.org/2000/svg",t);for(let k in a)e.setAttribute(k,a[k]);if(tx)e.textContent=tx;return e;}
+    svg.setAttribute("viewBox","0 0 800 420");svg.style.background="#06080c";
+
+    svg.append(E("text",{x:400,y:22,fill:"#b050ff","font-size":"15","font-weight":"700","text-anchor":"middle"},"Scatter-Reduce Phase (3 steps for N=4)"));
+
+    // 4 GPUs horizontally
+    let gs=[{x:30,c:"#00e5a0",l:"GPU 0"},{x:225,c:"#b050ff",l:"GPU 1"},{x:420,c:"#40a0ff",l:"GPU 2"},{x:615,c:"#ff8020",l:"GPU 3"}];
+
+    // Show 3 steps
+    for(let step=0;step<3;step++){
+      let sy=50+step*110;
+      svg.append(E("text",{x:10,y:sy+30,fill:"#607888","font-size":"10","font-family":"JetBrains Mono,monospace"},"Step "+step));
+
+      gs.forEach((g,i)=>{
+        svg.append(E("rect",{x:g.x,y:sy,width:140,height:65,rx:6,fill:"rgba(0,229,160,0.03)",stroke:g.c,"stroke-width":"1"}));
+        svg.append(E("text",{x:g.x+70,y:sy+18,fill:g.c,"font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},g.l));
+        // Chunks being sent/received
+        let sendChunk=(i-step+N)%N;
+        let recvChunk=(i-step-1+N)%N;
+        svg.append(E("text",{x:g.x+10,y:sy+38,fill:"#00e5a0","font-size":"9","font-family":"JetBrains Mono,monospace"},"send C"+sendChunk));
+        svg.append(E("text",{x:g.x+10,y:sy+54,fill:"#40a0ff","font-size":"9","font-family":"JetBrains Mono,monospace"},"recv C"+recvChunk));
+      });
+
+      // Data flow arrows
+      for(let i=0;i<3;i++){
+        svg.append(E("path",{d:`M${gs[i].x+140},${sy+32} C${gs[i].x+155},${sy+20} ${gs[i+1].x-15},${sy+20} ${gs[i+1].x-2},${sy+32}`,stroke:"#40a0ff",fill:"none","stroke-width":"1","marker-end":"url(#ar)"}));
+      }
+      let defs=E("defs");let ar=E("marker",{id:"ar",viewBox:"0 0 10 10",refX:"9",refY:"5",markerWidth:"4",markerHeight:"4",orient:"auto"});ar.append(E("path",{d:"M0,0 L10,5 L0,10 Z",fill:"#40a0ff"}));defs.append(ar);svg.append(defs);
+    }
+
+    // Final state after scatter-reduce
+    svg.append(E("text",{x:400,y:395,fill:"#00e5a0","font-size":"12","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"After N-1 steps: GPU[i] has fully aggregated chunk Cᵢ"));
+  }
+},{
+  t:"Phase 2: AllGather (N-1 steps)",
+  l:"Each GPU broadcasts its aggregated chunk to all others",
+  d:"AllGather 阶段同样需要 N-1=3 步。GPU[i] 将已聚合的 chunk Cᵢ 沿环传递给所有其他 GPU。每步传输后所有 GPU 增加一个完整的 chunk。经 N-1 步后所有 GPU 都拥有全部 4 个 chunk 的聚合结果。总带宽：2(N-1)/N × data_size。",
+  b:["AllGather","Ring Broadcast","Bandwidth"],
+  r:function(svg){
+    function E(t,a,tx){let e=document.createElementNS("http://www.w3.org/2000/svg",t);for(let k in a)e.setAttribute(k,a[k]);if(tx)e.textContent=tx;return e;}
+    svg.setAttribute("viewBox","0 0 800 420");svg.style.background="#06080c";
+
+    svg.append(E("text",{x:400,y:22,fill:"#00e5a0","font-size":"15","font-weight":"700","text-anchor":"middle"},"AllGather Phase (3 steps for N=4)"));
+
+    let gs=[{x:30,c:"#00e5a0",l:"GPU 0"},{x:225,c:"#b050ff",l:"GPU 1"},{x:420,c:"#40a0ff",l:"GPU 2"},{x:615,c:"#ff8020",l:"GPU 3"}];
+    let defs=E("defs");let ar=E("marker",{id:"ar",viewBox:"0 0 10 10",refX:"9",refY:"5",markerWidth:"4",markerHeight:"4",orient:"auto"});ar.append(E("path",{d:"M0,0 L10,5 L0,10 Z",fill:"#00e5a0"}));defs.append(ar);svg.append(defs);
+
+    for(let step=0;step<3;step++){
+      let sy=48+step*95;
+      svg.append(E("text",{x:10,y:sy+30,fill:"#607888","font-size":"10","font-family":"JetBrains Mono,monospace"},"Step "+step));
+
+      gs.forEach((g,i)=>{
+        svg.append(E("rect",{x:g.x,y:sy,width:140,height:55,rx:6,fill:"rgba(0,229,160,0.03)",stroke:g.c,"stroke-width":"1"}));
+        svg.append(E("text",{x:g.x+70,y:sy+15,fill:g.c,"font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},g.l));
+        // Show how many chunks this GPU has
+        let owned=step+2;
+        let chunks="";
+        for(let j=0;j<owned&&j<4;j++)chunks+="C"+(i+j)%4+" ";
+        svg.append(E("text",{x:g.x+70,y:sy+35,fill:"#d0e0e8","font-size":"8","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"owns:"+chunks));
+      });
+
+      for(let i=0;i<3;i++){
+        svg.append(E("path",{d:`M${gs[i].x+140},${sy+27} C${gs[i].x+155},${sy+15} ${gs[i+1].x-15},${sy+15} ${gs[i+1].x-2},${sy+27}`,stroke:"#00e5a0",fill:"none","stroke-width":"1","marker-end":"url(#ar)"}));
+      }
+    }
+
+    // Bandwidth formula
+    svg.append(E("rect",{x:120,y:340,width:560,height:60,rx:10,fill:"rgba(0,229,160,0.05)",stroke:"#00e5a0","stroke-width":"1.5"}));
+    svg.append(E("text",{x:400,y:362,fill:"#00e5a0","font-size":"14","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Total data sent per GPU = 2(N-1)/N × D ≈ 2D (as N→∞)"));
+    svg.append(E("text",{x:400,y:386,fill:"#607888","font-size":"11","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Bandwidth-optimal: each GPU sends exactly 2(N-1)/N of data. vs Tree: O(log N) latency but more BW"));
+  }
+}];
+
+let step=0;
+function render(i){
+  step=((i%S.length)+S.length)%S.length;
+  let s=S[step];
+  document.getElementById("explain").innerHTML=`
+    <div class="step-title">${s.t}</div>
+    <div class="badge-row">${s.b.map(b=>'<span class="badge badge--tip">'+b+'</span>').join("")}</div>
+    <div class="code-line">${s.l}</div>
+    <div class="step-desc">${s.d}</div>`;
+  let svg=document.getElementById("stage").querySelector("svg");
+  if(!svg){svg=document.createElementNS("http://www.w3.org/2000/svg","svg");document.getElementById("stage").appendChild(svg);svg.setAttribute("width","100%");svg.setAttribute("height","100%");svg.style.minHeight="420px";}
+  while(svg.firstChild)svg.removeChild(svg.firstChild);
+  s.r(svg);
+  document.getElementById("dots").innerHTML=S.map((_,j)=>'<div class="step-dot'+(j===step?' active':j<step?' done':'')+'></div>').join("");
+  document.getElementById("btn-prev").disabled=step===0;
+  document.getElementById("btn-next").disabled=step===S.length-1;
+}
+render(0);
+document.getElementById("btn-prev").onclick=()=>render(step-1);
+document.getElementById("btn-next").onclick=()=>render(step+1);
+document.addEventListener("keydown",e=>{if(e.key==="ArrowLeft")render(step-1);if(e.key==="ArrowRight")render(step+1);});
+</script>
+</body>
+</html>

@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>缺页异常处理 — 操作系统内核构建</title>
+<style>:root{--bg:#0d1117;--bg-soft:#161b22;--bg-code:#0a0c10;--fg:#e6edf3;--fg-dim:#8b949e;--line:#30363d;--accent:#58a6ff;--accent-2:#3fb950;--grad:#d29922;--success:#3fb950;--danger:#f85149}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(88,166,255,.18);color:var(--accent)}.badge--tip{background:rgba(63,185,80,.18);color:var(--success)}.badge--warn{background:rgba(210,153,34,.18);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.code-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>第 9 节 &middot; 缺页异常处理</h1>
+<span class="breadcrumb"><a href="../index.html">课程首页</a> / 内存管理</span>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="explain"></div>
+<div class="panel-stage" id="stage"></div>
+</div>
+<div class="demo-controls">
+<button id="prevBtn">&larr; 上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="nextBtn">下一步 &rarr;</button>
+<button id="autoBtn">&#9654; 自动播放</button>
+</div>
+</div>
+<script>
+const S=[
+  {
+    t:"缺页异常的类型",
+    l:"// CR2 = faulting virtual address; error code = type",
+    d:"CPU 访问页面时，MMU 检查 PTE 可能触发缺页异常 (#PF, 向量 14)：<br><b>1) 未映射 P=0</b> — 页面从没被访问过或已被换出<br><b>2) 权限违反</b> — 写只读页 / 用户态访问内核页<br><b>3) 保留位违反</b> — PTE 保留位被置 1<br>CR2 寄存器保存了触发异常的虚拟地址。",
+    b:[{t:"#PF",c:"badge--warn"},{t:"CR2",c:"badge--def"},{t:"error code",c:"badge--tip"}],
+    r(svg){
+      svg.innerHTML='';svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <text x="400" y="25" text-anchor="middle" fill="var(--fg)" font-size="15" font-weight="700">Page Fault — 缺页异常</text>
+        <!-- Types of page faults -->
+        <rect x="30" y="50" width="230" height="130" rx="10" fill="rgba(248,81,73,.06)" stroke="var(--danger)" stroke-width="1.5"/>
+        <text x="145" y="78" text-anchor="middle" fill="var(--danger)" font-size="13" font-weight="600">Type 1: Not Present</text>
+        <text x="50" y="105" fill="var(--fg-dim)" font-size="11">PTE.P = 0</text>
+        <text x="50" y="128" fill="var(--fg-dim)" font-size="11">页面不在内存中</text>
+        <text x="50" y="151" fill="var(--fg-dim)" font-size="11">需要分配/换入</text>
+        <text x="50" y="170" fill="var(--accent-2)" font-size="10">→ 正常处理，可恢复</text>
+        <rect x="285" y="50" width="230" height="130" rx="10" fill="rgba(210,153,34,.06)" stroke="var(--grad)" stroke-width="1.5"/>
+        <text x="400" y="78" text-anchor="middle" fill="var(--grad)" font-size="13" font-weight="600">Type 2: Protection</text>
+        <text x="305" y="105" fill="var(--fg-dim)" font-size="11">写只读页 (R/W=0)</text>
+        <text x="305" y="128" fill="var(--fg-dim)" font-size="11">用户态访内核页</text>
+        <text x="305" y="151" fill="var(--fg-dim)" font-size="11">执行不可执行页</text>
+        <text x="305" y="170" fill="var(--danger)" font-size="10">→ 通常 → SIGSEGV!</text>
+        <rect x="540" y="50" width="230" height="130" rx="10" fill="rgba(88,166,255,.06)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="655" y="78" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="600">Type 3: Reserved</text>
+        <text x="560" y="105" fill="var(--fg-dim)" font-size="11">PTE 保留位被置 1</text>
+        <text x="560" y="128" fill="var(--fg-dim)" font-size="11">(硬件要求必须为 0)</text>
+        <text x="560" y="151" fill="var(--fg-dim)" font-size="11">内核/硬件 bug</text>
+        <text x="560" y="170" fill="var(--danger)" font-size="10">→ 内核 panic!</text>
+        <!-- Error code bar -->
+        <rect x="30" y="200" width="740" height="50" rx="6" fill="var(--bg)" stroke="var(--line)"/>
+        <text x="50" y="230" fill="var(--accent)" font-family="monospace" font-size="12">PF Error Code (pushed on stack):</text>
+        <rect x="330" y="216" width="28" height="24" rx="3" fill="rgba(63,185,80,.15)"/><text x="344" y="233" text-anchor="middle" fill="var(--accent-2)" font-size="10">P</text>
+        <rect x="362" y="216" width="28" height="24" rx="3" fill="rgba(88,166,255,.15)"/><text x="376" y="233" text-anchor="middle" fill="var(--accent)" font-size="10">W/R</text>
+        <rect x="394" y="216" width="28" height="24" rx="3" fill="rgba(210,153,34,.15)"/><text x="408" y="233" text-anchor="middle" fill="var(--grad)" font-size="10">U/S</text>
+        <rect x="426" y="216" width="28" height="24" rx="3" fill="rgba(248,81,73,.15)"/><text x="440" y="233" text-anchor="middle" fill="var(--danger)" font-size="10">RSVD</text>
+        <rect x="458" y="216" width="28" height="24" rx="3" fill="rgba(88,166,255,.15)"/><text x="472" y="233" text-anchor="middle" fill="var(--accent)" font-size="10">I/D</text>
+        <text x="500" y="233" fill="var(--fg-dim)" font-size="10">P:0=not-present 1=protection | W/R:0=read 1=write | U/S:0=kernel 1=user</text>
+        <!-- Handler flow -->
+        <text x="400" y="285" text-anchor="middle" fill="var(--fg)" font-size="14" font-weight="700">缺页处理入口</text>
+        <rect x="30" y="300" width="740" height="160" rx="8" fill="var(--bg)"/>
+        <text x="50" y="325" fill="var(--accent)" font-family="monospace" font-size="12">void trap(struct trapframe *tf) {</text>
+        <text x="70" y="350" fill="var(--fg-dim)" font-family="monospace" font-size="11">switch(tf->trapno) {</text>
+        <text x="90" y="375" fill="var(--fg-dim)" font-family="monospace" font-size="11">case T_PGFLT:  // #14 Page Fault</text>
+        <text x="110" y="400" fill="var(--grad)" font-family="monospace" font-size="11">uint va = rcr2();  // get faulting address from CR2</text>
+        <text x="110" y="425" fill="var(--grad)" font-family="monospace" font-size="11">int r = pagefault_handler(va, tf->err);</text>
+        <text x="110" y="448" fill="var(--fg-dim)" font-family="monospace" font-size="11">if (r < 0) { p->killed = 1; }  // SIGSEGV</text>
+        <text x="50" y="450" fill="var(--fg-dim)" font-family="monospace" font-size="12">}</text>`;
+      svg.appendChild(g);
+    }
+  },
+  {
+    t:"pagefault_handler — 分配帧并更新页表",
+    l:"pa = kalloc();  mappages(pgdir, va, pa);  // 分配+映射",
+    d:"内核缺页处理流程：<br>1) 校验 va 是否在进程地址空间内<br>2) <code>kalloc()</code> 分配一个 4KB 物理帧<br>3) <code>memset(pa, 0, 4096)</code> 清零新帧<br>4) <code>mappages()</code> 更新页表，建立 va→pa 映射<br>5) 返回后 CPU 重试访问指令 — 这次成功！",
+    b:[{t:"kalloc",c:"badge--def"},{t:"mappages",c:"badge--tip"},{t:"重试",c:"badge--warn"}],
+    r(svg){
+      svg.innerHTML='';svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <text x="400" y="25" text-anchor="middle" fill="var(--fg)" font-size="15" font-weight="700">缺页处理流程 — 分配 + 映射</text>
+        <!-- Flow diagram -->
+        <rect x="30" y="55" width="160" height="50" rx="8" fill="rgba(248,81,73,.10)" stroke="var(--danger)" stroke-width="1.5"/>
+        <text x="110" y="75" text-anchor="middle" fill="var(--danger)" font-size="12">#PF: P=0</text>
+        <text x="110" y="93" text-anchor="middle" fill="var(--fg-dim)" font-size="10">va not mapped</text>
+        <line x1="190" y1="80" x2="230" y2="80" stroke="var(--line)" stroke-width="1.5" marker-end="url(#aD)"/>
+        <rect x="230" y="55" width="160" height="50" rx="8" fill="rgba(88,166,255,.10)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="310" y="75" text-anchor="middle" fill="var(--accent)" font-size="12">Validate va</text>
+        <text x="310" y="93" text-anchor="middle" fill="var(--fg-dim)" font-size="10">within process limit?</text>
+        <line x1="390" y1="80" x2="430" y2="80" stroke="var(--line)" stroke-width="1.5" marker-end="url(#aD)"/>
+        <rect x="430" y="55" width="160" height="50" rx="8" fill="rgba(63,185,80,.10)" stroke="var(--accent-2)" stroke-width="1.5"/>
+        <text x="510" y="75" text-anchor="middle" fill="var(--accent-2)" font-size="12">kalloc()</text>
+        <text x="510" y="93" text-anchor="middle" fill="var(--fg-dim)" font-size="10">alloc 4KB frame</text>
+        <line x1="590" y1="80" x2="640" y2="80" stroke="var(--line)" stroke-width="1.5" marker-end="url(#aD)"/>
+        <rect x="640" y="55" width="140" height="50" rx="8" fill="rgba(210,153,34,.10)" stroke="var(--grad)" stroke-width="1.5"/>
+        <text x="710" y="75" text-anchor="middle" fill="var(--grad)" font-size="12">mappages()</text>
+        <text x="710" y="93" text-anchor="middle" fill="var(--fg-dim)" font-size="10">va→pa in PTE</text>
+        <!-- State before -->
+        <rect x="30" y="140" width="360" height="150" rx="8" fill="rgba(248,81,73,.04)" stroke="var(--danger)" stroke-width="1" stroke-dasharray="4,2"/>
+        <text x="210" y="165" text-anchor="middle" fill="var(--danger)" font-size="13" font-weight="600">Before: Page Table</text>
+        <rect x="50" y="180" width="140" height="24" rx="4" fill="var(--bg-soft)"/><text x="120" y="197" text-anchor="middle" fill="var(--fg)" font-family="monospace" font-size="11">PTE[0x100]</text>
+        <rect x="200" y="180" width="180" height="24" rx="4" fill="rgba(248,81,73,.12)"/><text x="290" y="197" text-anchor="middle" fill="var(--danger)" font-family="monospace" font-size="11">P=0 (not present)</text>
+        <text x="50" y="235" fill="var(--fg-dim)" font-family="monospace" font-size="11">va=0x100000 → no mapping</text>
+        <text x="50" y="260" fill="var(--fg-dim)" font-family="monospace" font-size="11">CPU tries to access → #PF!</text>
+        <text x="50" y="282" fill="var(--fg-dim)" font-family="monospace" font-size="10">CR2 = 0x100000, err = 0x4 (user read)</text>
+        <!-- Arrow -->
+        <text x="400" y="215" text-anchor="middle" fill="var(--accent)" font-size="20" font-weight="700">→</text>
+        <!-- State after -->
+        <rect x="410" y="140" width="360" height="150" rx="8" fill="rgba(63,185,80,.04)" stroke="var(--accent-2)" stroke-width="1" stroke-dasharray="4,2"/>
+        <text x="590" y="165" text-anchor="middle" fill="var(--accent-2)" font-size="13" font-weight="600">After: Page Table</text>
+        <rect x="430" y="180" width="140" height="24" rx="4" fill="var(--bg-soft)"/><text x="500" y="197" text-anchor="middle" fill="var(--fg)" font-family="monospace" font-size="11">PTE[0x100]</text>
+        <rect x="580" y="180" width="180" height="24" rx="4" fill="rgba(63,185,80,.12)"/><text x="670" y="197" text-anchor="middle" fill="var(--accent-2)" font-family="monospace" font-size="11">PPN=0xA0 | P=1 R/U=1</text>
+        <text x="430" y="235" fill="var(--fg-dim)" font-family="monospace" font-size="11">va=0x100000 → pa=0xA00000</text>
+        <text x="430" y="260" fill="var(--accent-2)" font-family="monospace" font-size="11">CPU retries → TLB fill → SUCCESS!</text>
+        <!-- Physical frame -->
+        <rect x="30" y="320" width="740" height="140" rx="8" fill="var(--bg)" stroke="var(--line)"/>
+        <text x="50" y="348" fill="var(--accent)" font-family="monospace" font-size="12">Physical Memory</text>
+        <rect x="50" y="360" width="200" height="30" rx="4" fill="rgba(88,166,255,.10)"/><text x="150" y="380" text-anchor="middle" fill="var(--fg-dim)" font-family="monospace" font-size="11">Frame 0x0:  Used</text>
+        <rect x="260" y="360" width="200" height="30" rx="4" fill="rgba(88,166,255,.10)"/><text x="360" y="380" text-anchor="middle" fill="var(--fg-dim)" font-family="monospace" font-size="11">Frame 0x1:  Used</text>
+        <rect x="470" y="360" width="200" height="30" rx="4" fill="rgba(63,185,80,.18)"/><text x="570" y="380" text-anchor="middle" fill="var(--accent-2)" font-family="monospace" font-size="11">Frame 0xA0:  NEW!</text>
+        <rect x="50" y="400" width="700" height="30" rx="4" fill="rgba(63,185,80,.08)"/><text x="400" y="420" text-anchor="middle" fill="var(--accent-2)" font-family="monospace" font-size="11">kalloc() returned pa=0xA00000 (one 4KB frame from buddy allocator)</text>
+        <text x="400" y="450" text-anchor="middle" fill="var(--fg-dim)" font-size="11">memset(pa, 0, 4096) before mapping — security: never leak old data to user!</text>
+        <defs><marker id="aD" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="var(--line)"/></marker></defs>`;
+      svg.appendChild(g);
+    }
+  },
+  {
+    t:"写时复制 (Copy-on-Write) 与惰性分配",
+    l:"fork() → COW maps readonly; write → page fault → copy page",
+    d:"内核用缺页异常实现高效的内存管理：<br><b>写时复制 (COW)</b>：fork() 时父子共享页，标记只读。任一写触发 #PF，<br>内核复制物理页，分别映射为可写。<br><b>惰性分配</b>：malloc 不立即分配物理内存，首次访问才触发 #PF 分配。<br>节省大量物理内存和 fork 开销。",
+    b:[{t:"COW",c:"badge--def"},{t:"惰性分配",c:"badge--tip"},{t:"fork优化",c:"badge--warn"}],
+    r(svg){
+      svg.innerHTML='';svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <text x="400" y="25" text-anchor="middle" fill="var(--fg)" font-size="15" font-weight="700">Copy-on-Write Fork</text>
+        <!-- Parent process -->
+        <rect x="30" y="55" width="300" height="80" rx="10" fill="rgba(88,166,255,.08)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="180" y="80" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="600">Parent Process (PID=1)</text>
+        <rect x="50" y="95" width="260" height="30" rx="5" fill="var(--bg)"/>
+        <text x="180" y="115" text-anchor="middle" fill="var(--fg)" font-family="monospace" font-size="12">Page A: PPN=0x10, R/W=1 (rw)</text>
+        <!-- fork -->
+        <line x1="330" y1="95" x2="420" y2="95" stroke="var(--accent-2)" stroke-width="2.5" marker-end="url(#aG)"/>
+        <text x="375" y="85" text-anchor="middle" fill="var(--accent-2)" font-size="11">fork()</text>
+        <!-- Child process -->
+        <rect x="420" y="55" width="350" height="80" rx="10" fill="rgba(63,185,80,.08)" stroke="var(--accent-2)" stroke-width="1.5"/>
+        <text x="595" y="80" text-anchor="middle" fill="var(--accent-2)" font-size="13" font-weight="600">Child Process (PID=2) — After fork()</text>
+        <rect x="440" y="95" width="310" height="30" rx="5" fill="var(--bg)"/>
+        <text x="595" y="115" text-anchor="middle" fill="var(--grad)" font-family="monospace" font-size="12">Page A: PPN=0x10 (shared!), R/W=0 (ro)</text>
+        <!-- Physical memory: shared page -->
+        <rect x="200" y="165" width="400" height="60" rx="8" fill="rgba(63,185,80,.10)" stroke="var(--accent-2)" stroke-width="2"/>
+        <text x="400" y="190" text-anchor="middle" fill="var(--accent-2)" font-size="13" font-weight="600">Physical Frame 0x10 (shared)</text>
+        <text x="400" y="212" text-anchor="middle" fill="var(--fg-dim)" font-size="11">refcount = 2 (parent + child)</text>
+        <!-- Child tries to write -->
+        <line x1="400" y1="225" x2="400" y2="260" stroke="var(--danger)" stroke-width="2" marker-end="url(#aR)"/>
+        <text x="420" y="248" fill="var(--danger)" font-size="11">child writes to Page A → #PF!</text>
+        <!-- COW handler -->
+        <rect x="30" y="270" width="740" height="130" rx="8" fill="var(--bg)"/>
+        <text x="50" y="298" fill="var(--accent)" font-family="monospace" font-size="12">// COW page fault handler:</text>
+        <text x="50" y="322" fill="var(--fg-dim)" font-family="monospace" font-size="11">if (PTE.R/W == 0 && PTE.P == 1 && refcount > 1) {</text>
+        <text x="70" y="346" fill="var(--grad)" font-family="monospace" font-size="11">char *new_page = kalloc();               // 分配新帧</text>
+        <text x="70" y="370" fill="var(--grad)" font-family="monospace" font-size="11">memmove(new_page, old_page, 4096);       // 复制内容</text>
+        <text x="70" y="394" fill="var(--grad)" font-family="monospace" font-size="11">mappages(child_pgdir, va, new_page, R/W=1);  // 子进程可写</text>
+        <text x="70" y="410" fill="var(--grad)" font-family="monospace" font-size="11">// parent keeps old page; refcount of old page decreases</text>
+        <!-- Result -->
+        <rect x="200" y="420" width="180" height="40" rx="6" fill="rgba(88,166,255,.08)" stroke="var(--accent)" stroke-width="1"/>
+        <text x="290" y="440" text-anchor="middle" fill="var(--accent)" font-size="11">Parent: PPN=0x10 (rw)</text><text x="290" y="455" text-anchor="middle" fill="var(--fg-dim)" font-size="9">refcount=1</text>
+        <rect x="420" y="420" width="180" height="40" rx="6" fill="rgba(63,185,80,.08)" stroke="var(--accent-2)" stroke-width="1"/>
+        <text x="510" y="440" text-anchor="middle" fill="var(--accent-2)" font-size="11">Child: PPN=0x20 (rw)</text><text x="510" y="455" text-anchor="middle" fill="var(--fg-dim)" font-size="9">new copy!</text>
+        <defs><marker id="aG" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--accent-2)"/></marker>
+        <marker id="aR" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--danger)"/></marker></defs>`;
+      svg.appendChild(g);
+    }
+  }
+];
+
+let step=0,autoTimer=null,autoOn=false;
+const explain=document.getElementById('explain'),stage=document.getElementById('stage'),dots=document.getElementById('dots');
+const prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn'),autoBtn=document.getElementById('autoBtn');
+function render(){
+  const s=S[step];
+  explain.innerHTML=`<div class="step-title">${s.t}</div>${s.l?`<div class="code-line">${s.l}</div>`:''}<div class="badge-row">${s.b.map(b=>`<span class="badge ${b.c||'badge--def'}">${b.t}</span>`).join('')}</div><div class="step-desc">${s.d}</div>`;
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('viewBox','0 0 800 480');svg.style.width='100%';svg.style.height='100%';
+  stage.innerHTML='';stage.appendChild(svg);s.r(svg);
+  dots.innerHTML=S.map((_,i)=>{let cls=i===step?'active':i<step?'done':'';return `<span class="step-dot ${cls}"></span>`;}).join('');
+  prevBtn.disabled=step===0;nextBtn.disabled=step===S.length-1;
+}
+function next(){if(step<S.length-1){step++;render();}}
+function prev(){if(step>0){step--;render();}}
+function restart(){step=0;render();}
+function toggleAuto(){
+  if(autoTimer){clearInterval(autoTimer);autoTimer=null;autoOn=false;autoBtn.innerHTML='&#9654; 自动播放';}
+  else{autoOn=true;autoBtn.innerHTML='&#9646;&#9646; 停止';autoTimer=setInterval(()=>{if(step<S.length-1){step++;render();}else{clearInterval(autoTimer);autoTimer=null;autoOn=false;autoBtn.innerHTML='&#9654; 自动播放';}},3000);}
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();next();}
+  else if(e.key==='ArrowLeft'){e.preventDefault();prev();}
+  else if(e.key==='r'||e.key==='R'){e.preventDefault();restart();}
+  else if(e.key==='a'||e.key==='A'){e.preventDefault();toggleAuto();}
+});
+prevBtn.onclick=prev;nextBtn.onclick=next;autoBtn.onclick=toggleAuto;render();
+</script>
+</body>
+</html>

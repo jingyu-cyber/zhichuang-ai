@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>张量对象与 shape · 深度学习框架</title>
+<style>
+/* ========== 设计规范：CSS 变量 ========== */
+:root{
+  --bg:#1e1a1a; --bg-soft:#2d2525; --bg-code:#141010;
+  --fg:#f0e8e0; --fg-dim:#b0a090; --line:#3d3030;
+  --accent:#ff9050; --accent-2:#ffc040;
+  --success:#50d890; --danger:#f05060; --purple:#7b8cff;
+  --shadow:0 10px 30px rgba(0,0,0,0.35);
+  --radius:14px; --radius-sm:8px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);
+  font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  height:100%;overflow:hidden}
+code,.mono{font-family:"JetBrains Mono","Fira Code",Menlo,Consolas,monospace}
+
+.demo-shell{display:flex;flex-direction:column;height:100vh}
+
+/* Header */
+.demo-header{
+  display:flex;align-items:center;gap:16px;padding:12px 22px;
+  background:linear-gradient(90deg,#2a2222,#352a2a);
+  border-bottom:1px solid var(--line);box-shadow:var(--shadow)
+}
+.demo-header h1{font-size:18px;margin:0;letter-spacing:.5px}
+.demo-header h1 .sub{color:var(--fg-dim);font-weight:400;margin-left:8px;font-size:13px}
+.back-btn{
+  color:var(--fg);text-decoration:none;padding:6px 12px;border:1px solid var(--line);
+  border-radius:var(--radius-sm);background:var(--bg-soft);font-size:13px;transition:all .2s
+}
+.back-btn:hover{border-color:var(--accent);color:var(--accent)}
+.header-spacer{flex:1}
+.shape-badge{
+  padding:6px 14px;background:var(--bg-code);border:1px solid var(--line);
+  border-radius:var(--radius-sm);color:var(--accent);font-size:14px
+}
+
+/* Main */
+.demo-main{flex:1;display:flex;min-height:0}
+.panel-explain{
+  width:32%;min-width:340px;padding:18px 20px;overflow-y:auto;
+  background:var(--bg-soft);border-right:1px solid var(--line)
+}
+.panel-stage{flex:1;position:relative;background:var(--bg);overflow:hidden}
+
+/* 讲解卡片 */
+.phase-tag{
+  display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;
+  background:rgba(255,144,80,.12);color:var(--accent);
+  border:1px solid rgba(255,144,80,.35);margin-bottom:10px
+}
+.step-title{font-size:20px;margin:0 0 10px;line-height:1.4}
+.step-body{font-size:14px;line-height:1.75;color:var(--fg)}
+.step-body p{margin:8px 0}
+.step-body code{background:var(--bg-code);padding:1px 6px;border-radius:4px;color:var(--accent);font-size:13px}
+.badge{
+  display:inline-block;font-size:11px;padding:2px 8px;border-radius:4px;
+  margin-right:6px;font-weight:600;letter-spacing:.5px
+}
+.badge--def{background:rgba(123,140,255,.18);color:var(--purple);border:1px solid rgba(123,140,255,.4)}
+.badge--tip{background:rgba(80,216,144,.15);color:var(--success);border:1px solid rgba(80,216,144,.4)}
+.badge--warn{background:rgba(240,80,96,.15);color:var(--danger);border:1px solid rgba(240,80,96,.4)}
+.tip-block{
+  border-left:3px solid var(--accent);padding:8px 12px;margin:10px 0;
+  background:rgba(255,144,80,.06);border-radius:4px;font-size:13px;line-height:1.7
+}
+
+/* 舞台 */
+.stage-title{
+  position:absolute;top:14px;left:24px;font-size:13px;color:var(--fg-dim);
+  z-index:2;display:flex;align-items:center;gap:6px
+}
+.stage-title .num{
+  display:inline-block;padding:2px 8px;border-radius:4px;
+  background:var(--accent);color:var(--bg);font-weight:800;font-size:12px
+}
+.stage-svg{width:100%;height:100%}
+
+/* ====== 控制条 ====== */
+.demo-controls{
+  display:flex;align-items:center;gap:10px;padding:10px 22px;
+  background:var(--bg-soft);border-top:1px solid var(--line);box-shadow:var(--shadow)
+}
+.ctrl-btn{
+  padding:6px 14px;font-size:13px;font-weight:600;border:1px solid var(--line);
+  border-radius:var(--radius-sm);background:var(--bg);color:var(--fg-dim);
+  cursor:pointer;transition:all .2s;font-family:inherit
+}
+.ctrl-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.ctrl-btn:disabled{opacity:.3;cursor:default}
+.ctrl-btn.primary{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.ctrl-btn.primary:hover:not(:disabled){background:var(--accent-2)}
+.step-indicator{display:flex;gap:5px;flex:1;justify-content:center;align-items:center;overflow-x:auto}
+.step-dot{
+  width:9px;height:9px;min-width:9px;border-radius:50%;background:var(--line);
+  cursor:pointer;transition:all .2s;flex-shrink:0
+}
+.step-dot.active{background:var(--accent);box-shadow:0 0 8px var(--accent);transform:scale(1.3)}
+.step-dot.done{background:var(--success)}
+.step-info{font-size:13px;color:var(--fg-dim);white-space:nowrap;min-width:55px;text-align:center}
+.speed-btn{
+  padding:4px 10px;font-size:11px;font-weight:600;border:1px solid var(--line);
+  border-radius:var(--radius-sm);background:var(--bg);color:var(--fg-dim);
+  cursor:pointer;transition:all .2s;font-family:inherit
+}
+.speed-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ====== SVG 元素动画 ====== */
+.el {opacity:0;pointer-events:none;transition:opacity .4s,transform .35s}.el.active{transform:scale(1.05)}
+.el.visible {opacity:1;pointer-events:auto}
+.el .bx{fill:var(--bg-soft);stroke:var(--line);stroke-width:1.5;transition:all .35s}
+.el.visible .bx{stroke:var(--fg-dim)}
+.el.active .bx{stroke:var(--accent);stroke-width:3;fill:rgba(255,144,80,.18);filter:drop-shadow(0 0 16px rgba(255,144,80,.5))}
+.el .vl{font-family:"JetBrains Mono",monospace;font-size:14px;fill:var(--fg-dim);transition:all .35s}
+.el.visible .vl{fill:var(--fg)}
+.el.active .vl{fill:var(--accent-2);font-weight:700;font-size:16px}
+.el .lbl{font-family:"JetBrains Mono",monospace;font-size:11px;fill:var(--fg-dim);transition:all .35s}
+.el.visible .lbl{fill:var(--fg-dim)}
+.el.active .lbl{fill:var(--accent)}
+.ax{font-family:"JetBrains Mono",monospace;font-size:12px;fill:var(--fg-dim);text-anchor:middle;transition:all .35s}
+.ax.hi{fill:var(--accent-2);font-weight:700;font-size:14px}
+.ln{stroke:var(--line);stroke-width:1.5;fill:none;transition:all .35s}
+.ln.visible{stroke:var(--fg-dim)}
+.ln.hi{stroke:var(--accent);stroke-width:3}
+
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+  <!-- ============ Header ============ -->
+  <header class="demo-header">
+    <a href="../index.html" class="back-btn">← 返回目录</a>
+    <h1>张量对象与 shape <span class="sub">标量 · 向量 · 矩阵 · 张量 · 广播</span></h1>
+    <span class="header-spacer"></span>
+    <span class="shape-badge mono">tensor.shape</span>
+  </header>
+
+  <!-- ============ Main ============ -->
+  <main class="demo-main">
+    <aside class="panel-explain" id="panelExplain"></aside>
+    <section class="panel-stage">
+      <div class="stage-title" id="stageTitle"><span class="num">阶段 A</span> · 维度递进</div>
+      <svg class="stage-svg" id="stageSvg" viewBox="0 0 900 560" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#b0a090"/>
+          </marker>
+          <marker id="arrow-active" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#ff9050"/>
+          </marker>
+        </defs>
+        <g id="gfxLayer"></g>
+      </svg>
+    </section>
+  </main>
+
+  <!-- ============ Footer 控制条 ============ -->
+  <footer class="demo-controls">
+    <button class="ctrl-btn" id="btnReset" title="R">↺ 重置</button>
+    <button class="ctrl-btn" id="btnPrev" title="←">◀ 上一步</button>
+    <button class="ctrl-btn primary" id="btnNext" title="→">下一步 ▶</button>
+    <button class="ctrl-btn" id="btnPlay" title="Space">▶ 自动</button>
+    <div class="step-indicator" id="stepDots"></div>
+    <div class="step-info" id="stepInfo">1 / N</div>
+    <button class="speed-btn" id="btnSpeed">1×</button>
+  </footer>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const gfxLayer = $('#gfxLayer'), panelExpl = $('#panelExplain'), stageTitle = $('#stageTitle');
+const stepDots = $('#stepDots'), stepInfo = $('#stepInfo');
+const btnPrev = $('#btnPrev'), btnNext = $('#btnNext'), btnPlay = $('#btnPlay'), btnReset = $('#btnReset'), btnSpeed = $('#btnSpeed');
+
+/* ========== 工具函数：创建 SVG 元素 ========== */
+const NS = 'http://www.w3.org/2000/svg';
+function mkE(tag, attrs, parent){
+  const e = document.createElementNS(NS, tag);
+  if(attrs) Object.entries(attrs).forEach(([k,v]) => { if(k==='cls') e.setAttribute('class',v); else e.setAttribute(k,v); });
+  if(parent) parent.appendChild(e);
+  return e;
+}
+function mkT(text, x, y, sz, fill, fw, parent){
+  const t = mkE('text', {x, y, 'font-size': sz||'13', fill: fill||'var(--fg-dim)', 'text-anchor':'middle'}, parent);
+  if(fw) t.setAttribute('font-weight', fw);
+  t.textContent = text;
+  return t;
+}
+
+/* ========== 创建单个元素块 ========== */
+function blk(id, x, y, w, h, val, lbl, parent){
+  const g = mkE('g', {cls:'el', id}, parent);
+  mkE('rect', {cls:'bx', x, y, width:w, height:h, rx:'8'}, g);
+  mkT(val, x+w/2, y+h/2-4, '14', 'var(--fg-dim)', null, g).setAttribute('class','vl');
+  mkT(lbl, x+w/2, y+h/2+16, '11', 'var(--fg-dim)', null, g).setAttribute('class','lbl');
+  return g;
+}
+
+/* ========== 1. 预建所有 SVG 元素（一次性全部创建，初始不可见） ========== */
+const allIds = [];
+
+/* === Phase A：维度递进 === */
+
+// Scalar
+blk('s0', 340, 210, 220, 80, '3.14', '标量 · shape () · 0 维', gfxLayer); allIds.push('s0');
+blk('s1', 310, 330, 260, 50, '0.023', 'loss 标量', gfxLayer); allIds.push('s1');
+blk('s2', 310, 400, 260, 50, '0.95', 'accuracy 标量', gfxLayer); allIds.push('s2');
+blk('s3', 310, 470, 260, 50, '0.001', 'learning rate 标量', gfxLayer); allIds.push('s3');
+
+// Vector
+const vdat = [['0.2','索引 0'],['-0.5','索引 1'],['0.8','索引 2'],['0.1','索引 3']];
+vdat.forEach((v,i) => { blk('v'+i, 350, 70+i*68, 200, 52, v[0], v[1], gfxLayer); allIds.push('v'+i); });
+
+
+// Matrix
+const mdat = [['0.2','-0.5','0.8','0.1'],['0.6','0.3','-0.2','0.9'],['0.4','-0.7','0.5','0.0']];
+mdat.forEach((row,r) => row.forEach((v,c) => { blk('m'+r+'_'+c, 240+c*80, 100+r*68, 68, 54, v, '', gfxLayer); allIds.push('m'+r+'_'+c); }));
+
+
+
+// 3D Tensor - two matrix slabs with 3D perspective
+// Back slab (batch=1) - darker, offset up-left
+for(let r=0;r<3;r++)for(let c=0;c<3;c++){ blk('t1_'+r+'_'+c, 350+c*70, 70+r*60, 60, 48, '1.'+r+c, '', gfxLayer); allIds.push('t1_'+r+'_'+c); }
+// Front slab (batch=0) - brighter, offset down-right
+for(let r=0;r<3;r++)for(let c=0;c<3;c++){ blk('t0_'+r+'_'+c, 230+c*70, 150+r*60, 60, 48, '0.'+r+c, '', gfxLayer); allIds.push('t0_'+r+'_'+c); }
+// Perspective connecting lines between 4 corners
+{const pts=[[0,0],[0,2],[2,0],[2,2]]; pts.forEach(([rr,cc])=>{const l=mkE('line',{cls:'el ln',id:'cn'+rr+'_'+cc,x1:230+cc*70+30,y1:150+rr*60+24,x2:350+cc*70+30,y2:70+rr*60+24},gfxLayer);allIds.push('cn'+rr+'_'+cc);});}
+// Labels
+{const g=mkE('g',{cls:'el',id:'t3lbl'},gfxLayer);mkT('Front: batch=0', 335, 350, '14', 'var(--accent)', '700', g);mkT('shape (3,3)', 335, 370, '12', 'var(--fg-dim)', null, g);}allIds.push('t3lbl');
+
+
+// 4D Tensor
+blk('t4b', 90, 140, 160, 100, '32', 'Batch · dim=0', gfxLayer); allIds.push('t4b');
+blk('t4c', 280, 140, 160, 100, '3', 'Channel · dim=1', gfxLayer); allIds.push('t4c');
+blk('t4h', 470, 140, 160, 100, '28', 'Height · dim=2', gfxLayer); allIds.push('t4h');
+blk('t4w', 660, 140, 160, 100, '28', 'Width · dim=3', gfxLayer); allIds.push('t4w');
+
+// Summary cards
+const sums = [{id:'sum0',x:40,v:'标量',l:'shape () · 1 元素'},{id:'sum1',x:200,v:'向量',l:'shape (4,) · 4 元素'},{id:'sum2',x:360,v:'矩阵',l:'shape (3,4) · 12 元素'},{id:'sum3',x:520,v:'3D张量',l:'shape (2,3,4) · 24 元素'},{id:'sum4',x:680,v:'4D Batch',l:'shape (32,3,28,28)'}];
+sums.forEach(o => { blk(o.id, o.x, 160, 140, 120, o.v, o.l, gfxLayer); allIds.push(o.id); });
+
+/* === Phase B：shape 操作 === */
+
+// Reshape
+blk('rs1', 80, 140, 230, 110, '(2, 3, 4)', '原张量 · 24 元素', gfxLayer); allIds.push('rs1');
+blk('rs2', 350, 140, 230, 110, '(2, 12)', 'reshape 后 · 24 元素', gfxLayer); allIds.push('rs2');
+blk('rs3', 620, 140, 230, 110, '(2, -1)', '自动推导 · 24 元素', gfxLayer); allIds.push('rs3');
+
+// Squeeze
+blk('sq1', 60, 100, 240, 80, '(1, 3, 1, 4)', 'squeeze()', gfxLayer); allIds.push('sq1');
+blk('sq1r', 400, 100, 240, 80, '(3, 4)', '结果 · 元素数量不变', gfxLayer); allIds.push('sq1r');
+blk('sq2', 60, 260, 240, 80, '(3, 4)', 'unsqueeze(0)', gfxLayer); allIds.push('sq2');
+blk('sq2r', 400, 260, 240, 80, '(1, 3, 4)', '结果 · 元素数量不变', gfxLayer); allIds.push('sq2r');
+
+/* === Phase C：广播 === */
+
+// Broadcast success
+[{id:'b1a',x:40,y:50,v:'(3,4)'},{id:'b1b',x:300,y:50,v:'(4,)'},{id:'b1r',x:560,y:50,v:'(3,4) ✓'},
+ {id:'b2a',x:40,y:125,v:'(3,4)'},{id:'b2b',x:300,y:125,v:'(1,4)'},{id:'b2r',x:560,y:125,v:'(3,4) ✓'},
+ {id:'b3a',x:40,y:200,v:'(3,1)'},{id:'b3b',x:300,y:200,v:'(1,4)'},{id:'b3r',x:560,y:200,v:'(3,4) ✓'},
+ {id:'b4a',x:40,y:275,v:'(2,3,4)'},{id:'b4b',x:300,y:275,v:'(3,4)'},{id:'b4r',x:560,y:275,v:'(2,3,4) ✓'}]
+.forEach(o => { blk(o.id,o.x,o.y,220,55,o.v,'',gfxLayer); allIds.push(o.id); });
+
+// Broadcast fail
+[{id:'bf1a',x:40,y:360,v:'(3,4)'},{id:'bf1b',x:300,y:360,v:'(5,)'},{id:'bf1r',x:560,y:360,v:'✗ RuntimeError'},
+ {id:'bf2a',x:40,y:435,v:'(3,4)'},{id:'bf2b',x:300,y:435,v:'(2,4)'},{id:'bf2r',x:560,y:435,v:'✗ RuntimeError'}]
+.forEach(o => { blk(o.id,o.x,o.y,220,50,o.v,'',gfxLayer); allIds.push(o.id); });
+
+/* ================================================================
+ *   2. 步骤脚本 —— 17 步，3 个阶段
+ *   每步定义：phase, title, html（讲解内容）, show（可见ID）, active（高亮ID）
+ * ================================================================ */
+const STEPS = [
+  // ======== Phase A ========
+  {p:"A",t:"数据的最小单位：标量",h:'<p>深度学习的一切始于<b>数据</b>，而数据的最小单位是<b>标量（Scalar）</b>——<b>一个单独的数字</b>。它没有方向，没有结构，只有一个值。</p><p>在 PyTorch 中：<code>t = torch.tensor(3.14)</code> 创建标量。<code>t.shape</code> 返回 <code>torch.Size([])</code>——<b>空元组，表示零维</b>。<code>t.ndim</code> 返回 <code>0</code>。<code>t.numel()</code> 返回 <code>1</code>。</p><p>为什么需要标量？因为<b>优化算法只能朝一个标量的反方向走</b>——梯度下降需要 loss 这个标量来告诉它“往哪边调参数”。</p><div class=\"tip-block\"><b>关键直觉：</b>一个神经网络的最后一层可能有 1000 个输出，但 Softmax + CrossEntropy 把它们汇聚成一个标量 loss。这个标量是整个反向传播的起点——没有它，梯度无处可去。</div>',show:["s0"],active:["s0"]},
+  {p:"A",t:"训练循环中的三类标量",h:'<p><b>loss</b>（损失值）——衡量模型预测偏离真实标签的程度。范围 [0, +∞)，<b>越小越好</b>。它是训练的唯一优化目标。</p><p><b>accuracy</b>（准确率）——分类正确的比例。范围 [0, 1]，<b>越大越好</b>。但它不可微，所以不能直接优化。</p><p><b>learning rate</b>（学习率）——控制每次参数更新的步长。典型值 0.0001~0.1。<b>太大→震荡发散，太小→收敛太慢</b>。</p><div class=\"tip-block\">这三个标量之间的关系：loss 决定梯度方向，lr 决定沿这个方向走多远，accuracy 告诉你终点对不对。整个训练循环就是这三个标量的舞蹈。</div>',show:["s1","s2","s3"],active:["s1"]},
+  {p:"A",t:"一维：向量 Vector",h:'<p>把多个标量沿<b>一个轴</b>排列，得到<b>向量（Vector / 1D Tensor）</b>。每个位置叫一个<b>元素</b>，通过<b>整数索引</b>访问。</p><p>例如一个 4 维词嵌入向量 <code>[0.2, -0.5, 0.8, 0.1]</code>。这 4 个数字是这个词在 4 个语义维度上的“得分”——每个维度都是模型自己学会的。</p><p><code>t.shape = (4,)</code>——<b>1 个轴，长度 4</b>。<code>t.ndim = 1</code>，<code>t.numel() = 4</code>。索引从 0 开始：<code>v[0] = 0.2</code>，<code>v[-1] = 0.1</code>。</p><div class=\"tip-block\"><b>一维向量的三种常见身份：</b>① 特征向量（784 维的 MNIST 图片拉平）② 偏置向量（Linear 层的 bias）③ 分类 logits（10 类的原始分数）。</div>',show:["v0","v1","v2","v3"],active:["v2"]},
+  {p:"A",t:"二维：矩阵 Matrix",h:'<p>多个向量沿第 0 轴堆叠 = <b>矩阵（Matrix / 2D Tensor）</b>。<b>用两个索引定位一个元素</b>。</p><p>一个 (3, 4) 的矩阵：3 行（<b>dim=0</b>，第一个索引）、4 列（<b>dim=1</b>，第二个索引），共 3×4=12 个元素。<code>t[1, 2]</code> 指向第 2 行第 3 列。</p><p>线性层 <code>nn.Linear(784, 256)</code> 的权重矩阵 shape 是 <code>(256, 784)</code>——<b>输出维度在前，输入维度在后</b>。每行是 784 个输入连接到 1 个输出神经元的权重。</p><div class=\"tip-block\"><b>线性代数视角：</b>输入向量 x∈R<sup>784</sup> 左乘权重矩阵 W∈R<sup>256×784</sup> 得到输出向量 y∈R<sup>256</sup>。y = xW<sup>T</sup> + b。</div>',show:["m0_0","m0_1","m0_2","m0_3","m1_0","m1_1","m1_2","m1_3","m2_0","m2_1","m2_2","m2_3"],active:["m1_2"]},
+  {p:"A",t:"矩阵乘法的 shape 追踪",h:'<p>线性层的前向传播本质是<b>矩阵乘法</b>。理解 shape 变化比理解公式更重要：</p><p><code>y = x @ W.T + b</code>。x∈R<sup>(1,4)</sup>，W∈R<sup>(3,4)</sup>，W<sup>T</sup>∈R<sup>(4,3)</sup>。那么 (1,4)×(4,3)=(1,3)。y∈R<sup>(1,3)</sup>。</p><p><b>shape 追踪法：(m,n) × (n,p) = (m,p)</b>。内维度 n 必须相等，结果取外维度 m 和 p。如果内维度不相等 → RuntimeError。</p><p>3 个输出神经元 = 3 次点积。每次点积是输入向量与权重矩阵对应行的“相似度”度量。</p><div class=\"tip-block\"><b>调试铁律：</b>每次写 <code>x @ W.T</code> 之前，在脑子里跑一遍 shape 追踪法。(a,b)×(c,d) —— b 必须等于 c。如果不等，你的张量维度搞反了。</div>',show:["m0_0","m0_1","m0_2","m0_3","m1_0","m1_1","m1_2","m1_3","m2_0","m2_1","m2_2","m2_3"],active:[]},
+  {p:"A",t:"三维：3D 张量",h:'<p>多个矩阵沿第 0 轴堆叠 = <b>3D 张量</b>。<b>用三个索引定位一个元素</b>。</p><p>NLP 中的典型 shape：<code>(2, 5, 4)</code>——2 条推文（<b>batch</b>）× 每条最多 5 个词（<b>seq_len</b>）× 每词 4 维 embedding（<b>hidden_dim</b>）。</p><p><b>三层索引</b>：<code>t[0, 2, 3]</code> = 第 1 条推文的第 3 个词的第 4 维特征。</p><div class=\"tip-block\"><b>dim 命名约定：</b>dim=0→batch（多少个样本），dim=1→sequence/time（多长），dim=2→feature/hidden（多宽）。越往外层越“宏观”，越往内层越“细节”。</div>',show:["t0_0_0","t0_0_1","t0_0_2","t0_1_0","t0_1_1","t0_1_2","t0_2_0","t0_2_1","t0_2_2","t1_0_0","t1_0_1","t1_0_2","t1_1_0","t1_1_1","t1_1_2","t1_2_0","t1_2_1","t1_2_2","cn0_0","cn0_2","cn2_0","cn2_2","t3lbl"],active:["t0_0_0"]},
+  {p:"A",t:"3D 张量的内部结构",h:'<p>前面是 batch=0 的矩阵（橙色，shape (3,4)），后面是 batch=1 的矩阵（紫色，shape (3,4)）。两个矩阵沿 dim=0 堆叠形成 (2,3,4)。</p><p>每个矩阵内的元素通过<b>行索引（dim=1）和列索引（dim=2）</b>定位。不同 batch 之间<b>相互独立</b>——batch=0 的元素和 batch=1 的元素之间没有任何运算关系。</p><p>在 Transformer 中，一个 batch 内的所有序列被<b>并行处理</b>——这是 GPU 高效的关键。batch 越大，GPU 利用率越高，但显存占用也越大。</p><div class=\"tip-block\"><b>ndim 与 numel：</b>shape (2,3,4) → ndim=3（3 个轴），numel=2×3×4=24（24 个元素）。<b>ndim = shape 的长度，numel = shape 所有值的乘积。</b></div>',show:["t0_0_0","t0_0_1","t0_0_2","t0_1_0","t0_1_1","t0_1_2","t0_2_0","t0_2_1","t0_2_2","t1_0_0","t1_0_1","t1_0_2","t1_1_0","t1_1_1","t1_1_2","t1_2_0","t1_2_1","t1_2_2","cn0_0","cn0_2","cn2_0","cn2_2","t3lbl"],active:[]},
+  {p:"A",t:"四维：批量图像张量（NCHW）",h:'<p>真实训练中，输入往往是<b>4D 张量</b>。卷积神经网络的标准格式是 <b>NCHW</b>：</p><p><code>shape = (32, 3, 28, 28)</code>。共 32×3×28×28 = <b>75,264 个元素</b>。</p><p><b>N</b>（Batch）= 一次前向传播处理的图片数量。越大→梯度估计越准确，但显存占用越大。常用值：32/64/128。</p><p><b>C</b>（Channel）= RGB 三个通道。灰度图 C=1。</p><p><b>H×W</b>（Height×Width）= 图片的空间分辨率。</p><div class=\"tip-block\"><b>为什么是 NCHW 不是 NHWC？</b>PyTorch 使用 NCHW（通道在前），TensorFlow 默认 NHWC（通道在后）。NCHW 对 cuDNN 更友好，卷积计算更快。</div>',show:["t4b","t4c","t4h","t4w"],active:["t4b"]},
+  {p:"A",t:"维度递进总结：从 0D 到 4D",h:'<p><code>scalar ()</code> → <code>vector (4,)</code> → <code>matrix (3,4)</code> → <code>3D (2,3,4)</code> → <code>4D (32,3,28,28)</code></p><p>每增加一个维度，就多一个索引轴。每个轴有自己的<b>语义含义</b>（batch/seq/channel/feature...）。shape 不仅告诉你“多大”，更告诉你“怎么理解这些数据”。</p><p><b>三个永远成立的公式：</b><code>ndim = len(shape)</code>，<code>numel() = shape[0] × ... × shape[-1]</code>，<code>axis=0 最外层，axis=-1 最内层</code>。</p>',show:["sum0","sum1","sum2","sum3","sum4"],active:["sum4"]},
+  // ======== Phase B ========
+  {p:"B",t:"查看 shape——最重要的调试习惯",h:'<p>PyTorch 提供三个核心属性来了解张量的“身材”：</p><p><code>.shape</code> 返回 <code>torch.Size</code> 对象（本质是元组）。<b>每次定义张量后立刻 print(x.shape)</b>。</p><p><code>.ndim</code> 返回维度数（轴的数量）。<code>.numel()</code> 返回总元素数（所有维度大小的乘积）。</p><p><span class=\"badge badge--warn\">铁律</span> shape 不匹配是深度学习 bug 的第一大来源。每当你看到 <code>RuntimeError: shape ... mismatch</code>，第一反应不是读报错文字，而是 <code>print</code> 所有相关张量的 shape。</p><div class=\"tip-block\">花 2 秒 print shape，省 20 分钟 debug。这是所有资深 PyTorch 用户的共同经验。</div>',show:["rs1"],active:["rs1"]},
+  {p:"B",t:"reshape——改变视角，不改变数据",h:'<p><code>x.reshape(2, 12)</code> 把 (2,3,4) 的 24 个元素重新排列成 (2,12) 的矩阵。<b>元素总数不变：24=24</b>。</p><p><b>reshape 不复制数据</b>（如果可能）。它只是改变了“怎么看”这 24 个元素的视角——底层内存中，元素顺序从未改变。</p><p><code>-1</code> 符号：<code>x.reshape(2, -1)</code> 自动推导第二个维度为 12。<code>-1</code> 只能在一处使用。</p><p><b>reshape vs view：</b>view 要求内存连续（更快但更严格），reshape 更宽容。不确定时用 reshape。</p>',show:["rs1","rs2","rs3"],active:["rs2"]},
+  {p:"B",t:"squeeze 与 unsqueeze——增减长度为 1 的轴",h:'<p><b>squeeze(dim)</b>：去掉长度为 1 的维度。<code>(1,3,1,4).squeeze() = (3,4)</code>。dim=0 和 dim=2 长度为 1，被移除。</p><p><b>unsqueeze(dim)</b>：在指定位置插入长度为 1 的新轴。<code>(3,4).unsqueeze(0) = (1,3,4)</code>。数据不变，只是多了一层嵌套。</p><p><b>最常见场景：</b>模型期望 4D 输入 (N,C,H,W)，但你只有一张图 (C,H,W)。<code>img.unsqueeze(0)</code> 添加 batch 维度 → (1,C,H,W)。忘记这步是新手 #1 报错原因。</p><div class=\"tip-block\"><b>记忆技巧：</b>squeeze = 挤掉（去掉长度为 1 的维度），unsqueeze = 插入（添加长度为 1 的维度）。两者都不改变元素总数。</div>',show:["sq1","sq1r","sq2","sq2r"],active:["sq2r"]},
+  {p:"B",t:"transpose 与 permute——重排轴顺序",h:'<p><b>transpose(dim0, dim1)</b>：交换两个轴。<code>(2,3,4).transpose(0,2) = (4,3,2)</code>。一次只能交换两个维度。</p><p><b>permute(*dims)</b>：重排所有轴。<code>(2,3,4).permute(2,0,1) = (4,2,3)</code>。参数是新顺序的索引列表。</p><p><b>经典用例：NCHW ↔ NHWC 转换</b>。<code>img_nchw.permute(0,2,3,1)</code> 把 (N,C,H,W) 转为 (N,H,W,C)——TensorFlow 格式。这在 ONNX 导出和模型部署时经常用到。</p><div class=\"tip-block\"><b>重要：transpose 后张量不连续！</b>transpose/permute 后的张量不能再 .view()——需要先 .contiguous() 或改用 .reshape()。</div>',show:[],active:[]},
+  // ======== Phase C ========
+  {p:"C",t:"广播机制——不同 shape 也能运算",h:'<p>广播（Broadcasting）是 PyTorch 中最强大的隐式机制——让<b>不同 shape 的张量能进行逐元素运算</b>，而无需显式复制数据。它遵循 NumPy 的广播语义。</p><p><b>广播三步法（从右向左检查）：</b></p><p><b>第 1 步：左侧补 1。</b>维度数不同时，给维度较少的张量在前面补 1。(4,) → (1,4)。</p><p><b>第 2 步：逐维比较。</b>从最右侧开始，每个维度：相等 OK，有一个是 1 OK，否则报错。</p><p><b>第 3 步：1 被拉伸。</b>长度为 1 的轴被“虚拟扩展”到匹配——<b>不复制数据，只是逻辑上重复</b>。</p>',show:["b1a","b1b","b1r"],active:[]},
+  {p:"C",t:"广播成功案例",h:'<p><b>(3,4) + (4,) → (3,4)</b>：(4,) 补为 (1,4)，dim=0: 3 vs 1→广播，dim=1: 4 vs 4 OK。向量被加到矩阵每一行。</p><p><b>(3,1) + (1,4) → (3,4)</b>：dim=1: 1 vs 4→广播，dim=0: 3 vs 1→广播。两个轴各自扩展——这是最经典的广播模式，用于构造坐标网格。</p><p><b>(2,3,4) + (3,4) → (2,3,4)</b>：(3,4) 补为 (1,3,4)。dim=0: 2 vs 1→广播。高维也完美支持——这是深度学习中最常用的模式：偏置加到特征图上。</p>',show:["b1a","b1b","b1r","b2a","b2b","b2r","b3a","b3b","b3r","b4a","b4b","b4r"],active:["b3r"]},
+  {p:"C",t:"广播失败——这些会直接报错",h:'<p><b>(3,4) + (5,) → RuntimeError!</b>——补为 (1,4) vs (1,5)，dim=1: 4 vs 5<b>都不为 1</b>。</p><p><b>(3,4) + (2,4) → RuntimeError!</b>——dim=0: 3 vs 2<b>都不为 1</b>。</p><p><b>(5,2,4,1) + (3,1,1) → RuntimeError!</b>——dim=1: 2 vs 3<b>都不为 1</b>。虽然 dim=2 和 dim=3 都兼容，但 dim=1 卡住了。</p><p>广播失败时 PyTorch 会清楚地告诉你哪个维度不兼容——仔细读报错信息，它已经帮你定位了问题轴。</p>',show:["bf1a","bf1b","bf1r","bf2a","bf2b","bf2r"],active:["bf1r"]},
+  {p:"C",t:"总结：张量 shape 四条核心法则",h:'<p><b>1. shape 第一。</b>每次张量操作前确认 shape。print(x.shape) 是调试的第一步，往往也是最后一步。</p><p><b>2. 从右对齐。</b>广播规则永远从 dim=-1 开始比较。左侧补 1，逐个检查，1 被拉伸。</p><p><b>3. 总元素不变。</b>reshape/squeeze/unsqueeze/permute 不创造也不消灭元素。numel() 永远不变。</p><p><b>4. 标量是终点。</b>所有维度的张量最终汇聚为一个标量 loss——反向传播从它开始，优化器沿它的负梯度方向更新参数。</p><div class=\"tip-block\"><b>记住这张维度阶梯图：</b>从左到右，每个维度增加一层嵌套。ndim = shape 长度，numel = shape 乘积。这两条规则适用于任何维度的张量。</div>',show:["sum0","sum1","sum2","sum3","sum4"],active:["sum4"]},
+];;
+
+/* ================================================================
+ *   3. 渲染引擎
+ * ================================================================ */
+let curStep = 0, playing = false, playTimer = null;
+let speedIdx = 1; const SPEEDS = [0.5, 1, 2, 4]; const BASE_DELAY = 1600;
+
+/* ---------- 应用可见性 ---------- */
+function applyVisibility(step){
+  const showSet = new Set(step.show || []);
+  const actSet  = new Set(step.active || []);
+  allIds.forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.classList.toggle('visible', showSet.has(id));
+    if(actSet.has(id)) { el.classList.add('visible'); el.classList.add('active'); }
+    else el.classList.remove('active');
+  });
+}
+
+/* ---------- 渲染左侧讲解 ---------- */
+function renderExplain(step){
+  const phaseName = {A:'阶段 A · 维度递进：从标量到4D张量', B:'阶段 B · shape 操作：reshape / squeeze / unsqueeze', C:'阶段 C · 广播规则：不同shape张量运算'}[step.p];
+  panelExpl.innerHTML = `<span class="phase-tag">${phaseName}</span><h2 class="step-title">${step.t}</h2><div class="step-body">${step.h}</div>`;
+  panelExpl.scrollTop = 0;
+}
+
+/* ---------- 渲染步骤指示 ---------- */
+function renderDots(){
+  stepDots.innerHTML = '';
+  STEPS.forEach((s, i) => {
+    const d = document.createElement('div');
+    d.className = 'step-dot' + (i === curStep ? ' active' : (i < curStep ? ' done' : ''));
+    d.title = `Step ${i+1}`;
+    d.addEventListener('click', () => go(i));
+    stepDots.appendChild(d);
+  });
+  stepInfo.textContent = `${curStep+1} / ${STEPS.length}`;
+  btnPrev.disabled = (curStep === 0);
+  btnNext.disabled = (curStep === STEPS.length - 1);
+}
+
+/* ---------- 阶段标题 ---------- */
+function updateStageTitle(step){
+  const names = {A:'维度递进', B:'shape 操作', C:'广播规则'};
+  stageTitle.innerHTML = `<span class="num">阶段 ${step.p}</span> · ${names[step.p]}`;
+}
+
+/* ---------- 主渲染入口 ---------- */
+function go(i){
+  if(i < 0 || i >= STEPS.length) return;
+  curStep = i;
+  const step = STEPS[i];
+  applyVisibility(step);
+  renderExplain(step);
+  renderDots();
+  updateStageTitle(step);
+}
+
+/* ---------- 控制按钮 ---------- */
+btnPrev.onclick = () => go(curStep - 1);
+btnNext.onclick = () => go(curStep + 1);
+btnReset.onclick = () => { stopPlay(); go(0); };
+btnPlay.onclick = togglePlay;
+btnSpeed.onclick = () => {
+  speedIdx = (speedIdx + 1) % SPEEDS.length;
+  btnSpeed.textContent = SPEEDS[speedIdx] + '×';
+  if(playing){ stopPlay(); startPlay(); }
+};
+
+function togglePlay(){ playing ? stopPlay() : startPlay(); }
+function startPlay(){
+  playing = true; btnPlay.textContent = '⏸ 暂停';
+  playTimer = setInterval(() => {
+    if(curStep < STEPS.length - 1) go(curStep + 1);
+    else stopPlay();
+  }, BASE_DELAY / SPEEDS[speedIdx]);
+}
+function stopPlay(){
+  playing = false; btnPlay.textContent = '▶ 自动';
+  clearInterval(playTimer); playTimer = null;
+}
+
+/* ---------- 键盘 ---------- */
+document.addEventListener('keydown', e => {
+  if(e.key === 'ArrowLeft')  go(curStep - 1);
+  if(e.key === 'ArrowRight') go(curStep + 1);
+  if(e.key === ' ')          { e.preventDefault(); togglePlay(); }
+  if(e.key === 'r' || e.key === 'R') { stopPlay(); go(0); }
+});
+
+/* ---------- 初始化 ---------- */
+go(0);
+</script>
+</body>
+</html>

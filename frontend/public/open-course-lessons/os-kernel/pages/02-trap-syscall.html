@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Trap 陷入机制 — 操作系统内核构建</title>
+<style>:root{--bg:#0d1117;--bg-soft:#161b22;--bg-code:#0a0c10;--fg:#e6edf3;--fg-dim:#8b949e;--line:#30363d;--accent:#58a6ff;--accent-2:#3fb950;--grad:#d29922;--success:#3fb950;--danger:#f85149}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(88,166,255,.18);color:var(--accent)}.badge--tip{background:rgba(63,185,80,.18);color:var(--success)}.badge--warn{background:rgba(210,153,34,.18);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.code-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>第 2 节 &middot; Trap 陷入机制</h1>
+<span class="breadcrumb"><a href="../index.html">课程首页</a> / 内核启动与系统调用</span>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="explain"></div>
+<div class="panel-stage" id="stage"></div>
+</div>
+<div class="demo-controls">
+<button id="prevBtn">&larr; 上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="nextBtn">下一步 &rarr;</button>
+<button id="autoBtn">&#9654; 自动播放</button>
+</div>
+</div>
+<script>
+const S=[
+  {
+    t:"用户态发起系统调用",
+    l:"mov $SYS_write, %eax   ;  int $0x80",
+    d:"用户程序将系统调用号放入 <code>%eax</code>，参数放入 <code>%ebx, %ecx, %edx</code>。<br>执行 <code>int $0x80</code>（或 <code>syscall</code> 指令）触发软件中断，<br>CPU 自动切换到内核态（Ring 0）。",
+    b:[{t:"Ring 3",c:"badge--tip"},{t:"int 0x80",c:"badge--warn"}],
+    r(svg){
+      svg.innerHTML='';
+      svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <!-- User / Kernel boundary -->
+        <rect x="20" y="20" width="760" height="200" rx="10" fill="rgba(63,185,80,.06)" stroke="var(--accent-2)" stroke-width="1.5" stroke-dasharray="6,3"/>
+        <text x="50" y="50" fill="var(--accent-2)" font-size="16" font-weight="700">Ring 3 — User Space</text>
+        <rect x="60" y="70" width="200" height="60" rx="8" fill="rgba(63,185,80,.12)" stroke="var(--accent-2)" stroke-width="1"/>
+        <text x="160" y="95" text-anchor="middle" fill="var(--accent-2)" font-size="13" font-weight="600">User Program</text>
+        <text x="160" y="115" text-anchor="middle" fill="var(--fg-dim)" font-size="11">write(fd, buf, len)</text>
+        <!-- Registers -->
+        <rect x="300" y="70" width="180" height="60" rx="8" fill="var(--bg)" stroke="var(--line)" stroke-width="1"/>
+        <text x="390" y="90" text-anchor="middle" fill="var(--fg-dim)" font-size="11">Registers (before trap)</text>
+        <text x="390" y="112" text-anchor="middle" fill="var(--accent)" font-size="12" font-family="monospace">eax=4 ebx=1 ecx=buf edx=6</text>
+        <!-- Trap arrow -->
+        <line x1="390" y1="130" x2="390" y2="240" stroke="var(--grad)" stroke-width="3" marker-end="url(#arrT)"/>
+        <text x="410" y="190" fill="var(--grad)" font-size="12" font-weight="600">int $0x80</text>
+        <!-- Kernel Space -->
+        <rect x="20" y="245" width="760" height="215" rx="10" fill="rgba(88,166,255,.06)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="50" y="275" fill="var(--accent)" font-size="16" font-weight="700">Ring 0 — Kernel Space</text>
+        <rect x="260" y="300" width="280" height="70" rx="8" fill="rgba(88,166,255,.12)" stroke="var(--accent)" stroke-width="1"/>
+        <text x="400" y="328" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="600">Trap Entry Point</text>
+        <text x="400" y="350" text-anchor="middle" fill="var(--fg-dim)" font-size="11">trap_entry: 保存上下文, 切换内核栈</text>
+        <!-- Privilege ring diagram -->
+        <rect x="560" y="60" width="200" height="160" rx="100" fill="none" stroke="var(--line)" stroke-width="1"/>
+        <circle cx="660" cy="140" r="70" fill="none" stroke="var(--line)" stroke-width="1"/>
+        <circle cx="660" cy="140" r="40" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="4,2"/>
+        <circle cx="660" cy="140" r="15" fill="rgba(88,166,255,.15)" stroke="var(--accent)" stroke-width="1"/>
+        <text x="660" y="85" text-anchor="middle" fill="var(--accent-2)" font-size="11">Ring 3</text>
+        <text x="660" y="118" text-anchor="middle" fill="var(--fg-dim)" font-size="10">Ring 2</text>
+        <text x="660" y="133" text-anchor="middle" fill="var(--fg-dim)" font-size="10">Ring 1</text>
+        <text x="660" y="155" text-anchor="middle" fill="var(--accent)" font-size="10">Ring 0</text>
+        <defs><marker id="arrT" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="var(--grad)"/></marker></defs>`;
+      svg.appendChild(g);
+    }
+  },
+  {
+    t:"CPU 保存上下文并切换特权级",
+    l:"push %ss; push %esp; push %eflags; push %cs; push %eip",
+    d:"CPU 自动将用户态 <code>%ss, %esp, %eflags, %cs, %eip</code> 压入内核栈。<br>然后从 TSS 加载内核栈指针，从 IDT 读取 trap handler 地址，<br>跳转到内核的 <code>trap_entry</code>。",
+    b:[{t:"IDT",c:"badge--def"},{t:"TSS",c:"badge--warn"},{t:"栈切换",c:"badge--tip"}],
+    r(svg){
+      svg.innerHTML='';
+      svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <!-- CPU core in center -->
+        <rect x="300" y="20" width="200" height="60" rx="10" fill="var(--bg-soft)" stroke="var(--line)" stroke-width="1.5"/>
+        <text x="400" y="48" text-anchor="middle" fill="var(--fg)" font-size="14" font-weight="700">CPU Core</text>
+        <text x="400" y="68" text-anchor="middle" fill="var(--fg-dim)" font-size="11">Privilege: Ring 0</text>
+        <!-- IDT table left -->
+        <rect x="30" y="100" width="220" height="260" rx="8" fill="var(--bg)" stroke="var(--line)" stroke-width="1"/>
+        <text x="140" y="125" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="700">IDT (Interrupt Descriptor Table)</text>
+        <line x1="40" y1="135" x2="250" y2="135" stroke="var(--line)" stroke-width="1"/>
+        <rect x="40" y="142" width="200" height="22" rx="3" fill="rgba(88,166,255,.08)"/><text x="140" y="158" text-anchor="middle" fill="var(--fg-dim)" font-size="11">#0  Divide Error</text>
+        <rect x="40" y="168" width="200" height="22" rx="3" fill="rgba(88,166,255,.08)"/><text x="140" y="184" text-anchor="middle" fill="var(--fg-dim)" font-size="11">#14 Page Fault</text>
+        <rect x="40" y="194" width="200" height="26" rx="3" fill="rgba(210,153,34,.15)"/><text x="140" y="212" text-anchor="middle" fill="var(--grad)" font-size="11" font-weight="600">#80 System Call →</text>
+        <rect x="40" y="224" width="200" height="22" rx="3" fill="rgba(88,166,255,.08)"/><text x="140" y="240" text-anchor="middle" fill="var(--fg-dim)" font-size="11">#32 Timer IRQ</text>
+        <rect x="40" y="250" width="200" height="22" rx="3" fill="rgba(88,166,255,.08)"/><text x="140" y="266" text-anchor="middle" fill="var(--fg-dim)" font-size="11">#33 Keyboard IRQ</text>
+        <!-- Arrow IDT to CPU -->
+        <line x1="250" y1="207" x2="300" y2="60" stroke="var(--grad)" stroke-width="2" stroke-dasharray="5,3"/>
+        <!-- User stack (right top) -->
+        <rect x="560" y="100" width="220" height="130" rx="8" fill="var(--bg)" stroke="var(--accent-2)" stroke-width="1"/>
+        <text x="670" y="125" text-anchor="middle" fill="var(--accent-2)" font-size="12" font-weight="600">User Stack (before trap)</text>
+        <rect x="575" y="135" width="190" height="18" rx="3" fill="rgba(63,185,80,.08)"/><text x="670" y="149" text-anchor="middle" fill="var(--fg-dim)" font-size="11" font-family="monospace">... user data ...</text>
+        <rect x="575" y="158" width="190" height="18" rx="3" fill="rgba(63,185,80,.08)"/><text x="670" y="172" text-anchor="middle" fill="var(--fg-dim)" font-size="11" font-family="monospace">arg3 = 6</text>
+        <rect x="575" y="181" width="190" height="18" rx="3" fill="rgba(63,185,80,.08)"/><text x="670" y="195" text-anchor="middle" fill="var(--fg-dim)" font-size="11" font-family="monospace">arg2 = buf</text>
+        <rect x="575" y="204" width="190" height="18" rx="3" fill="rgba(63,185,80,.08)"/><text x="670" y="218" text-anchor="middle" fill="var(--fg-dim)" font-size="11" font-family="monospace">arg1 = 1 (stdout)</text>
+        <!-- Kernel stack right bottom -->
+        <rect x="560" y="250" width="220" height="210" rx="8" fill="var(--bg)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="670" y="275" text-anchor="middle" fill="var(--accent)" font-size="12" font-weight="600">Kernel Stack (after trap)</text>
+        <rect x="575" y="285" width="190" height="18" rx="3" fill="rgba(88,166,255,.08)"/><text x="670" y="299" text-anchor="middle" fill="var(--fg-dim)" font-size="10" font-family="monospace">user_ss</text>
+        <rect x="575" y="308" width="190" height="18" rx="3" fill="rgba(88,166,255,.08)"/><text x="670" y="322" text-anchor="middle" fill="var(--fg-dim)" font-size="10" font-family="monospace">user_esp</text>
+        <rect x="575" y="331" width="190" height="18" rx="3" fill="rgba(88,166,255,.08)"/><text x="670" y="345" text-anchor="middle" fill="var(--fg-dim)" font-size="10" font-family="monospace">user_eflags</text>
+        <rect x="575" y="354" width="190" height="18" rx="3" fill="rgba(88,166,255,.08)"/><text x="670" y="368" text-anchor="middle" fill="var(--fg-dim)" font-size="10" font-family="monospace">user_cs (Ring 3)</text>
+        <rect x="575" y="377" width="190" height="18" rx="3" fill="rgba(210,153,34,.12)"/><text x="670" y="391" text-anchor="middle" fill="var(--grad)" font-size="10" font-family="monospace">user_eip (return addr)</text>
+        <rect x="575" y="400" width="190" height="18" rx="3" fill="rgba(88,166,255,.15)"/><text x="670" y="414" text-anchor="middle" fill="var(--accent)" font-size="10" font-family="monospace">... error_code, kernel frame</text>
+        <rect x="575" y="423" width="190" height="18" rx="3" fill="rgba(88,166,255,.25)"/><text x="670" y="437" text-anchor="middle" fill="var(--accent)" font-size="10" font-family="monospace">&#9660; kernel esp</text>
+        <!-- Animated pulse on IDT entry -->
+        <circle cx="140" cy="207" r="20" fill="none" stroke="var(--grad)" stroke-width="2" opacity="0.5">
+          <animate attributeName="r" from="15" to="35" dur="1s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" from="0.5" to="0" dur="1s" repeatCount="indefinite"/>
+        </circle>`;
+      svg.appendChild(g);
+    }
+  },
+  {
+    t:"内核处理系统调用",
+    l:"void syscall_handler(trapframe *tf) { ... syscall[tf->eax](tf); }",
+    d:"<code>trap_entry</code> 保护通用寄存器后调用 <code>trap()</code>，<br><code>trap()</code> 判断中断号为 0x80，调用 <code>syscall()</code>，<br>根据 <code>%eax</code> 索引系统调用表，执行对应的内核函数。",
+    b:[{t:"Handler",c:"badge--def"},{t:"Trapframe",c:"badge--warn"},{t:"跳转表",c:"badge--tip"}],
+    r(svg){
+      svg.innerHTML='';
+      svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <!-- Flow diagram -->
+        <rect x="40" y="40" width="160" height="50" rx="8" fill="rgba(210,153,34,.12)" stroke="var(--grad)" stroke-width="1.5"/>
+        <text x="120" y="60" text-anchor="middle" fill="var(--grad)" font-size="12">trap_entry (asm)</text>
+        <text x="120" y="78" text-anchor="middle" fill="var(--fg-dim)" font-size="10">保存寄存器</text>
+        <line x1="200" y1="65" x2="260" y2="65" stroke="var(--line)" stroke-width="2" marker-end="url(#a1)"/>
+        <rect x="260" y="40" width="160" height="50" rx="8" fill="rgba(88,166,255,.12)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="340" y="60" text-anchor="middle" fill="var(--accent)" font-size="12">trap(tf)</text>
+        <text x="340" y="78" text-anchor="middle" fill="var(--fg-dim)" font-size="10">C handler</text>
+        <line x1="420" y1="65" x2="480" y2="65" stroke="var(--line)" stroke-width="2" marker-end="url(#a1)"/>
+        <rect x="480" y="40" width="160" height="50" rx="8" fill="rgba(63,185,80,.12)" stroke="var(--accent-2)" stroke-width="1.5"/>
+        <text x="560" y="60" text-anchor="middle" fill="var(--accent-2)" font-size="12">syscall()</text>
+        <text x="560" y="78" text-anchor="middle" fill="var(--fg-dim)" font-size="10">dispatcher</text>
+        <!-- Syscall table -->
+        <text x="400" y="155" text-anchor="middle" fill="var(--fg)" font-size="14" font-weight="700">System Call Table (syscalls[])</text>
+        <rect x="100" y="172" width="600" height="240" rx="8" fill="var(--bg)" stroke="var(--line)" stroke-width="1"/>
+        <rect x="110" y="182" width="50" height="22" rx="3" fill="var(--line)"/><text x="135" y="198" text-anchor="middle" fill="var(--fg-dim)" font-size="11">#0</text>
+        <rect x="165" y="182" width="520" height="22" rx="3" fill="rgba(88,166,255,.06)"/><text x="425" y="198" text-anchor="middle" fill="var(--fg-dim)" font-size="11">sys_read    (fd, buf, count)</text>
+        <rect x="110" y="210" width="50" height="22" rx="3" fill="var(--line)"/><text x="135" y="226" text-anchor="middle" fill="var(--fg-dim)" font-size="11">#1</text>
+        <rect x="165" y="210" width="520" height="22" rx="3" fill="rgba(88,166,255,.06)"/><text x="425" y="226" text-anchor="middle" fill="var(--fg-dim)" font-size="11">sys_write   (fd, buf, count)</text>
+        <rect x="110" y="238" width="50" height="26" rx="3" fill="rgba(63,185,80,.3)"/><text x="135" y="256" text-anchor="middle" fill="var(--accent-2)" font-size="11">#4</text>
+        <rect x="165" y="238" width="520" height="26" rx="3" fill="rgba(63,185,80,.18)"/><text x="425" y="256" text-anchor="middle" fill="var(--accent-2)" font-size="12" font-weight="600">sys_write(fd=1, buf, len=6)  ← eax=4, executing now</text>
+        <rect x="110" y="270" width="50" height="22" rx="3" fill="var(--line)"/><text x="135" y="286" text-anchor="middle" fill="var(--fg-dim)" font-size="11">#5</text>
+        <rect x="165" y="270" width="520" height="22" rx="3" fill="rgba(88,166,255,.06)"/><text x="425" y="286" text-anchor="middle" fill="var(--fg-dim)" font-size="11">sys_open    (path, flags, mode)</text>
+        <rect x="110" y="298" width="50" height="22" rx="3" fill="var(--line)"/><text x="135" y="314" text-anchor="middle" fill="var(--fg-dim)" font-size="11">#6</text>
+        <rect x="165" y="298" width="520" height="22" rx="3" fill="rgba(88,166,255,.06)"/><text x="425" y="314" text-anchor="middle" fill="var(--fg-dim)" font-size="11">sys_close   (fd)</text>
+        <rect x="110" y="326" width="50" height="22" rx="3" fill="var(--line)"/><text x="135" y="342" text-anchor="middle" fill="var(--fg-dim)" font-size="11">...</text>
+        <!-- Animated highlight on #4 -->
+        <rect x="110" y="238" width="580" height="26" rx="3" fill="none" stroke="var(--accent-2)" stroke-width="2">
+          <animate attributeName="opacity" values="1;0.3;1" dur="1.8s" repeatCount="indefinite"/>
+        </rect>
+        <defs><marker id="a1" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--line)"/></marker></defs>`;
+      svg.appendChild(g);
+    }
+  },
+  {
+    t:"从内核返回用户态",
+    l:"iret  ;  恢复 %eip, %cs, %eflags, %esp, %ss",
+    d:"系统调用完成后，<code>iret</code>（或 <code>sysret</code>）指令：<br>1) 恢复通用寄存器 2) 弹出内核栈中保存的 CPU 上下文<br>3) 切换回 Ring 3 4) 用户程序从 <code>int $0x80</code> 下一条指令继续执行。",
+    b:[{t:"iret",c:"badge--def"},{t:"Ring 3 返回",c:"badge--tip"},{t:"恢复现场",c:"badge--warn"}],
+    r(svg){
+      svg.innerHTML='';
+      svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <!-- Return flow -->
+        <rect x="20" y="20" width="360" height="180" rx="10" fill="rgba(88,166,255,.06)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="200" y="50" text-anchor="middle" fill="var(--accent)" font-size="15" font-weight="700">Ring 0 — Kernel (return path)</text>
+        <!-- Trap return steps -->
+        <rect x="40" y="70" width="160" height="40" rx="6" fill="rgba(88,166,255,.12)"/><text x="120" y="95" text-anchor="middle" fill="var(--fg)" font-size="12">restore regs</text>
+        <line x1="200" y1="90" x2="240" y2="90" stroke="var(--line)" stroke-width="1.5" marker-end="url(#a2)"/>
+        <rect x="240" y="70" width="120" height="40" rx="6" fill="rgba(88,166,255,.12)"/><text x="300" y="95" text-anchor="middle" fill="var(--fg)" font-size="12">pop %gs..%edi</text>
+        <line x1="300" y1="110" x2="300" y2="140" stroke="var(--line)" stroke-width="1.5" marker-end="url(#a2)"/>
+        <rect x="240" y="140" width="120" height="40" rx="6" fill="rgba(210,153,34,.15)"/><text x="300" y="165" text-anchor="middle" fill="var(--grad)" font-size="12" font-weight="600">iret / sysret</text>
+        <!-- Big arrow down -->
+        <line x1="300" y1="180" x2="300" y2="260" stroke="var(--grad)" stroke-width="3" marker-end="url(#arrB)"/>
+        <text x="320" y="225" fill="var(--grad)" font-size="13" font-weight="600">Ring 0 → Ring 3</text>
+        <!-- User space after return -->
+        <rect x="20" y="265" width="360" height="180" rx="10" fill="rgba(63,185,80,.06)" stroke="var(--accent-2)" stroke-width="1.5"/>
+        <text x="200" y="295" text-anchor="middle" fill="var(--accent-2)" font-size="15" font-weight="700">Ring 3 — User Space (resumed)</text>
+        <rect x="60" y="320" width="280" height="60" rx="8" fill="rgba(63,185,80,.12)" stroke="var(--accent-2)" stroke-width="1"/>
+        <text x="200" y="345" text-anchor="middle" fill="var(--accent-2)" font-size="13">User Program (resumed at next insn)</text>
+        <text x="200" y="368" text-anchor="middle" fill="var(--fg)" font-size="12" font-family="monospace">result = 6; // write returned 6</text>
+        <!-- Right side: trapframe structure -->
+        <rect x="420" y="20" width="360" height="430" rx="8" fill="var(--bg)" stroke="var(--line)" stroke-width="1"/>
+        <text x="600" y="50" text-anchor="middle" fill="var(--accent)" font-size="14" font-weight="700">struct trapframe (kernel stack)</text>
+        <line x1="440" y1="60" x2="760" y2="60" stroke="var(--line)" stroke-width="1"/>
+        <rect x="440" y="70" width="150" height="22" rx="3" fill="rgba(88,166,255,.08)"/><text x="515" y="86" text-anchor="middle" fill="var(--fg-dim)" font-size="11">uint edi, esi, ebp</text>
+        <rect x="440" y="98" width="150" height="22" rx="3" fill="rgba(88,166,255,.08)"/><text x="515" y="114" text-anchor="middle" fill="var(--fg-dim)" font-size="11">uint oesp, ebx, edx</text>
+        <rect x="440" y="126" width="150" height="22" rx="3" fill="rgba(88,166,255,.08)"/><text x="515" y="142" text-anchor="middle" fill="var(--fg-dim)" font-size="11">uint ecx, eax</text>
+        <rect x="440" y="160" width="150" height="22" rx="3" fill="rgba(210,153,34,.10)"/><text x="515" y="176" text-anchor="middle" fill="var(--grad)" font-size="11">ushort gs, fs, es, ds</text>
+        <rect x="440" y="188" width="150" height="22" rx="3" fill="rgba(248,81,73,.08)"/><text x="515" y="204" text-anchor="middle" fill="var(--danger)" font-size="11">uint trapno</text>
+        <rect x="440" y="216" width="150" height="22" rx="3" fill="rgba(248,81,73,.08)"/><text x="515" y="232" text-anchor="middle" fill="var(--danger)" font-size="11">uint err</text>
+        <!-- CPU-saved frame -->
+        <rect x="600" y="70" width="160" height="22" rx="3" fill="rgba(63,185,80,.10)"/><text x="680" y="86" text-anchor="middle" fill="var(--accent-2)" font-size="11">uint eip (next insn)</text>
+        <rect x="600" y="98" width="160" height="22" rx="3" fill="rgba(63,185,80,.10)"/><text x="680" y="114" text-anchor="middle" fill="var(--accent-2)" font-size="11">ushort cs</text>
+        <rect x="600" y="126" width="160" height="22" rx="3" fill="rgba(63,185,80,.10)"/><text x="680" y="142" text-anchor="middle" fill="var(--accent-2)" font-size="11">uint eflags</text>
+        <rect x="600" y="160" width="160" height="22" rx="3" fill="rgba(63,185,80,.10)"/><text x="680" y="176" text-anchor="middle" fill="var(--accent-2)" font-size="11">uint esp</text>
+        <rect x="600" y="188" width="160" height="22" rx="3" fill="rgba(63,185,80,.10)"/><text x="680" y="204" text-anchor="middle" fill="var(--accent-2)" font-size="11">ushort ss</text>
+        <!-- Annotation -->
+        <text x="600" y="270" text-anchor="middle" fill="var(--fg-dim)" font-size="11">← iret 弹出这 5 个值</text>
+        <line x1="600" y1="210" x2="600" y2="260" stroke="var(--grad)" stroke-width="1" stroke-dasharray="3,3"/>
+        <!-- Return value -->
+        <text x="600" y="310" text-anchor="middle" fill="var(--accent-2)" font-size="14" font-weight="700">eax = 6 (return value)</text>
+        <rect x="500" y="340" width="200" height="70" rx="8" fill="rgba(63,185,80,.08)" stroke="var(--accent-2)" stroke-width="1"/>
+        <text x="600" y="362" text-anchor="middle" fill="var(--accent-2)" font-size="12">User sees: write() → 6</text>
+        <text x="600" y="385" text-anchor="middle" fill="var(--fg-dim)" font-size="11">transparent to user code!</text>
+        <defs><marker id="a2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--line)"/></marker>
+        <marker id="arrB" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="var(--grad)"/></marker></defs>`;
+      svg.appendChild(g);
+    }
+  }
+];
+
+let step=0,autoTimer=null,autoOn=false;
+const explain=document.getElementById('explain'),stage=document.getElementById('stage'),dots=document.getElementById('dots');
+const prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn'),autoBtn=document.getElementById('autoBtn');
+function render(){
+  const s=S[step];
+  explain.innerHTML=`
+    <div class="step-title">${s.t}</div>
+    ${s.l?`<div class="code-line">${s.l}</div>`:''}
+    <div class="badge-row">${s.b.map(b=>`<span class="badge ${b.c||'badge--def'}">${b.t}</span>`).join('')}</div>
+    <div class="step-desc">${s.d}</div>`;
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('viewBox','0 0 800 480');svg.style.width='100%';svg.style.height='100%';
+  stage.innerHTML='';stage.appendChild(svg);s.r(svg);
+  dots.innerHTML=S.map((_,i)=>{
+    let cls=i===step?'active':i<step?'done':'';
+    return `<span class="step-dot ${cls}"></span>`;
+  }).join('');
+  prevBtn.disabled=step===0;nextBtn.disabled=step===S.length-1;
+}
+function next(){if(step<S.length-1){step++;render();}}
+function prev(){if(step>0){step--;render();}}
+function restart(){step=0;render();}
+function toggleAuto(){
+  if(autoTimer){clearInterval(autoTimer);autoTimer=null;autoOn=false;autoBtn.innerHTML='&#9654; 自动播放';}
+  else{autoOn=true;autoBtn.innerHTML='&#9646;&#9646; 停止';autoTimer=setInterval(()=>{if(step<S.length-1){step++;render();}else{clearInterval(autoTimer);autoTimer=null;autoOn=false;autoBtn.innerHTML='&#9654; 自动播放';}},3000);}
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();next();}
+  else if(e.key==='ArrowLeft'){e.preventDefault();prev();}
+  else if(e.key==='r'||e.key==='R'){e.preventDefault();restart();}
+  else if(e.key==='a'||e.key==='A'){e.preventDefault();toggleAuto();}
+});
+prevBtn.onclick=prev;nextBtn.onclick=next;autoBtn.onclick=toggleAuto;render();
+</script>
+</body>
+</html>

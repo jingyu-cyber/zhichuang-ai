@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>软件工程 - 互动课程</title>
+<style>
+:root{--bg:#1c2128;--bg-soft:#252c35;--bg-code:#141820;--fg:#e6edf3;--fg-dim:#8b949e;--line:#30363d;--accent:#539bf5;--accent-2:#57ab5a;--grad:#c69026;--success:#57ab5a;--danger:#e5534b;--purple:#986ee2}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}
+.shell{max-width:1100px;margin:0 auto;padding:40px 24px 60px}
+h1{font-size:28px;margin-bottom:8px}
+.subtitle{color:var(--fg-dim);font-size:15px;margin-bottom:40px}
+.chapter{margin-bottom:32px}
+.chapter h2{font-size:20px;color:var(--accent);margin-bottom:4px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.chapter-desc{color:var(--fg-dim);font-size:13px;margin-bottom:16px}
+.lesson-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.lesson-card{display:block;background:var(--bg-soft);border:1px solid var(--line);border-radius:12px;padding:18px;text-decoration:none;color:var(--fg);transition:border-color .2s,transform .15s}
+.lesson-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.lesson-card .num{font-size:11px;color:var(--fg-dim);margin-bottom:4px}
+.lesson-card .title{font-size:15px;font-weight:600;margin-bottom:6px}
+.lesson-card .desc{font-size:13px;color:var(--fg-dim);line-height:1.5}
+.badge-row{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.badge{padding:3px 8px;border-radius:999px;font-size:11px;font-weight:600}
+.badge--def{background:rgba(83,155,245,.18);color:var(--accent)}
+.badge--tip{background:rgba(87,171,90,.18);color:var(--success)}
+.badge--warn{background:rgba(198,144,38,.18);color:var(--grad)}
+@media(max-width:760px){.lesson-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="shell">
+<h1>软件工程 互动课程</h1>
+<p class="subtitle">12 个互动演示页面 · 覆盖需求工程、软件设计、实现测试、项目管理四大章节</p>
+
+<div class="chapter">
+<h2>第一章：需求工程</h2>
+<p class="chapter-desc">从用户场景到验收标准，建立完整的需求定义流程</p>
+<div class="lesson-grid">
+<a class="lesson-card" href="pages/01-user-scenario.html">
+<div class="num">Lesson 01</div>
+<div class="title">用户场景提取</div>
+<div class="desc">项目文本→角色/场景/痛点识别，构建用户旅程地图</div>
+<div class="badge-row"><span class="badge badge--def">User Story</span><span class="badge badge--tip">Journey Map</span></div>
+</a>
+<a class="lesson-card" href="pages/02-feature-scope.html">
+<div class="num">Lesson 02</div>
+<div class="title">功能范围矩阵</div>
+<div class="desc">功能卡片按价值×成本拖入四象限（核心/增强/锦上添花/不做）</div>
+<div class="badge-row"><span class="badge badge--def">MoSCoW</span><span class="badge badge--warn">Priority</span></div>
+</a>
+<a class="lesson-card" href="pages/03-acceptance-criteria.html">
+<div class="num">Lesson 03</div>
+<div class="title">验收标准编写</div>
+<div class="desc">模糊需求→Given-When-Then 格式，逐步精化验收条件</div>
+<div class="badge-row"><span class="badge badge--def">BDD</span><span class="badge badge--tip">GWT</span></div>
+</a>
+</div>
+</div>
+
+<div class="chapter">
+<h2>第二章：软件设计</h2>
+<p class="chapter-desc">从交互流到API数据模型，构建系统架构的完整视图</p>
+<div class="lesson-grid">
+<a class="lesson-card" href="pages/04-interaction-flow.html">
+<div class="num">Lesson 04</div>
+<div class="title">交互流程设计</div>
+<div class="desc">页面节点+操作路径，标记断头路和回退路径</div>
+<div class="badge-row"><span class="badge badge--def">Flow Chart</span><span class="badge badge--warn">Edge Cases</span></div>
+</a>
+<a class="lesson-card" href="pages/05-module-boundary.html">
+<div class="num">Lesson 05</div>
+<div class="title">模块边界划分</div>
+<div class="desc">功能→前端/后端/数据/AI层，接口依赖箭头标注</div>
+<div class="badge-row"><span class="badge badge--def">Architecture</span><span class="badge badge--tip">Layers</span></div>
+</a>
+<a class="lesson-card" href="pages/06-api-data-model.html">
+<div class="num">Lesson 06</div>
+<div class="title">API与数据对齐</div>
+<div class="desc">请求追踪：页面→API→服务→数据库，标记鉴权和验证点</div>
+<div class="badge-row"><span class="badge badge--def">Trace</span><span class="badge badge--warn">Auth</span></div>
+</a>
+</div>
+</div>
+
+<div class="chapter">
+<h2>第三章：实现与测试</h2>
+<p class="chapter-desc">从仓库结构到部署流水线，建立工程化实现体系</p>
+<div class="lesson-grid">
+<a class="lesson-card" href="pages/07-repo-structure.html">
+<div class="num">Lesson 07</div>
+<div class="title">仓库结构设计</div>
+<div class="desc">项目树按入口/业务/测试/配置/文档分色标注</div>
+<div class="badge-row"><span class="badge badge--def">Monorepo</span><span class="badge badge--tip">Structure</span></div>
+</a>
+<a class="lesson-card" href="pages/08-test-matrix.html">
+<div class="num">Lesson 08</div>
+<div class="title">测试矩阵</div>
+<div class="desc">每需求→正常/边界/异常用例，覆盖率可视化</div>
+<div class="badge-row"><span class="badge badge--def">Coverage</span><span class="badge badge--warn">Edge Cases</span></div>
+</a>
+<a class="lesson-card" href="pages/09-deploy-reproduce.html">
+<div class="num">Lesson 09</div>
+<div class="title">部署步骤链</div>
+<div class="desc">依赖→环境→迁移→启动，缺失步骤检测</div>
+<div class="badge-row"><span class="badge badge--def">CI/CD</span><span class="badge badge--tip">DevOps</span></div>
+</a>
+</div>
+</div>
+
+<div class="chapter">
+<h2>第四章：项目管理</h2>
+<p class="chapter-desc">从团队贡献到评审复盘，覆盖项目管理核心实践</p>
+<div class="lesson-grid">
+<a class="lesson-card" href="pages/10-team-contribution.html">
+<div class="num">Lesson 10</div>
+<div class="title">团队贡献分析</div>
+<div class="desc">成员×模块×提交×产出对齐，总线因子风险标记</div>
+<div class="badge-row"><span class="badge badge--def">Bus Factor</span><span class="badge badge--warn">Risk</span></div>
+</a>
+<a class="lesson-card" href="pages/11-report-reading.html">
+<div class="num">Lesson 11</div>
+<div class="title">报告阅读与评审</div>
+<div class="desc">雷达图+代码证据+改进建议，多维度评估</div>
+<div class="badge-row"><span class="badge badge--def">Radar</span><span class="badge badge--tip">Review</span></div>
+</a>
+<a class="lesson-card" href="pages/12-class-review.html">
+<div class="num">Lesson 12</div>
+<div class="title">课堂评审与复盘</div>
+<div class="desc">常见问题→评审主题→自动生成大纲+练习</div>
+<div class="badge-row"><span class="badge badge--def">Retro</span><span class="badge badge--tip">Exercise</span></div>
+</a>
+</div>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EXPLAIN 执行计划</title>
+<style>
+:root{--bg:#1a1e1d;--bg-soft:#25302d;--bg-code:#0d1111;--fg:#e0eee8;--fg-dim:#90a898;--line:#304038;--accent:#40c0b0;--accent-2:#4898e0;--grad:#4898e0;--success:#40c870;--danger:#e05050}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(72,152,224,.18);color:var(--grad)}.badge--tip{background:rgba(64,200,112,.18);color:var(--success)}.badge--warn{background:rgba(224,80,80,.18);color:var(--danger)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+  <div class="demo-header">
+    <div>
+      <h1>EXPLAIN 执行计划</h1>
+    </div>
+    <div class="breadcrumb">第三章 · 查询优化</div>
+  </div>
+  <div class="demo-main">
+    <div class="panel-explain" id="explainPanel">
+      <div class="step-title" id="stepTitle">步骤 1 / 4</div>
+      <div class="step-desc" id="stepDesc">查询语句解析</div>
+      <div class="info-line" id="infoLine">SELECT s.name, d.dept_name FROM student s JOIN dept d ON s.dept_id = d.id WHERE s.gpa > 3.0 ORDER BY s.name</div>
+      <div class="badge-row" id="badgeRow">
+        <span class="badge badge--def">SQL 解析</span>
+        <span class="badge badge--def">语法树</span>
+      </div>
+    </div>
+    <div class="panel-stage" id="svgp"></div>
+  </div>
+  <div class="demo-controls">
+    <button id="prevBtn" onclick="changeStep(-1)">&larr; 上一步</button>
+    <div class="step-dots" id="stepDots"></div>
+    <button id="nextBtn" onclick="changeStep(1)">下一步 &rarr;</button>
+    <button id="autoBtn" onclick="toggleAuto()">&#9654; 自动播放</button>
+  </div>
+</div>
+
+<script>
+(function(){
+var cur=-1,autoTimer=null;
+
+var S=[
+  {
+    title:"步骤 1 / 4 — SQL 语法解析",
+    desc:"数据库首先对 SQL 语句进行词法和语法分析，生成一棵抽象语法树（AST）。每个子句（SELECT 列表、FROM/JOIN、WHERE、ORDER BY）被解析为树的不同分支，查询优化器将基于这棵树进行后续的代数优化和物理优化。",
+    info:"SELECT s.name, d.dept_name<br>FROM student s JOIN dept d<br>ON s.dept_id = d.id<br>WHERE s.gpa > 3.0<br>ORDER BY s.name",
+    badges:[{c:"badge--def",t:"SQL 解析"},{c:"badge--def",t:"语法树"}],
+    svg:function(){
+      var svg='<svg viewBox="0 0 800 340" xmlns="http://www.w3.org/2000/svg">';
+      svg+='<defs><marker id="arr0" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#40c0b0"/></marker><marker id="arr1" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#4898e0"/></marker></defs>';
+      svg+='<rect x="315" y="10" width="170" height="36" rx="10" fill="none" stroke="#40c0b0" stroke-width="2"/>';
+      svg+='<text x="400" y="33" text-anchor="middle" fill="#40c0b0" font-size="15" font-weight="700">SELECT 查询</text>';
+      var branches=[
+        {x:80,label:"SELECT 列表",sub:"s.name, d.dept_name",color:"#4898e0",yoff:0},
+        {x:270,label:"FROM / JOIN",sub:"student s JOIN dept d\nON s.dept_id = d.id",color:"#40c870",yoff:0},
+        {x:460,label:"WHERE 条件",sub:"s.gpa > 3.0",color:"#e0b040",yoff:0},
+        {x:650,label:"ORDER BY",sub:"s.name ASC",color:"#c070e0",yoff:0}
+      ];
+      for(var i=0;i<branches.length;i++){
+        var b=branches[i];
+        svg+='<line x1="385" y1="46" x2="'+(b.x+45)+'" y2="100" stroke="#40c0b0" stroke-width="1.5" marker-end="url(#arr0)" stroke-dasharray="4,3"/>';
+        svg+='<rect x="'+b.x+'" y="102" width="90" height="30" rx="6" fill="rgba(72,152,224,0.12)" stroke="'+b.color+'" stroke-width="1.5"/>';
+        svg+='<text x="'+(b.x+45)+'" y="122" text-anchor="middle" fill="'+b.color+'" font-size="12" font-weight="600">'+b.label+'</text>';
+        var sub=b.sub;
+        var lines=sub.split("\n");
+        for(var j=0;j<lines.length;j++){
+          svg+='<rect x="'+(b.x-20)+'" y="'+(148+j*26)+'" width="130" height="22" rx="4" fill="rgba(72,152,224,0.06)" stroke="rgba(72,152,224,0.25)" stroke-width="1"/>';
+          svg+='<text x="'+(b.x+45)+'" y="'+(163+j*26)+'" text-anchor="middle" fill="#e0eee8" font-size="11" font-family="JetBrains Mono,monospace">'+lines[j]+'</text>';
+        }
+        svg+='<line x1="'+(b.x+45)+'" y1="132" x2="'+(b.x+45)+'" y2="148" stroke="'+b.color+'" stroke-width="1" stroke-dasharray="3,2"/>';
+      }
+      svg+='<rect x="50" y="260" width="700" height="55" rx="10" fill="rgba(64,200,112,0.08)" stroke="rgba(64,200,112,0.3)" stroke-width="1"/>';
+      svg+='<text x="400" y="282" text-anchor="middle" fill="#40c870" font-size="13" font-weight="600">查询优化器输入：语法树（AST）</text>';
+      svg+='<text x="400" y="302" text-anchor="middle" fill="#90a898" font-size="11">词法分析 → 语法分析 → 语义检查 → 生成查询树</text>';
+      svg+='</svg>';
+      return svg;
+    }
+  },
+  {
+    title:"步骤 2 / 4 — EXPLAIN 输出计划",
+    desc:"通过 EXPLAIN 命令查看优化器生成的执行计划。这是一个树状结构：顶层是 Sort 节点（排序），中间是 Nested Loop Join（嵌套循环连接），底层是两张表的 Seq Scan（顺序扫描）。每个节点标注了预估成本（启动成本..总成本）和预估行数。",
+    info:"EXPLAIN SELECT s.name, d.dept_name<br>FROM student s JOIN dept d ...<br><br>Sort (cost=250.50..260.50 rows=300)<br>&nbsp;&nbsp;Nested Loop Join (cost=0.00..250.50 rows=300)<br>&nbsp;&nbsp;&nbsp;&nbsp;Seq Scan student (cost=0.00..100.00 rows=500 filter: gpa>3.0)<br>&nbsp;&nbsp;&nbsp;&nbsp;Seq Scan dept (cost=0.00..50.00 rows=1000)",
+    badges:[{c:"badge--def",t:"EXPLAIN"},{c:"badge--warn",t:"嵌套循环连接"}],
+    svg:function(){
+      var svg='<svg viewBox="0 0 800 340" xmlns="http://www.w3.org/2000/svg">';
+      svg+='<defs><marker id="a2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#40c0b0"/></marker></defs>';
+      function node(x,y,w,h,label,sub,color){
+        svg+='<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="10" fill="rgba('+(color==="#40c0b0"?"64,192,176":"72,152,224")+',0.12)" stroke="'+color+'" stroke-width="2"/>';
+        svg+='<text x="'+(x+w/2)+'" y="'+(y+20)+'" text-anchor="middle" fill="'+color+'" font-size="13" font-weight="700">'+label+'</text>';
+        svg+='<text x="'+(x+w/2)+'" y="'+(y+42)+'" text-anchor="middle" fill="#90a898" font-size="11" font-family="JetBrains Mono,monospace">'+sub+'</text>';
+      }
+      node(275,10,250,52,"Sort (排序)","cost=250.50..260.50  rows=300","#40c0b0");
+      svg+='<line x1="400" y1="62" x2="400" y2="95" stroke="#40c0b0" stroke-width="1.5" marker-end="url(#a2)" stroke-dasharray="4,3"/>';
+      node(230,97,340,52,"Nested Loop Join (嵌套循环连接)","cost=0.00..250.50  rows=300","#4898e0");
+      svg+='<line x1="300" y1="149" x2="200" y2="195" stroke="#4898e0" stroke-width="1.5" marker-end="url(#a2)" stroke-dasharray="4,3"/>';
+      svg+='<line x1="500" y1="149" x2="555" y2="195" stroke="#4898e0" stroke-width="1.5" marker-end="url(#a2)" stroke-dasharray="4,3"/>';
+      node(60,198,280,52,"Seq Scan on student","cost=0.00..100.00  rows=500  filter: gpa>3.0","#40c870");
+      node(400,198,310,52,"Seq Scan on dept","cost=0.00..50.00  rows=1,000","#40c870");
+      svg+='<rect x="30" y="275" width="740" height="48" rx="8" fill="rgba(224,80,80,0.08)" stroke="rgba(224,80,80,0.25)" stroke-width="1"/>';
+      svg+='<text x="400" y="296" text-anchor="middle" fill="#e05050" font-size="12">总成本 260.50 — 嵌套循环连接对每行 student（500行）扫描全表 dept（1000行）= 500,000 次比较</text>';
+      svg+='<text x="400" y="314" text-anchor="middle" fill="#90a898" font-size="11">数据流自底向上：扫描 → 连接 → 排序 → 返回结果</text>';
+      svg+='</svg>';
+      return svg;
+    }
+  },
+  {
+    title:"步骤 3 / 4 — 自底向上执行过程",
+    desc:"执行器从叶子节点开始：① 顺序扫描 student 表，通过 gpa>3.0 过滤，假设 1000 行中 500 行通过；② 对每一行存活记录，顺序扫描 dept 表匹配 dept_id=id，每次扫描 1000 行；③ 将 300 行连接结果在内存中按 s.name 排序；④ 返回最终结果集。嵌套循环连接是最慢的连接方式之一。",
+    info:"执行流程（自底向上）：<br>1. Seq Scan student → filter gpa>3.0 → 500 rows<br>2. For each row: Seq Scan dept → match dept_id=id → 300 rows<br>3. Sort by s.name → 300 rows 有序输出<br>总 I/O 操作数 ≈ 500 + 500×1,000 = 500,500 页",
+    badges:[{c:"badge--warn",t:"500K I/O"}],
+    svg:function(){
+      var svg='<svg viewBox="0 0 800 340" xmlns="http://www.w3.org/2000/svg">';
+      svg+='<defs><marker id="a3" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#40c0b0"/></marker><marker id="a3r" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#e05050"/></marker></defs>';
+      svg+='<text x="400" y="22" text-anchor="middle" fill="#40c0b0" font-size="14" font-weight="700">执行器工作流程（火山模型 — 一次一行）</text>';
+      svg+='<rect x="45" y="42" width="710" height="52" rx="8" fill="rgba(64,192,176,0.08)" stroke="#40c0b0" stroke-width="1"/>';
+      svg+='<text x="400" y="62" text-anchor="middle" fill="#e0eee8" font-size="12">步骤 1: Seq Scan student — 顺序读取 student 表所有页</text>';
+      svg+='<text x="400" y="82" text-anchor="middle" fill="#90a898" font-size="11">gpa>3.0 过滤：1,000 行 → 500 行通过 ✓ | 通过率 50%</text>';
+      svg+='<rect x="45" y="105" width="710" height="52" rx="8" fill="rgba(224,80,80,0.08)" stroke="#e05050" stroke-width="1"/>';
+      svg+='<text x="400" y="125" text-anchor="middle" fill="#e0eee8" font-size="12">步骤 2: Nested Loop Join — 对每行 student（500行）扫描全表 dept（1000行）</text>';
+      svg+='<text x="400" y="145" text-anchor="middle" fill="#90a898" font-size="11">500 × 1000 = 500,000 次比较 | 匹配成功：300 行 | 效率极低</text>';
+      svg+='<rect x="45" y="168" width="710" height="52" rx="8" fill="rgba(72,152,224,0.08)" stroke="#4898e0" stroke-width="1"/>';
+      svg+='<text x="400" y="188" text-anchor="middle" fill="#e0eee8" font-size="12">步骤 3: Sort — 对 300 行按 s.name 进行内存排序（quicksort）</text>';
+      svg+='<text x="400" y="208" text-anchor="middle" fill="#90a898" font-size="11">排序复杂度：O(300×log300) ≈ 2,500 次比较 | 内存充足时在 work_mem 内完成</text>';
+      svg+='<rect x="45" y="231" width="710" height="38" rx="8" fill="rgba(64,200,112,0.08)" stroke="#40c870" stroke-width="1"/>';
+      svg+='<text x="400" y="255" text-anchor="middle" fill="#40c870" font-size="12" font-weight="600">步骤 4: 返回 300 行有序结果集给客户端</text>';
+      svg+='<rect x="160" y="290" width="480" height="35" rx="8" fill="rgba(224,80,80,0.12)" stroke="#e05050" stroke-width="1.5"/>';
+      svg+='<text x="400" y="312" text-anchor="middle" fill="#e05050" font-size="12" font-weight="700">瓶颈：嵌套循环连接 (500K 比较) — 占总执行时间 95%</text>';
+      svg+='</svg>';
+      return svg;
+    }
+  },
+  {
+    title:"步骤 4 / 4 — 优化对比：Hash Join",
+    desc:"优化方案：在 dept.id 上建立哈希表（O(n)），然后对 student 的每一行做 O(1) 哈希查找。最终成本从 260.5 降至 118.5，提升 2.2 倍。如果进一步在 student.gpa 上建索引，可用 Index Scan 代替 Seq Scan，成本再降至 58.2。",
+    info:"优化前: 260.50 | 优化后: 118.50<br>提升比例: 2.2x (Hash Join)<br>进阶优化: 58.20 (Hash Join + Index)<br>终极提升: 4.5x 更快",
+    badges:[{c:"badge--tip",t:"Hash Join"},{c:"badge--tip",t:"4.5x 更快"}],
+    svg:function(){
+      var svg='<svg viewBox="0 0 800 340" xmlns="http://www.w3.org/2000/svg">';
+      svg+='<defs><marker id="a4" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#4898e0"/></marker></defs>';
+      svg+='<text x="160" y="25" text-anchor="middle" fill="#e05050" font-size="15" font-weight="700">优化前 — Nested Loop</text>';
+      svg+='<text x="640" y="25" text-anchor="middle" fill="#40c870" font-size="15" font-weight="700">优化后 — Hash Join</text>';
+      svg+='<rect x="30" y="40" width="260" height="175" rx="10" fill="rgba(224,80,80,0.08)" stroke="#e05050" stroke-width="1.5"/>';
+      svg+='<text x="160" y="68" text-anchor="middle" fill="#e0eee8" font-size="13">Sort: 10.00</text>';
+      svg+='<rect x="60" y="80" width="200" height="14" rx="4" fill="#e05050" opacity="0.6"/>';
+      svg+='<text x="160" y="108" text-anchor="middle" fill="#e0eee8" font-size="13">NL Join: 150.50</text>';
+      svg+='<rect x="60" y="120" width="200" height="28" rx="4" fill="#e05050" opacity="0.8"/>';
+      svg+='<text x="160" y="158" text-anchor="middle" fill="#e0eee8" font-size="13">Seq Scan×2: 100.00</text>';
+      svg+='<rect x="60" y="170" width="200" height="18" rx="4" fill="#e05050" opacity="0.5"/>';
+      svg+='<text x="160" y="205" text-anchor="middle" fill="#e05050" font-size="18" font-weight="700">总计: 260.50</text>';
+      svg+='<rect x="510" y="40" width="260" height="175" rx="10" fill="rgba(64,200,112,0.08)" stroke="#40c870" stroke-width="1.5"/>';
+      svg+='<text x="640" y="68" text-anchor="middle" fill="#e0eee8" font-size="13">Sort: 10.00</text>';
+      svg+='<rect x="540" y="80" width="200" height="14" rx="4" fill="#40c870" opacity="0.6"/>';
+      svg+='<text x="640" y="108" text-anchor="middle" fill="#e0eee8" font-size="13">Hash Join: 58.50</text>';
+      svg+='<rect x="540" y="120" width="200" height="18" rx="4" fill="#40c870" opacity="0.7"/>';
+      svg+='<text x="640" y="158" text-anchor="middle" fill="#e0eee8" font-size="13">Seq Scan×2: 50.00</text>';
+      svg+='<rect x="540" y="170" width="200" height="12" rx="4" fill="#40c870" opacity="0.5"/>';
+      svg+='<text x="640" y="205" text-anchor="middle" fill="#40c870" font-size="18" font-weight="700">总计: 118.50</text>';
+      svg+='<rect x="310" y="60" width="180" height="36" rx="6" fill="rgba(64,200,112,0.1)" stroke="#40c870" stroke-width="1"/>';
+      svg+='<text x="400" y="84" text-anchor="middle" fill="#40c870" font-size="14" font-weight="700">2.2x 加速</text>';
+      svg+='<polygon points="300,78 310,73 310,83" fill="#40c870"/><polygon points="500,78 490,73 490,83" fill="#40c870"/>';
+      svg+='<rect x="115" y="240" width="570" height="45" rx="8" fill="rgba(72,152,224,0.1)" stroke="#4898e0" stroke-width="1"/>';
+      svg+='<text x="400" y="260" text-anchor="middle" fill="#4898e0" font-size="13" font-weight="600">进阶优化：student.gpa 建索引 → Index Scan (500 rows → 50 pages)</text>';
+      svg+='<text x="400" y="278" text-anchor="middle" fill="#90a898" font-size="11">Index Scan cost: 20.00 | 总成本降至 58.20 | 4.5x 终极提升</text>';
+      svg+='<rect x="130" y="300" width="540" height="30" rx="8" fill="rgba(64,192,176,0.1)" stroke="#40c0b0" stroke-width="1"/>';
+      svg+='<text x="400" y="320" text-anchor="middle" fill="#40c0b0" font-size="12" font-weight="600">核心原则：小表建哈希 | 连接列建索引 | 过滤列优先建索引</text>';
+      svg+='</svg>';
+      return svg;
+    }
+  }
+];
+
+function render(i){
+  var s=S[i];
+  document.getElementById('stepTitle').textContent=s.title;
+  document.getElementById('stepDesc').textContent=s.desc;
+  document.getElementById('infoLine').innerHTML=s.info;
+  var br=document.getElementById('badgeRow');br.innerHTML='';
+  for(var j=0;j<s.badges.length;j++){var b=s.badges[j];var sp=document.createElement('span');sp.className='badge '+b.c;sp.textContent=b.t;br.appendChild(sp);}
+  document.getElementById('svgp').innerHTML=s.svg();
+  var dots=document.getElementById('stepDots');dots.innerHTML='';
+  for(var k=0;k<S.length;k++){var d=document.createElement('span');d.className='step-dot'+(k===i?' active':(k<i?' done':''));dots.appendChild(d);}
+  document.getElementById('prevBtn').disabled=i===0;
+  document.getElementById('nextBtn').disabled=i===S.length-1;
+  cur=i;
+}
+function changeStep(d){var n=cur+d;if(n>=0&&n<S.length){if(autoTimer){clearInterval(autoTimer);autoTimer=null;document.getElementById('autoBtn').innerHTML='&#9654; 自动播放';}render(n);}}
+function resetStep(){if(autoTimer){clearInterval(autoTimer);autoTimer=null;document.getElementById('autoBtn').innerHTML='&#9654; 自动播放';}render(0);}
+function toggleAuto(){if(autoTimer){clearInterval(autoTimer);autoTimer=null;document.getElementById('autoBtn').innerHTML='&#9654; 自动播放';}else{document.getElementById('autoBtn').innerHTML='&#9646;&#9646; 停止';autoTimer=setInterval(function(){if(cur<S.length-1)render(cur+1);else{toggleAuto();}},4000);}}
+document.addEventListener('keydown',function(e){if(e.key==='ArrowLeft'){e.preventDefault();changeStep(-1);}else if(e.key==='ArrowRight'){e.preventDefault();changeStep(1);}else if(e.key===' '){e.preventDefault();toggleAuto();}else if(e.key==='r'||e.key==='R'){e.preventDefault();resetStep();}});
+render(0);
+})();
+</script>
+</body>
+</html>

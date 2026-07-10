@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>文件描述符 — 操作系统内核构建</title>
+<style>:root{--bg:#0d1117;--bg-soft:#161b22;--bg-code:#0a0c10;--fg:#e6edf3;--fg-dim:#8b949e;--line:#30363d;--accent:#58a6ff;--accent-2:#3fb950;--grad:#d29922;--success:#3fb950;--danger:#f85149}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(88,166,255,.18);color:var(--accent)}.badge--tip{background:rgba(63,185,80,.18);color:var(--success)}.badge--warn{background:rgba(210,153,34,.18);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.code-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>第 10 节 &middot; 文件描述符</h1>
+<span class="breadcrumb"><a href="../index.html">课程首页</a> / 文件系统与 I/O</span>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="explain"></div>
+<div class="panel-stage" id="stage"></div>
+</div>
+<div class="demo-controls">
+<button id="prevBtn">&larr; 上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="nextBtn">下一步 &rarr;</button>
+<button id="autoBtn">&#9654; 自动播放</button>
+</div>
+</div>
+<script>
+const S=[
+  {
+    t:"三层结构：fd → file → inode",
+    l:"fd=3  →  ofile[3]  →  struct file  →  struct inode  →  disk",
+    d:"Linux/xv6 中文件访问通过三层间接：<br>1) <b>文件描述符表</b> — 每进程的 <code>ofile[NOFILE]</code> 数组<br>2) <b>打开文件表</b> — 系统全局的 <code>ftable</code>，记录偏移量/权限<br>3) <b>inode</b> — 文件在磁盘上的元数据（大小、块指针、类型）<br>fd 是进程内局部索引，指向全局打开文件条目。",
+    b:[{t:"fd table",c:"badge--def"},{t:"ftable",c:"badge--tip"},{t:"inode",c:"badge--warn"}],
+    r(svg){
+      svg.innerHTML='';svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <text x="400" y="25" text-anchor="middle" fill="var(--fg)" font-size="15" font-weight="700">File Descriptor — 三层结构</text>
+        <!-- Process fd table -->
+        <rect x="20" y="50" width="200" height="300" rx="10" fill="rgba(63,185,80,.06)" stroke="var(--accent-2)" stroke-width="1.5"/>
+        <text x="120" y="78" text-anchor="middle" fill="var(--accent-2)" font-size="13" font-weight="600">Proc fd table</text>
+        <text x="120" y="95" text-anchor="middle" fill="var(--fg-dim)" font-size="10">ofile[16]</text>
+        <rect x="30" y="105" width="50" height="26" rx="3" fill="var(--line)"/><text x="55" y="123" text-anchor="middle" fill="var(--fg-dim)" font-size="11">0</text>
+        <rect x="130" y="105" width="80" height="26" rx="3" fill="rgba(63,185,80,.15)"/><text x="170" y="123" text-anchor="middle" fill="var(--accent-2)" font-family="monospace" font-size="11">stdin →</text>
+        <rect x="30" y="135" width="50" height="26" rx="3" fill="var(--line)"/><text x="55" y="153" text-anchor="middle" fill="var(--fg-dim)" font-size="11">1</text>
+        <rect x="130" y="135" width="80" height="26" rx="3" fill="rgba(63,185,80,.15)"/><text x="170" y="153" text-anchor="middle" fill="var(--accent-2)" font-family="monospace" font-size="11">stdout →</text>
+        <rect x="30" y="165" width="50" height="26" rx="3" fill="var(--line)"/><text x="55" y="183" text-anchor="middle" fill="var(--fg-dim)" font-size="11">2</text>
+        <rect x="130" y="165" width="80" height="26" rx="3" fill="rgba(63,185,80,.15)"/><text x="170" y="183" text-anchor="middle" fill="var(--accent-2)" font-family="monospace" font-size="11">stderr →</text>
+        <rect x="30" y="195" width="50" height="28" rx="3" fill="rgba(88,166,255,.3)"/><text x="55" y="214" text-anchor="middle" fill="var(--accent)" font-size="11">3</text>
+        <rect x="130" y="195" width="80" height="28" rx="3" fill="rgba(88,166,255,.15)"/><text x="170" y="214" text-anchor="middle" fill="var(--accent)" font-family="monospace" font-size="11">file * →</text>
+        <rect x="30" y="227" width="50" height="26" rx="3" fill="var(--line)"/><text x="55" y="245" text-anchor="middle" fill="var(--fg-dim)" font-size="11">4</text>
+        <rect x="130" y="227" width="80" height="26" rx="3" fill="var(--bg-soft)"/><text x="170" y="245" text-anchor="middle" fill="var(--fg-dim)" font-family="monospace" font-size="11">NULL</text>
+        <text x="120" y="280" text-anchor="middle" fill="var(--fg-dim)" font-size="10">...</text>
+        <text x="120" y="310" text-anchor="middle" fill="var(--fg-dim)" font-size="10">15 slots max</text>
+        <!-- Global open file table -->
+        <rect x="270" y="50" width="250" height="300" rx="10" fill="rgba(88,166,255,.06)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="395" y="78" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="600">ftable (global)</text>
+        <text x="395" y="95" text-anchor="middle" fill="var(--fg-dim)" font-size="10">NFILE entries</text>
+        <rect x="280" y="108" width="230" height="60" rx="6" fill="rgba(88,166,255,.10)"/>
+        <text x="395" y="130" text-anchor="middle" fill="var(--accent)" font-family="monospace" font-size="11">file (type=FD_INODE)</text>
+        <text x="395" y="148" text-anchor="middle" fill="var(--fg-dim)" font-family="monospace" font-size="10">off=128  ref=1  rw=1</text>
+        <text x="395" y="163" text-anchor="middle" fill="var(--fg-dim)" font-family="monospace" font-size="9">ip → inode</text>
+        <rect x="280" y="178" width="230" height="22" rx="3" fill="rgba(88,166,255,.05)"/>
+        <text x="395" y="194" text-anchor="middle" fill="var(--fg-dim)" font-size="11" font-family="monospace">file (FD_PIPE) → pipe</text>
+        <rect x="280" y="208" width="230" height="22" rx="3" fill="rgba(88,166,255,.05)"/>
+        <text x="395" y="224" text-anchor="middle" fill="var(--fg-dim)" font-size="11" font-family="monospace">file (FD_INODE) → inode</text>
+        <text x="395" y="270" text-anchor="middle" fill="var(--fg-dim)" font-size="10">...</text>
+        <text x="395" y="310" text-anchor="middle" fill="var(--fg-dim)" font-size="10">global, shared by all procs</text>
+        <!-- Inode -->
+        <rect x="570" y="50" width="210" height="300" rx="10" fill="rgba(210,153,34,.06)" stroke="var(--grad)" stroke-width="1.5"/>
+        <text x="675" y="78" text-anchor="middle" fill="var(--grad)" font-size="13" font-weight="600">inode</text>
+        <text x="675" y="95" text-anchor="middle" fill="var(--fg-dim)" font-size="10">disk metadata</text>
+        <rect x="580" y="108" width="190" height="100" rx="6" fill="rgba(210,153,34,.10)"/>
+        <text x="675" y="130" text-anchor="middle" fill="var(--grad)" font-family="monospace" font-size="11">type = T_FILE</text>
+        <text x="675" y="150" text-anchor="middle" fill="var(--fg-dim)" font-family="monospace" font-size="10">dev = 1, inum = 42</text>
+        <text x="675" y="170" text-anchor="middle" fill="var(--fg-dim)" font-family="monospace" font-size="10">nlink = 1, size = 4096</text>
+        <text x="675" y="190" text-anchor="middle" fill="var(--fg-dim)" font-family="monospace" font-size="10">addrs[0..12] = disk blocks</text>
+        <!-- Arrows -->
+        <line x1="210" y1="209" x2="270" y2="138" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#aB)"/>
+        <line x1="510" y1="138" x2="570" y2="150" stroke="var(--grad)" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#aG)"/>
+        <!-- Bottom code -->
+        <rect x="20" y="370" width="760" height="95" rx="8" fill="var(--bg)"/>
+        <text x="40" y="395" fill="var(--accent)" font-family="monospace" font-size="12">open("file.txt", O_RDONLY) → fd=3:</text>
+        <text x="60" y="418" fill="var(--fg-dim)" font-family="monospace" font-size="11">1. namei("file.txt") → inode           // 路径 → inode</text>
+        <text x="60" y="440" fill="var(--fg-dim)" font-family="monospace" font-size="11">2. filealloc() → file {type=FD_INODE}   // 分配打开文件条目</text>
+        <text x="60" y="455" fill="var(--fg-dim)" font-family="monospace" font-size="11">3. fdalloc(file) → fd=3                 // 分配 fd</text>
+        <defs><marker id="aB" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="var(--accent)"/></marker>
+        <marker id="aG" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="var(--grad)"/></marker></defs>`;
+      svg.appendChild(g);
+    }
+  },
+  {
+    t:"dup() — 共享文件引用",
+    l:"dup(3) → 4;  // fd 3 and 4 share same struct file",
+    d:"<code>dup(oldfd)</code> 复制文件描述符：<br>新的 fd 指向 <b>同一个 struct file</b>，共享偏移量和 refcount。<br>这意味着：用 fd=3 write 写入 100 字节后，fd=4 的偏移也是 100。<br>close(fd=3) 后 fd=4 仍然有效（refcount 从 2 降到 1）。",
+    b:[{t:"dup",c:"badge--def"},{t:"共享引用",c:"badge--tip"},{t:"refcount",c:"badge--warn"}],
+    r(svg){
+      svg.innerHTML='';svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <text x="400" y="25" text-anchor="middle" fill="var(--fg)" font-size="15" font-weight="700">dup() — 共享文件引用</text>
+        <!-- Before dup -->
+        <rect x="20" y="55" width="360" height="200" rx="10" fill="rgba(88,166,255,.05)" stroke="var(--accent)" stroke-width="1"/>
+        <text x="200" y="80" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="600">Before dup(3)</text>
+        <rect x="40" y="95" width="150" height="60" rx="8" fill="rgba(63,185,80,.08)" stroke="var(--accent-2)" stroke-width="1"/>
+        <text x="115" y="118" text-anchor="middle" fill="var(--accent-2)" font-size="11">ofile</text>
+        <text x="115" y="138" text-anchor="middle" fill="var(--fg)" font-family="monospace" font-size="10">[3] → file_A</text>
+        <text x="115" y="152" text-anchor="middle" fill="var(--fg)" font-family="monospace" font-size="10">[4] = NULL</text>
+        <rect x="220" y="95" width="140" height="60" rx="8" fill="rgba(88,166,255,.10)" stroke="var(--accent)" stroke-width="1"/>
+        <text x="290" y="118" text-anchor="middle" fill="var(--accent)" font-size="11">file_A</text>
+        <text x="290" y="138" text-anchor="middle" fill="var(--fg)" font-family="monospace" font-size="10">ref = 1</text>
+        <text x="290" y="152" text-anchor="middle" fill="var(--fg)" font-family="monospace" font-size="10">off = 0</text>
+        <!-- Arrow -->
+        <text x="400" y="155" text-anchor="middle" fill="var(--accent-2)" font-size="20" font-weight="700">→</text>
+        <!-- After dup -->
+        <rect x="420" y="55" width="360" height="200" rx="10" fill="rgba(63,185,80,.05)" stroke="var(--accent-2)" stroke-width="1"/>
+        <text x="600" y="80" text-anchor="middle" fill="var(--accent-2)" font-size="13" font-weight="600">After dup(3) → 4</text>
+        <rect x="440" y="95" width="150" height="60" rx="8" fill="rgba(63,185,80,.10)" stroke="var(--accent-2)" stroke-width="1"/>
+        <text x="515" y="118" text-anchor="middle" fill="var(--accent-2)" font-size="11">ofile</text>
+        <text x="515" y="138" text-anchor="middle" fill="var(--fg)" font-family="monospace" font-size="10">[3] → file_A ←</text>
+        <text x="515" y="152" text-anchor="middle" fill="var(--fg)" font-family="monospace" font-size="10">[4] → file_A ←</text>
+        <rect x="620" y="95" width="140" height="60" rx="8" fill="rgba(88,166,255,.15)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="690" y="118" text-anchor="middle" fill="var(--accent)" font-size="11">file_A</text>
+        <text x="690" y="138" text-anchor="middle" fill="var(--accent)" font-family="monospace" font-size="10">ref = 2</text>
+        <text x="690" y="152" text-anchor="middle" fill="var(--accent)" font-family="monospace" font-size="10">off = 0</text>
+        <!-- Consequences -->
+        <text x="400" y="290" text-anchor="middle" fill="var(--fg)" font-size="14" font-weight="700">共享引用的效果</text>
+        <rect x="20" y="310" width="760" height="155" rx="8" fill="var(--bg)"/>
+        <text x="40" y="338" fill="var(--accent-2)" font-family="monospace" font-size="12">write(3, "hello", 5);   // off advances to 5</text>
+        <text x="40" y="365" fill="var(--accent-2)" font-family="monospace" font-size="12">write(4, "world", 5);   // off advances to 10 (shares same off!)</text>
+        <line x1="40" y1="375" x2="760" y2="375" stroke="var(--line)"/>
+        <text x="40" y="398" fill="var(--accent)" font-family="monospace" font-size="12">close(3);                // refcount 2→1, file_A lives on</text>
+        <text x="40" y="422" fill="var(--accent)" font-family="monospace" font-size="12">read(4, buf, 5);         // still works! reads from offset 10</text>
+        <text x="40" y="448" fill="var(--accent)" font-family="monospace" font-size="12">close(4);                // refcount 1→0, file_A freed</text>
+        <text x="40" y="462" fill="var(--fg-dim)" font-size="10">dup() is how shell implements:  ls > file.txt 2>&amp;1  (stderr dup'd to stdout's file)</text>`;
+      svg.appendChild(g);
+    }
+  },
+  {
+    t:"pipe — 管道与 fd 继承",
+    l:"int pipe(int fd[2]);  // fd[0]=read end, fd[1]=write end",
+    d:"<b>pipe()</b> 创建一个内核缓冲区，返回两个 fd：<br><code>fd[0]</code> — 读端，<code>fd[1]</code> — 写端。<br>典型用法：shell fork 后，父进程关闭读端，子进程关闭写端，<br>实现单向数据流。管道在写端关闭时发送 EOF 给读端。",
+    b:[{t:"pipe",c:"badge--def"},{t:"IPC",c:"badge--tip"},{t:"fork继承",c:"badge--warn"}],
+    r(svg){
+      svg.innerHTML='';svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <text x="400" y="25" text-anchor="middle" fill="var(--fg)" font-size="15" font-weight="700">Pipe — 进程间管道通信</text>
+        <!-- Parent process -->
+        <rect x="20" y="55" width="230" height="140" rx="10" fill="rgba(88,166,255,.08)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="135" y="80" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="600">Parent (PID=42)</text>
+        <rect x="35" y="95" width="200" height="24" rx="4" fill="rgba(63,185,80,.10)"/><text x="135" y="112" text-anchor="middle" fill="var(--accent-2)" font-family="monospace" font-size="10">fd[0] → pipe_read</text>
+        <rect x="35" y="123" width="200" height="24" rx="4" fill="rgba(210,153,34,.10)"/><text x="135" y="140" text-anchor="middle" fill="var(--grad)" font-family="monospace" font-size="10">fd[1] → pipe_write</text>
+        <text x="135" y="175" text-anchor="middle" fill="var(--fg-dim)" font-size="10">closes fd[1] (read-only)</text>
+        <!-- Child process -->
+        <rect x="550" y="55" width="230" height="140" rx="10" fill="rgba(63,185,80,.08)" stroke="var(--accent-2)" stroke-width="1.5"/>
+        <text x="665" y="80" text-anchor="middle" fill="var(--accent-2)" font-size="13" font-weight="600">Child (PID=43)</text>
+        <rect x="565" y="95" width="200" height="24" rx="4" fill="rgba(63,185,80,.10)"/><text x="665" y="112" text-anchor="middle" fill="var(--accent-2)" font-family="monospace" font-size="10">fd[0] → pipe_read (close)</text>
+        <rect x="565" y="123" width="200" height="24" rx="4" fill="rgba(210,153,34,.10)"/><text x="665" y="140" text-anchor="middle" fill="var(--grad)" font-family="monospace" font-size="10">fd[1] → pipe_write</text>
+        <text x="665" y="175" text-anchor="middle" fill="var(--fg-dim)" font-size="10">closes fd[0] (write-only)</text>
+        <!-- Pipe buffer in middle -->
+        <rect x="290" y="75" width="220" height="100" rx="8" fill="rgba(210,153,34,.10)" stroke="var(--grad)" stroke-width="2"/>
+        <text x="400" y="100" text-anchor="middle" fill="var(--grad)" font-size="13" font-weight="600">Pipe Buffer</text>
+        <rect x="305" y="112" width="190" height="24" rx="4" fill="var(--bg)"/><text x="400" y="129" text-anchor="middle" fill="var(--fg)" font-family="monospace" font-size="10">[data ...............]</text>
+        <text x="400" y="158" text-anchor="middle" fill="var(--fg-dim)" font-size="10">readoff=0  writeoff=0</text>
+        <!-- Arrows -->
+        <line x1="235" y1="130" x2="290" y2="130" stroke="var(--grad)" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#aG)"/><text x="262" y="120" text-anchor="middle" fill="var(--grad)" font-size="9">write→</text>
+        <line x1="510" y1="110" x2="550" y2="110" stroke="var(--accent-2)" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#aB2)"/><text x="530" y="100" text-anchor="middle" fill="var(--accent-2)" font-size="9">←read</text>
+        <!-- Shell example -->
+        <text x="400" y="230" text-anchor="middle" fill="var(--fg)" font-size="14" font-weight="700">Shell 管道示例: ls | wc -l</text>
+        <rect x="20" y="250" width="760" height="210" rx="8" fill="var(--bg)"/>
+        <text x="40" y="278" fill="var(--accent)" font-family="monospace" font-size="12">// Shell executes: ls | wc -l</text>
+        <text x="40" y="302" fill="var(--fg-dim)" font-family="monospace" font-size="11">int p[2];  pipe(p);  // create pipe</text>
+        <text x="40" y="326" fill="var(--fg-dim)" font-family="monospace" font-size="11">if (fork() == 0) {     // child → right side (wc -l)</text>
+        <text x="60" y="350" fill="var(--accent-2)" font-family="monospace" font-size="11">close(1);             // close stdout</text>
+        <text x="60" y="374" fill="var(--accent-2)" font-family="monospace" font-size="11">dup(p[1]);            // dup pipe write → fd[1]</text>
+        <text x="60" y="398" fill="var(--accent-2)" font-family="monospace" font-size="11">close(p[0]); close(p[1]);</text>
+        <text x="60" y="422" fill="var(--accent-2)" font-family="monospace" font-size="11">exec("wc", ["wc","-l"]);</text>
+        <text x="40" y="438" fill="var(--fg-dim)" font-family="monospace" font-size="11">} // parent → left side (ls) similarly...</text>
+        <text x="40" y="455" fill="var(--fg-dim)" font-size="10">dup() + close() = shell I/O redirection (one of Unix's most elegant design patterns)</text>
+        <defs><marker id="aG" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="var(--grad)"/></marker>
+        <marker id="aB2" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="var(--accent-2)"/></marker></defs>`;
+      svg.appendChild(g);
+    }
+  }
+];
+
+let step=0,autoTimer=null,autoOn=false;
+const explain=document.getElementById('explain'),stage=document.getElementById('stage'),dots=document.getElementById('dots');
+const prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn'),autoBtn=document.getElementById('autoBtn');
+function render(){
+  const s=S[step];
+  explain.innerHTML=`<div class="step-title">${s.t}</div>${s.l?`<div class="code-line">${s.l}</div>`:''}<div class="badge-row">${s.b.map(b=>`<span class="badge ${b.c||'badge--def'}">${b.t}</span>`).join('')}</div><div class="step-desc">${s.d}</div>`;
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('viewBox','0 0 800 480');svg.style.width='100%';svg.style.height='100%';
+  stage.innerHTML='';stage.appendChild(svg);s.r(svg);
+  dots.innerHTML=S.map((_,i)=>{let cls=i===step?'active':i<step?'done':'';return `<span class="step-dot ${cls}"></span>`;}).join('');
+  prevBtn.disabled=step===0;nextBtn.disabled=step===S.length-1;
+}
+function next(){if(step<S.length-1){step++;render();}}
+function prev(){if(step>0){step--;render();}}
+function restart(){step=0;render();}
+function toggleAuto(){
+  if(autoTimer){clearInterval(autoTimer);autoTimer=null;autoOn=false;autoBtn.innerHTML='&#9654; 自动播放';}
+  else{autoOn=true;autoBtn.innerHTML='&#9646;&#9646; 停止';autoTimer=setInterval(()=>{if(step<S.length-1){step++;render();}else{clearInterval(autoTimer);autoTimer=null;autoOn=false;autoBtn.innerHTML='&#9654; 自动播放';}},3000);}
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();next();}
+  else if(e.key==='ArrowLeft'){e.preventDefault();prev();}
+  else if(e.key==='r'||e.key==='R'){e.preventDefault();restart();}
+  else if(e.key==='a'||e.key==='A'){e.preventDefault();toggleAuto();}
+});
+prevBtn.onclick=prev;nextBtn.onclick=next;autoBtn.onclick=toggleAuto;render();
+</script>
+</body>
+</html>

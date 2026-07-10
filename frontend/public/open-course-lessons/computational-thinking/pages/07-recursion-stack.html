@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>07 递归调用栈 — 计算思维</title>
+<style>
+:root{--bg:#f5f5f8;--bg-soft:#ffffff;--bg-code:#f0f0f4;--fg:#2c2c38;--fg-dim:#6c6c80;--line:#dcdce4;--accent:#5b6abf;--accent-2:#36a2b8;--grad:#f09840;--success:#40c878;--danger:#e04860;--shadow:0 2px 12px rgba(0,0,0,.06)}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:"Noto Sans SC","PingFang SC",-apple-system,sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(91,106,191,.12);color:var(--accent)}.badge--tip{background:rgba(64,200,120,.12);color:var(--success)}.badge--warn{background:rgba(240,152,64,.15);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--accent);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px;box-shadow:var(--shadow)}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 8px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>07 递归调用栈</h1>
+<div class="breadcrumb"><a href="../index.html">计算思维</a> / 第3章 / 递归调用栈</div>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="explain">
+<div class="step-title" id="stepTitle"></div>
+<div class="step-desc" id="stepDesc"></div>
+<div class="badge-row" id="badges"></div>
+<div class="info-line" id="codeLine"></div>
+</div>
+<div class="panel-stage" id="stage"></div>
+</div>
+<div class="demo-controls">
+<button id="btnPrev" aria-label="上一步">&larr; 上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btnNext" aria-label="下一步">下一步 &rarr;</button>
+<button id="btnAuto" aria-label="自动播放">&#9654; 自动播放</button>
+<span style="font-size:12px;color:var(--fg-dim)">键盘 &larr; &rarr;</span>
+</div>
+</div>
+<script>
+const S=[{
+t:"递归的两个要素",
+l:"def fib(n): if n<=1: return n; return fib(n-1) + fib(n-2)",
+d:"递归需要两个条件：<strong>基准情况</strong>（Base Case，停止递归）和<strong>递归情况</strong>（Recursive Case，分解为更小问题）。缺一不可。",
+b:[{t:"Base Case",c:"def"},{t:"Recursive Case",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// Left: recursive tree for fib(5)
+const calc=[[350,30,"fib(5)"],[[250,80,"fib(4)"],[150,140,"fib(3)"],[100,200,"fib(2)"],[60,260,"fib(1)=1"],[140,260,"fib(0)=0"]],[[180,200,"fib(2)"],[140,260,"fib(1)=1"],[220,260,"fib(0)=0"]],[[280,140,"fib(2)"],[240,200,"fib(1)=1"],[320,200,"fib(0)=0"]],[[430,80,"fib(3)"],[370,140,"fib(2)"],[330,200,"fib(1)=1"],[410,200,"fib(0)=0"]],[[460,140,"fib(1)=1"]]];
+// simplified tree view for the main split
+const treeNodes=[
+// level 0
+{cx:350,cy:25,r:20,label:"F(5)",col:"var(--grad)"},
+// level 1
+{cx:230,cy:75,r:18,label:"F(4)",col:"var(--accent)"},
+{cx:470,cy:75,r:18,label:"F(3)",col:"var(--accent)"},
+// level 2
+{cx:140,cy:130,r:16,label:"F(3)",col:"var(--accent-2)"},
+{cx:320,cy:130,r:16,label:"F(2)",col:"var(--accent-2)"},
+{cx:420,cy:130,r:16,label:"F(2)",col:"var(--accent-2)"},
+{cx:520,cy:130,r:14,label:"F(1)",col:"var(--success)"},
+// level 3
+{cx:80,cy:190,r:14,label:"F(2)",col:"var(--fg-dim)"},
+{cx:190,cy:190,r:14,label:"F(1)",col:"var(--success)"},
+{cx:270,cy:190,r:14,label:"F(1)",col:"var(--success)"},
+{cx:370,cy:190,r:14,label:"F(1)",col:"var(--success)"},
+{cx:470,cy:190,r:14,label:"F(0)",col:"var(--fg-dim)"},
+// level 4
+{cx:50,cy:240,r:12,label:"F(1)",col:"var(--success)"},
+{cx:120,cy:240,r:12,label:"F(0)",col:"var(--fg-dim)"},
+];
+treeNodes.forEach(n=>{
+const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+c.setAttribute("cx",n.cx);c.setAttribute("cy",n.cy);c.setAttribute("r",n.r);
+c.setAttribute("fill",n.col==="var(--success)"?"var(--success)":"var(--bg-soft)");
+c.setAttribute("fill-opacity",n.col==="var(--success)"?"0.12":"1");
+c.setAttribute("stroke",n.col);c.setAttribute("stroke-width","1.5");
+svg.appendChild(c);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",n.cx);t.setAttribute("y",n.cy+4);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","9");t.setAttribute("fill",n.col);t.setAttribute("font-weight","600");
+t.textContent=n.label;
+svg.appendChild(t);
+});
+// edges
+[{x1:350,y1:45,x2:230,y2:57},{x1:350,y1:45,x2:470,y2:57},{x1:230,y1:93,x2:140,y2:114},{x1:230,y1:93,x2:320,y2:114},{x1:470,y1:93,x2:420,y2:114},{x1:470,y1:93,x2:520,y2:116},{x1:140,y1:146,x2:80,y2:176},{x1:140,y1:146,x2:190,y2:178},{x1:320,y1:146,x2:270,y2:178},{x1:320,y1:146,x2:370,y2:178},{x1:420,y1:146,x2:470,y2:176}].forEach(e=>{
+const l=document.createElementNS("http://www.w3.org/2000/svg","line");
+l.setAttribute("x1",e.x1);l.setAttribute("y1",e.y1);l.setAttribute("x2",e.x2);l.setAttribute("y2",e.y2);
+l.setAttribute("stroke","var(--line)");l.setAttribute("stroke-width","1");
+svg.appendChild(l);
+});
+// annotation
+const an=document.createElementNS("http://www.w3.org/2000/svg","text");
+an.setAttribute("x","350");an.setAttribute("y","280");an.setAttribute("text-anchor","middle");an.setAttribute("font-size","11");an.setAttribute("fill","var(--fg-dim)");
+an.textContent="F(0)和F(1)不需要再分解 → Base Case";
+svg.appendChild(an);
+}},
+{
+t:"调用栈的压栈与弹栈",
+l:"Push: fib(5)→fib(4)→fib(3)→fib(2)→fib(1)=1\nPop: fib(1)=1返回到fib(2), fib(2)+fib(0)=1返回到fib(3)...",
+d:"每次递归调用都在调用栈上<strong>压入一个新帧</strong>。到达 Base Case 后开始<strong>弹栈</strong>，返回值逐层向上传递。",
+b:[{t:"调用栈",c:"def"},{t:"压栈/弹栈",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// Stack visualization on left
+const stackFrames=[
+{y:215,h:30,label:"fib(1)  [栈顶]",col:"var(--success)",push:true},
+{y:182,h:30,label:"fib(2)",col:"var(--accent-2)",push:true},
+{y:149,h:30,label:"fib(3)",col:"var(--accent-2)",push:true},
+{y:116,h:30,label:"fib(4)",col:"var(--accent)",push:true},
+{y:83,h:30,label:"fib(5)  [栈底]",col:"var(--grad)",push:false},
+];
+// stack container
+const sr=document.createElementNS("http://www.w3.org/2000/svg","rect");
+sr.setAttribute("x","40");sr.setAttribute("y","70");sr.setAttribute("width","220");sr.setAttribute("height","190");
+sr.setAttribute("fill","none");sr.setAttribute("stroke","var(--accent)");sr.setAttribute("stroke-width","2");sr.setAttribute("rx","6");
+svg.appendChild(sr);
+const st=document.createElementNS("http://www.w3.org/2000/svg","text");
+st.setAttribute("x","150");st.setAttribute("y","60");st.setAttribute("text-anchor","middle");st.setAttribute("font-size","12");st.setAttribute("font-weight","700");st.setAttribute("fill","var(--accent)");
+st.textContent="调用栈 (Stack)";
+svg.appendChild(st);
+stackFrames.forEach(f=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x","50");r.setAttribute("y",f.y);r.setAttribute("width","200");r.setAttribute("height",f.h);
+r.setAttribute("rx","4");r.setAttribute("fill","var(--bg-soft)");r.setAttribute("stroke",f.col);r.setAttribute("stroke-width","1");
+svg.appendChild(r);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x","150");t.setAttribute("y",f.y+20);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","11");t.setAttribute("fill",f.col);t.setAttribute("font-family","JetBrains Mono,monospace");
+t.textContent=f.label;
+svg.appendChild(t);
+});
+// right side: call tree with highlight
+const rnodes=[
+{cx:400,cy:70,r:18,label:"F(5)",col:"var(--grad)"},
+{cx:320,cy:130,r:16,label:"F(4)",col:"var(--accent)"},
+{cx:260,cy:190,r:14,label:"F(3)",col:"var(--accent-2)"},
+{cx:220,cy:250,r:12,label:"F(2)",col:"var(--accent-2)"},
+{cx:190,cy:300,r:10,label:"F(1)",col:"var(--success)"},
+];
+// highlight path
+rnodes.forEach((n,i)=>{
+const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+c.setAttribute("cx",n.cx);c.setAttribute("cy",n.cy);c.setAttribute("r",n.r);
+c.setAttribute("fill",i===4?"var(--success)":"var(--bg-soft)");
+c.setAttribute("fill-opacity",i===4?"0.2":"1");
+c.setAttribute("stroke",n.col);c.setAttribute("stroke-width",i===4?"2.5":"1.5");
+svg.appendChild(c);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",n.cx);t.setAttribute("y",n.cy+4);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","9");t.setAttribute("fill",n.col);t.setAttribute("font-weight","600");
+t.textContent=n.label;
+svg.appendChild(t);
+if(i<rnodes.length-1){
+const l=document.createElementNS("http://www.w3.org/2000/svg","line");
+l.setAttribute("x1",n.cx);l.setAttribute("y1",n.cy+n.r);l.setAttribute("x2",rnodes[i+1].cx);l.setAttribute("y2",rnodes[i+1].cy-rnodes[i+1].r);
+l.setAttribute("stroke",n.col);l.setAttribute("stroke-width","1.5");
+svg.appendChild(l);
+}
+});
+// arrow labels
+const ar=document.createElementNS("http://www.w3.org/2000/svg","text");
+ar.setAttribute("x","440");ar.setAttribute("y","100");ar.setAttribute("font-size","10");ar.setAttribute("fill","var(--success)");ar.setAttribute("font-weight","600");
+ar.textContent="→ 沿最左分支";
+svg.appendChild(ar);
+const ar2=document.createElementNS("http://www.w3.org/2000/svg","text");
+ar2.setAttribute("x","440");ar2.setAttribute("y","118");ar2.setAttribute("font-size","10");ar2.setAttribute("fill","var(--success)");
+ar2.textContent="  一直向下压栈";
+svg.appendChild(ar2);
+const ar3=document.createElementNS("http://www.w3.org/2000/svg","text");
+ar3.setAttribute("x","440");ar3.setAttribute("y","136");ar3.setAttribute("font-size","10");ar3.setAttribute("fill","var(--accent-2)");
+ar3.textContent="→ 到达Base Case";
+svg.appendChild(ar3);
+const ar4=document.createElementNS("http://www.w3.org/2000/svg","text");
+ar4.setAttribute("x","440");ar4.setAttribute("y","154");ar4.setAttribute("font-size","10");ar4.setAttribute("fill","var(--accent-2)");
+ar4.textContent="  开始弹栈返回";
+svg.appendChild(ar4);
+}},
+{
+t:"汉诺塔：经典递归问题",
+l:"def hanoi(n, src, aux, dst): if n==1: move(src,dst); else: hanoi(n-1,src,dst,aux); move(src,dst); hanoi(n-1,aux,src,dst)",
+d:"汉诺塔是递归的经典例题。移动 n 个盘子的思路：<strong>先移 n-1 个到辅助柱、再移最大的、再把 n-1 个移回来</strong>。",
+b:[{t:"经典问题",c:"def"},{t:"递归思维",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// Tower of Hanoi visualization for n=3
+const baseY=260,pegX=[120,350,580];
+// base
+const br=document.createElementNS("http://www.w3.org/2000/svg","rect");
+br.setAttribute("x","40");br.setAttribute("y",baseY);br.setAttribute("width","620");br.setAttribute("height","8");
+br.setAttribute("rx","4");br.setAttribute("fill","var(--fg-dim)");
+svg.appendChild(br);
+// pegs
+pegX.forEach(px=>{
+const pr=document.createElementNS("http://www.w3.org/2000/svg","rect");
+pr.setAttribute("x",px-3);pr.setAttribute("y","90");pr.setAttribute("width","6");pr.setAttribute("height",baseY-90);
+pr.setAttribute("fill","var(--fg-dim)");pr.setAttribute("opacity","0.5");
+svg.appendChild(pr);
+});
+// labels
+[{x:120,label:"A (源柱)"},{x:350,label:"B (辅助柱)"},{x:580,label:"C (目标柱)"}].forEach(p=>{
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",p.x);t.setAttribute("y",baseY+28);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","11");t.setAttribute("fill","var(--accent)");t.setAttribute("font-weight","600");
+t.textContent=p.label;
+svg.appendChild(t);
+});
+// disks on peg A
+const disks=[{w:80,y:baseY-12,col:"var(--accent)"},{w:60,y:baseY-24,col:"var(--accent-2)"},{w:40,y:baseY-36,col:"var(--grad)"}];
+disks.forEach(d=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",120-d.w/2);r.setAttribute("y",d.y-10);r.setAttribute("width",d.w);r.setAttribute("height","10");
+r.setAttribute("rx","4");r.setAttribute("fill",d.col);r.setAttribute("opacity","0.7");
+svg.appendChild(r);
+const dt=document.createElementNS("http://www.w3.org/2000/svg","text");
+dt.setAttribute("x","120");dt.setAttribute("y",d.y-2);dt.setAttribute("text-anchor","middle");dt.setAttribute("font-size","8");dt.setAttribute("fill","#fff");
+dt.textContent=d.w===80?"3":d.w===60?"2":"1";
+svg.appendChild(dt);
+});
+// recursive formula display
+const formula=[
+{x:40,y:40,text:"hanoi(n, src, aux, dst):"},
+{x:55,y:62,text:"if n == 1: move(src→dst)"},
+{x:55,y:82,text:"else:"},
+{x:75,y:100,text:"hanoi(n-1, src, dst, aux)  // 移 n-1 到辅助柱"},
+{x:75,y:118,text:"move(src→dst)                 // 移最大的直接到目标"},
+{x:75,y:136,text:"hanoi(n-1, aux, src, dst)  // 移 n-1 到目标柱顶"},
+];
+formula.forEach(f=>{
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",f.x);t.setAttribute("y",f.y);t.setAttribute("font-size","10");t.setAttribute("fill","var(--fg)");t.setAttribute("font-family","JetBrains Mono,monospace");
+t.textContent=f.text;
+svg.appendChild(t);
+});
+const note=document.createElementNS("http://www.w3.org/2000/svg","text");
+note.setAttribute("x","350");note.setAttribute("y","160");note.setAttribute("text-anchor","middle");note.setAttribute("font-size","12");note.setAttribute("fill","var(--grad)");
+note.textContent="步骤数 = 2ⁿ-1，n=3 时需要 7 步";
+svg.appendChild(note);
+}},
+{
+t:"递归 vs 迭代的对比",
+l:"# 递归: 简洁但可能有重复计算\n# 迭代 (备忘录): 自底向上，避免重复\n# 尾递归优化: 编译器将递归转为迭代",
+d:"递归代码<strong>简洁优雅</strong>，但可能有重复计算（如斐波那契指数级重复）。迭代+备忘录可达 O(n)。尾递归可被编译器优化为循环。",
+b:[{t:"性能",c:"warn"},{t:"优化",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// side by side comparison
+// Left: Recursive fib
+const lr=document.createElementNS("http://www.w3.org/2000/svg","rect");
+lr.setAttribute("x","30");lr.setAttribute("y","40");lr.setAttribute("width","280");lr.setAttribute("height","210");
+lr.setAttribute("rx","8");lr.setAttribute("fill","var(--bg-soft)");lr.setAttribute("stroke","var(--grad)");lr.setAttribute("stroke-width","2");
+svg.appendChild(lr);
+const lt=document.createElementNS("http://www.w3.org/2000/svg","text");
+lt.setAttribute("x","170");lt.setAttribute("y","65");lt.setAttribute("text-anchor","middle");lt.setAttribute("font-size","14");lt.setAttribute("font-weight","700");lt.setAttribute("fill","var(--grad)");
+lt.textContent="递归 (自顶向下)";
+svg.appendChild(lt);
+["def fib(n):","  if n<=1: return n","  return fib(n-1)+fib(n-2)","","时间: O(2^n) 😰","空间: O(n) 调用栈"].forEach((l,i)=>{
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x","45");t.setAttribute("y",90+i*22);t.setAttribute("font-size","11");t.setAttribute("fill","var(--fg-dim)");t.setAttribute("font-family","JetBrains Mono,monospace");
+t.textContent=l;
+svg.appendChild(t);
+});
+// Right: Iterative fib
+const rr=document.createElementNS("http://www.w3.org/2000/svg","rect");
+rr.setAttribute("x","350");rr.setAttribute("y","40");rr.setAttribute("width","320");rr.setAttribute("height","210");
+rr.setAttribute("rx","8");rr.setAttribute("fill","var(--bg-soft)");rr.setAttribute("stroke","var(--success)");rr.setAttribute("stroke-width","2");
+svg.appendChild(rr);
+const rt=document.createElementNS("http://www.w3.org/2000/svg","text");
+rt.setAttribute("x","510");rt.setAttribute("y","65");rt.setAttribute("text-anchor","middle");rt.setAttribute("font-size","14");rt.setAttribute("font-weight","700");rt.setAttribute("fill","var(--success)");
+rt.textContent="迭代 (自底向上)";
+svg.appendChild(rt);
+["def fib(n):","  if n<=1: return n","  a,b = 0,1","  for _ in range(2,n+1):","    a,b = b, a+b","  return b","","时间: O(n) ✅","空间: O(1) ✅"].forEach((l,i)=>{
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x","365");t.setAttribute("y",90+i*22);t.setAttribute("font-size","11");t.setAttribute("fill","var(--fg-dim)");t.setAttribute("font-family","JetBrains Mono,monospace");
+t.textContent=l;
+svg.appendChild(t);
+});
+// bottom summary
+const bs=document.createElementNS("http://www.w3.org/2000/svg","rect");
+bs.setAttribute("x","30");bs.setAttribute("y","270");bs.setAttribute("width","640");bs.setAttribute("height","40");
+bs.setAttribute("rx","6");bs.setAttribute("fill","var(--accent)");bs.setAttribute("opacity","0.08");bs.setAttribute("stroke","var(--accent)");bs.setAttribute("stroke-width","1");
+svg.appendChild(bs);
+const bst=document.createElementNS("http://www.w3.org/2000/svg","text");
+bst.setAttribute("x","350");bst.setAttribute("y","295");bst.setAttribute("text-anchor","middle");bst.setAttribute("font-size","12");bst.setAttribute("fill","var(--accent)");bst.setAttribute("font-weight","600");
+bst.textContent="选择策略：先用递归写出清晰逻辑，如果性能瓶颈再用迭代+备忘录优化";
+svg.appendChild(bst);
+}}
+];
+
+let step=0,autoTimer=null,autoOn=false;
+const stepTitle=document.getElementById("stepTitle");
+const stepDesc=document.getElementById("stepDesc");
+const badges=document.getElementById("badges");
+const codeLine=document.getElementById("codeLine");
+const stage=document.getElementById("stage");
+const dots=document.getElementById("dots");
+const btnPrev=document.getElementById("btnPrev");
+const btnNext=document.getElementById("btnNext");
+const btnAuto=document.getElementById("btnAuto");
+
+function renderDots(){
+dots.innerHTML='';
+S.forEach((_,i)=>{
+const d=document.createElement("span");
+d.className="step-dot"+(i===step?" active":i<step?" done":"");
+d.onclick=()=>goTo(i);
+dots.appendChild(d);
+});
+}
+function goTo(i){
+step=Math.max(0,Math.min(S.length-1,i));
+const s=S[step];
+stepTitle.textContent=s.t;
+stepDesc.innerHTML=s.d;
+badges.innerHTML=s.b.map(b=>`<span class="badge badge--${b.c}">${b.t}</span>`).join('');
+codeLine.textContent=s.l;
+const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+svg.setAttribute("viewBox","0 0 700 340");
+svg.setAttribute("preserveAspectRatio","xMidYMid meet");
+stage.innerHTML='';
+stage.appendChild(svg);
+s.r(svg);
+btnPrev.disabled=step===0;
+btnNext.disabled=step===S.length-1;
+renderDots();
+}
+btnPrev.onclick=()=>goTo(step-1);
+btnNext.onclick=()=>{if(step<S.length-1)goTo(step+1);else{autoOn=false;btnAuto.innerHTML="&#9654; 自动播放";clearInterval(autoTimer);}};
+btnAuto.onclick=()=>{autoOn=!autoOn;btnAuto.innerHTML=autoOn?"&#9632; 停止":"&#9654; 自动播放";if(autoOn){autoTimer=setInterval(()=>{if(step<S.length-1)goTo(step+1);else goTo(0);},3500);}else clearInterval(autoTimer);};
+document.addEventListener("keydown",e=>{if(e.key==="ArrowLeft")goTo(step-1);if(e.key==="ArrowRight"){if(step<S.length-1)goTo(step+1);}});
+goTo(0);
+</script>
+</body>
+</html>

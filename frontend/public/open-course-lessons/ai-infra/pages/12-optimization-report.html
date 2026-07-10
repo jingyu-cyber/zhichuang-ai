@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>优化报告 — AI基础设施</title>
+<style>
+:root{--bg:#0a0e14;--bg-soft:#141b22;--bg-code:#06080c;--fg:#d0e0e8;--fg-dim:#607888;--line:#1c2836;--accent:#00e5a0;--accent-2:#b050ff;--grad:#40a0ff;--success:#30d060;--danger:#ff8020}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(176,80,255,.18);color:var(--accent-2)}.badge--tip{background:rgba(0,229,160,.15);color:var(--accent)}.badge--warn{background:rgba(255,128,32,.18);color:var(--danger)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.code-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 12px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+  <div class="demo-header">
+    <div>
+      <div class="breadcrumb"><a href="../index.html">AI基础设施</a> / 第4章 /</div>
+      <h1>4.3 综合优化报告</h1>
+    </div>
+    <div class="badge-row">
+      <span class="badge badge--def">性能分析</span>
+      <span class="badge badge--tip">Report</span>
+    </div>
+  </div>
+  <div class="demo-main">
+    <div class="panel-explain" id="explain"></div>
+    <div class="panel-stage" id="stage"></div>
+  </div>
+  <div class="demo-controls">
+    <button id="btn-prev">&larr; 上一步</button>
+    <div class="step-dots" id="dots"></div>
+    <button id="btn-next">下一步 &rarr;</button>
+  </div>
+</div>
+<script>
+const S=[{
+  t:"瓶颈发现 → 候选方案",
+  l:"Bottleneck identification → prioritize by impact",
+  d:"优化报告从识别瓶颈开始。通过 profiling 数据，按影响程度排序瓶颈：1)小矩阵 MatMul 导致 memory-bound(影响 55% 耗时)；2)BN+ReLU 未融合(多 2 次 kernel launch)；3)通信与计算未重叠(气泡 15%)；4)注意力分数计算缺乏 flash attention。",
+  b:["Bottleneck","Priority","Impact"],
+  r:function(svg){
+    function E(t,a,tx){let e=document.createElementNS("http://www.w3.org/2000/svg",t);for(let k in a)e.setAttribute(k,a[k]);if(tx)e.textContent=tx;return e;}
+    svg.setAttribute("viewBox","0 0 800 420");svg.style.background="#06080c";
+
+    svg.append(E("text",{x:400,y:20,fill:"#d0e0e8","font-size":"15","font-weight":"700","text-anchor":"middle"},"Optimization Report: Bottleneck → Solution Pipeline"));
+
+    // 4 columns: Bottleneck → Candidate Solutions → Expected Gain → Risk
+    let cols=[
+      {x:10,w:180,t:"Bottleneck",c:"#ff8020"},
+      {x:200,w:190,t:"Candidate Solution",c:"#40a0ff"},
+      {x:400,w:130,t:"Exp. Gain",c:"#00e5a0"},
+      {x:540,w:250,t:"Risk / Verification",c:"#b050ff"}
+    ];
+
+    cols.forEach(c=>{
+      svg.append(E("rect",{x:c.x,y:35,width:c.w,height:24,rx:5,fill:"rgba(0,229,160,0.06)",stroke:c.c,"stroke-width":"1"}));
+      svg.append(E("text",{x:c.x+c.w/2,y:52,fill:c.c,"font-size":"11","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},c.t));
+    });
+
+    // Row data
+    let rows=[
+      {b:"Small MatMul\nmemory-bound\n(55% time)",s:"Fuse QKV matmuls\n+ increase tile to 256",g:"+35%\nthroughput",r:"Accuracy neutral\nVerify: tiling config",bc:"#ff8020"},
+      {b:"BN+ReLU\nnot fused\n(extra launches)",s:"Apply vertical\noperator fusion",g:"+12%",r:"Easy, no risk\nVerify: nsys trace",bc:"#ff8020"},
+      {b:"Comm bubble\ncompute/comm\nno overlap",s:"Enable gradient\naccumulation K=4",g:"+18%",r:"Convergence may\nslow down, tune lr",bc:"#ff8020"},
+      {b:"Attention\nsoftmax in HBM\n(O(n2) memory)",s:"Implement Flash\nAttention v2",g:"+45% attn\n-60% memory",r:"Requires custom\nCUDA kernel dev",bc:"#ff8020"},
+    ];
+
+    rows.forEach((r,i)=>{
+      let y=72+i*80;
+      svg.append(E("rect",{x:10,y:y,width:780,height:70,rx:8,fill:"rgba(0,229,160,0.02)",stroke:"#1c2836","stroke-width":"1"}));
+
+      // Bottleneck
+      let bl=r.b.split("\n");
+      bl.forEach((l,li)=>{svg.append(E("text",{x:20,y:y+16+li*14,fill:r.bc,"font-size":li===0?"11":"9","font-weight":li===0?"700":"normal","font-family":"JetBrains Mono,monospace"},l));});
+
+      // Solution
+      let sl=r.s.split("\n");
+      sl.forEach((l,li)=>{svg.append(E("text",{x:205,y:y+16+li*14,fill:"#40a0ff","font-size":"10","font-family":"JetBrains Mono,monospace"},l));});
+
+      // Expected gain
+      let gl=r.g.split("\n");
+      gl.forEach((l,li)=>{svg.append(E("text",{x:405,y:y+16+li*14,fill:li===0?"#00e5a0":"#30d060","font-size":li===0?"14":"9","font-weight":li===0?"700":"normal","font-family":"JetBrains Mono,monospace"},l));});
+
+      // Risk
+      let rl=r.r.split("\n");
+      rl.forEach((l,li)=>{svg.append(E("text",{x:545,y:y+16+li*14,fill:"#b050ff","font-size":"9","font-family":"JetBrains Mono,monospace"},l));});
+
+      // Separator
+      svg.append(E("line",{x1:195,y1:y+5,x2:195,y2:y+65,stroke:"#1c2836","stroke-width":"1"}));
+      svg.append(E("line",{x1:395,y1:y+5,x2:395,y2:y+65,stroke:"#1c2836","stroke-width":"1"}));
+      svg.append(E("line",{x1:535,y1:y+5,x2:535,y2:y+65,stroke:"#1c2836","stroke-width":"1"}));
+    });
+  }
+},{
+  t:"预期收益与风险评估",
+  l:"Prioritized: Fuse QKV (easy, +35%) > Overlap (+18%) > FlashAttn (hard, +45%)",
+  d:"按实现难度和收益排序优化方案：1)QKV MatMul 融合，低风险 +35% 吞吐；2)计算/通信重叠，中风险 +18%；3)Flash Attention，高实现成本但收益巨大(+45% attention, -60% memory)；4)BN+ReLU 融合，零风险 +12%。从低垂果实开始逐步推进。",
+  b:["Impact","Effort","Risk Matrix"],
+  r:function(svg){
+    function E(t,a,tx){let e=document.createElementNS("http://www.w3.org/2000/svg",t);for(let k in a)e.setAttribute(k,a[k]);if(tx)e.textContent=tx;return e;}
+    svg.setAttribute("viewBox","0 0 800 420");svg.style.background="#06080c";
+
+    // Impact vs Effort scatter chart
+    svg.append(E("text",{x:400,y:18,fill:"#d0e0e8","font-size":"14","font-weight":"700","text-anchor":"middle"},"Impact vs Implementation Effort"));
+
+    // Axes
+    svg.append(E("line",{x1:120,y1:280,x2:680,y2:280,stroke:"#1c2836","stroke-width":"1"}));
+    svg.append(E("line",{x1:120,y1:280,x2:120,y2:40,stroke:"#1c2836","stroke-width":"1"}));
+    svg.append(E("text",{x:400,y:305,fill:"#607888","font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Implementation Effort →"));
+    svg.append(E("text",{x:40,y:160,fill:"#607888","font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace","transform":"rotate(-90,40,160)"},"Performance Gain →"));
+
+    // Quadrant labels
+    svg.append(E("text",{x:250,y:100,fill:"#30d060","font-size":"11","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"QUICK WINS"));
+    svg.append(E("text",{x:550,y:100,fill:"#40a0ff","font-size":"11","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"STRATEGIC INVEST"));
+    svg.append(E("text",{x:250,y:270,fill:"#607888","font-size":"10","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"LOW PRIORITY"));
+
+    // Points
+    let pts=[
+      {x:180,y:90,p:8,l:"Fuse QKV",c:"#00e5a0",gain:"+35%",eff:"Low"},
+      {x:230,y:120,p:6,l:"BN+ReLU fuse",c:"#00e5a0",gain:"+12%",eff:"Low"},
+      {x:300,y:110,p:7,l:"Comm overlap",c:"#40a0ff",gain:"+18%",eff:"Med"},
+      {x:520,y:85,p:9,l:"FlashAttn",c:"#40a0ff",gain:"+45%",eff:"High"},
+      {x:420,y:180,p:5,l:"Kernel tuning",c:"#607888",gain:"+8%",eff:"Med"},
+    ];
+
+    pts.forEach(p=>{
+      svg.append(E("circle",{cx:p.x,cy:p.y,r:p.p,fill:p.c,opacity:"0.7",stroke:p.c,"stroke-width":"2"}));
+      svg.append(E("text",{x:p.x,y:p.y-14,fill:p.c,"font-size":"9","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},p.l));
+      svg.append(E("text",{x:p.x,y:p.y+18,fill:"#607888","font-size":"8","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},p.gain));
+    });
+
+    // Cumulative gain bar at bottom
+    svg.append(E("text",{x:400,y:320,fill:"#d0e0e8","font-size":"12","font-weight":"700","text-anchor":"middle"},"Cumulative Throughput Gain (stacked optimizations)"));
+
+    let bars=[
+      {l:"Baseline",v:"100%",c:"#607888"},
+      {l:"+BN+ReLU",v:"112%",c:"#00e5a0"},
+      {l:"+QKV Fuse",v:"151%",c:"#40a0ff"},
+      {l:"+Comm Overlap",v:"178%",c:"#b050ff"},
+      {l:"+FlashAttn",v:"223%",c:"#ff8020"},
+    ];
+
+    let bx=60;
+    bars.forEach(b=>{
+      let w=parseInt(b.v)/223*620;
+      svg.append(E("rect",{x:bx,y:340,width:w,height:28,rx:4,fill:b.c,opacity:"0.5",stroke:b.c,"stroke-width":"1"}));
+      svg.append(E("text",{x:bx+w/2,y:359,fill:"#fff","font-size":"9","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},b.v));
+      bx+=w;
+    });
+
+    // X-axis labels
+    let blx=60;
+    bars.forEach(b=>{
+      let w=parseInt(b.v)/223*620;
+      svg.append(E("text",{x:blx,y:388,fill:"#607888","font-size":"8","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},b.l));
+      blx+=w;
+    });
+  }
+},{
+  t:"验证计划与回归测试",
+  l:"Verification: correctness → performance → stability",
+  d:"每项优化都需要验证流程：1)正确性验证——输出 tensor 与 baseline 逐位比较(allclose 1e-4)；2)性能验证——nsys/ncu profiling 确认耗时改善；3)稳定性验证——连续 1000 步训练无 NaN/Inf；4)回归测试——CI 中自动运行 profiling 基准。建立优化 → 验证 → 回滚的完整闭环。",
+  b:["Verification","Regression","CI"],
+  r:function(svg){
+    function E(t,a,tx){let e=document.createElementNS("http://www.w3.org/2000/svg",t);for(let k in a)e.setAttribute(k,a[k]);if(tx)e.textContent=tx;return e;}
+    svg.setAttribute("viewBox","0 0 800 420");svg.style.background="#06080c";
+
+    svg.append(E("text",{x:400,y:18,fill:"#d0e0e8","font-size":"14","font-weight":"700","text-anchor":"middle"},"Verification & Regression Testing Pipeline"));
+
+    // Pipeline flow
+    let stages=[
+      {x:30,y:45,w:150,h:50,label:"Code Change",c:"#40a0ff"},
+      {x:210,y:45,w:150,h:50,label:"Correctness\nCheck",c:"#00e5a0"},
+      {x:390,y:45,w:150,h:50,label:"Performance\nBenchmark",c:"#b050ff"},
+      {x:570,y:45,w:150,h:50,label:"Deploy &\nMonitor",c:"#ff8020"},
+    ];
+
+    stages.forEach(s=>{
+      svg.append(E("rect",{x:s.x,y:s.y,width:s.w,height:s.h,rx:8,fill:"rgba(0,229,160,0.04)",stroke:s.c,"stroke-width":"2"}));
+      let ls=s.label.split("\n");
+      ls.forEach((l,i)=>{svg.append(E("text",{x:s.x+s.w/2,y:s.y+25+i*14,fill:s.c,"font-size":"11","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},l));});
+    });
+
+    let defs=E("defs");let ar=E("marker",{id:"ar",viewBox:"0 0 10 10",refX:"9",refY:"5",markerWidth:"5",markerHeight:"5",orient:"auto"});ar.append(E("path",{d:"M0,0 L10,5 L0,10 Z",fill:"#d0e0e8"}));defs.append(ar);svg.append(defs);
+
+    for(let i=0;i<3;i++){
+      svg.append(E("line",{x1:stages[i].x+stages[i].w,y1:stages[i].y+25,x2:stages[i+1].x,y2:stages[i+1].y+25,stroke:"#d0e0e8","stroke-width":"1.5","marker-end":"url(#ar)"}));
+    }
+
+    // Rollback loop
+    svg.append(E("path",{d:"M570,95 L570,120 L30,120 L30,95",stroke:"#ff8020",fill:"none","stroke-width":"1.5","stroke-dasharray":"6,4","marker-end":"url(#ar2)"}));
+    svg.append(E("text",{x:300,y:115,fill:"#ff8020","font-size":"9","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"On failure: rollback + fix"));
+
+    let defs2=E("defs");let ar2=E("marker",{id:"ar2",viewBox:"0 0 10 10",refX:"9",refY:"5",markerWidth:"5",markerHeight:"5",orient:"auto"});ar2.append(E("path",{d:"M0,0 L10,5 L0,10 Z",fill:"#ff8020"}));defs2.append(ar2);svg.append(defs2);
+
+    // Verification details
+    svg.append(E("text",{x:400,y:155,fill:"#00e5a0","font-size":"13","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Verification Checklist"));
+
+    let checks=[
+      {c:"Correctness",items:"allclose(baseline, optimized, rtol=1e-4, atol=1e-6)",cl:"#00e5a0"},
+      {c:"Performance",items:"nsys profile: kernel time ↓, step time ↓, SM util ↑",cl:"#40a0ff"},
+      {c:"Memory",items:"peak_alloc ≤ baseline; no OOM; fragmentation < 10%",cl:"#b050ff"},
+      {c:"Stability",items:"train 1000 steps: no NaN/Inf; loss curve within 0.1%",cl:"#ff8020"},
+      {c:"Convergence",items:"final eval metric within ε of baseline; no divergence",cl:"#30d060"},
+    ];
+
+    checks.forEach((ch,i)=>{
+      let y=178+i*38;
+      svg.append(E("text",{x:30,y:y,fill:ch.cl,"font-size":"11","font-weight":"700","font-family":"JetBrains Mono,monospace"},ch.c));
+      svg.append(E("rect",{x:150,y:y-14,width:620,height:32,rx:6,fill:"rgba(0,229,160,0.02)",stroke:"#1c2836","stroke-width":"1"}));
+      svg.append(E("text",{x:160,y:y+6,fill:"#607888","font-size":"10","font-family":"JetBrains Mono,monospace"},ch.items));
+    });
+
+    // CI badge
+    svg.append(E("rect",{x:280,y:380,width:240,height:30,rx:15,fill:"rgba(0,229,160,0.08)",stroke:"#00e5a0","stroke-width":"1"}));
+    svg.append(E("text",{x:400,y:400,fill:"#00e5a0","font-size":"11","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"CI Auto-Benchmark: Every PR"));
+  }
+}];
+
+let step=0;
+function render(i){
+  step=((i%S.length)+S.length)%S.length;
+  let s=S[step];
+  document.getElementById("explain").innerHTML=`
+    <div class="step-title">${s.t}</div>
+    <div class="badge-row">${s.b.map(b=>'<span class="badge badge--tip">'+b+'</span>').join("")}</div>
+    <div class="code-line">${s.l}</div>
+    <div class="step-desc">${s.d}</div>`;
+  let svg=document.getElementById("stage").querySelector("svg");
+  if(!svg){svg=document.createElementNS("http://www.w3.org/2000/svg","svg");document.getElementById("stage").appendChild(svg);svg.setAttribute("width","100%");svg.setAttribute("height","100%");svg.style.minHeight="420px";}
+  while(svg.firstChild)svg.removeChild(svg.firstChild);
+  s.r(svg);
+  document.getElementById("dots").innerHTML=S.map((_,j)=>'<div class="step-dot'+(j===step?' active':j<step?' done':'')+'></div>').join("");
+  document.getElementById("btn-prev").disabled=step===0;
+  document.getElementById("btn-next").disabled=step===S.length-1;
+}
+render(0);
+document.getElementById("btn-prev").onclick=()=>render(step-1);
+document.getElementById("btn-next").onclick=()=>render(step+1);
+document.addEventListener("keydown",e=>{if(e.key==="ArrowLeft")render(step-1);if(e.key==="ArrowRight")render(step+1);});
+</script>
+</body>
+</html>

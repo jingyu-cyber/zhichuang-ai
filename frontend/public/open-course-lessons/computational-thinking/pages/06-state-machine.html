@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>06 状态机构建 — 计算思维</title>
+<style>
+:root{--bg:#f5f5f8;--bg-soft:#ffffff;--bg-code:#f0f0f4;--fg:#2c2c38;--fg-dim:#6c6c80;--line:#dcdce4;--accent:#5b6abf;--accent-2:#36a2b8;--grad:#f09840;--success:#40c878;--danger:#e04860;--shadow:0 2px 12px rgba(0,0,0,.06)}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:"Noto Sans SC","PingFang SC",-apple-system,sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(91,106,191,.12);color:var(--accent)}.badge--tip{background:rgba(64,200,120,.12);color:var(--success)}.badge--warn{background:rgba(240,152,64,.15);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--accent);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px;box-shadow:var(--shadow)}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 8px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>06 状态机构建</h1>
+<div class="breadcrumb"><a href="../index.html">计算思维</a> / 第2章 / 状态机构建</div>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="explain">
+<div class="step-title" id="stepTitle"></div>
+<div class="step-desc" id="stepDesc"></div>
+<div class="badge-row" id="badges"></div>
+<div class="info-line" id="codeLine"></div>
+</div>
+<div class="panel-stage" id="stage"></div>
+</div>
+<div class="demo-controls">
+<button id="btnPrev" aria-label="上一步">&larr; 上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btnNext" aria-label="下一步">下一步 &rarr;</button>
+<button id="btnAuto" aria-label="自动播放">&#9654; 自动播放</button>
+<span style="font-size:12px;color:var(--fg-dim)">键盘 &larr; &rarr;</span>
+</div>
+</div>
+<script>
+const S=[{
+t:"什么是状态机",
+l:"状态机 = 有限状态集合 + 事件集合 + 状态转移函数 f(state, event) → new_state",
+d:"状态机有三个要素：<strong>状态</strong>（系统在某个时刻的静态快照）、<strong>事件</strong>（触发状态变化的外部输入）、<strong>转移</strong>（从一个状态到另一个状态的路径）。",
+b:[{t:"定义",c:"def"},{t:"有限状态机",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// Order state machine example
+const states=[
+{cx:100,cy:80,r:32,label:"待支付",col:"var(--grad)"},
+{cx:280,cy:80,r:32,label:"已支付",col:"var(--accent)"},
+{cx:460,cy:80,r:32,label:"配送中",col:"var(--accent-2)"},
+{cx:580,cy:80,r:32,label:"已完成",col:"var(--success)"},
+{cx:340,cy:200,r:28,label:"已取消",col:"var(--danger)"},
+];
+// draw states
+states.forEach(s=>{
+const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+c.setAttribute("cx",s.cx);c.setAttribute("cy",s.cy);c.setAttribute("r",s.r);
+c.setAttribute("fill","var(--bg-soft)");c.setAttribute("stroke",s.col);c.setAttribute("stroke-width","2.5");
+svg.appendChild(c);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",s.cx);t.setAttribute("y",s.cy+5);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","12");t.setAttribute("font-weight","600");t.setAttribute("fill",s.col);
+t.textContent=s.label;
+svg.appendChild(t);
+});
+// transitions with curved arrows
+const trans=[
+{x1:132,y1:80,x2:248,y2:80,label:"付款",col:"var(--success)"},
+{x1:312,y1:80,x2:428,y2:80,label:"发货",col:"var(--accent-2)"},
+{x1:492,y1:80,x2:548,y2:80,label:"签收",col:"var(--success)"},
+{x1:200,y1:105,x2:295,y2:180,label:"超时/取消",col:"var(--danger)"},
+{x1:360,y1:105,x2:340,y2:172,label:"退款",col:"var(--grad)"},
+];
+trans.forEach(tx=>{
+const dx=tx.x2-tx.x1,dy=tx.y2-tx.y1;
+const midx=tx.x1+dx*0.45,midy=tx.y1+dy*0.5;
+const p=document.createElementNS("http://www.w3.org/2000/svg","path");
+if(Math.abs(dx)>Math.abs(dy)){
+p.setAttribute("d",`M ${tx.x1} ${tx.y1} Q ${midx} ${midy-20} ${tx.x2} ${tx.y2}`);
+}else{
+p.setAttribute("d",`M ${tx.x1} ${tx.y1} Q ${midx} ${midy} ${tx.x2} ${tx.y2}`);
+}
+p.setAttribute("fill","none");p.setAttribute("stroke",tx.col);p.setAttribute("stroke-width","1.5");p.setAttribute("marker-end","url(#arrow-"+tx.label.replace(/[^a-zA-Z]/g,'')+")");
+svg.appendChild(p);
+const lt=document.createElementNS("http://www.w3.org/2000/svg","text");
+lt.setAttribute("x",midx);lt.setAttribute("y",Math.abs(dx)>Math.abs(dy)?midy-25:midy-8);
+lt.setAttribute("font-size","9");lt.setAttribute("fill",tx.col);lt.setAttribute("font-weight","600");
+lt.textContent=tx.label;
+svg.appendChild(lt);
+});
+// legend
+const legend=document.createElementNS("http://www.w3.org/2000/svg","text");
+legend.setAttribute("x","350");legend.setAttribute("y","270");legend.setAttribute("text-anchor","middle");legend.setAttribute("font-size","13");legend.setAttribute("fill","var(--fg-dim)");
+legend.textContent="状态 = 圆圈 | 事件 = 箭头上的文字 | 转移 = 箭头方向";
+svg.appendChild(legend);
+}},
+{
+t:"订单状态机详解",
+l:"states = {待支付, 已支付, 配送中, 已完成, 已取消}\nevents: 付款→已支付; 发货→配送中; 签收→已完成; 超时→已取消",
+d:"以电商订单为例，画出<strong>5个状态</strong>和它们之间的<strong>事件箭头</strong>。每个事件只能在特定状态下触发。",
+b:[{t:"订单系统",c:"def"},{t:"状态转移表",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// transition table
+const colW=140,rowH=32,ox=30,oy=50;
+const headers=["当前状态","事件","下一状态"];
+headers.forEach((h,i)=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",ox+i*colW);r.setAttribute("y",oy);r.setAttribute("width",colW);r.setAttribute("height","26");
+r.setAttribute("fill","var(--accent)");r.setAttribute("opacity","0.12");r.setAttribute("stroke","var(--accent)");r.setAttribute("stroke-width","1");
+svg.appendChild(r);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",ox+i*colW+colW/2);t.setAttribute("y",oy+18);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","11");t.setAttribute("font-weight","700");t.setAttribute("fill","var(--accent)");
+t.textContent=h;
+svg.appendChild(t);
+});
+const rows=[["待支付","付款成功","已支付"],["待支付","超时未付","已取消"],["已支付","商家发货","配送中"],["已支付","用户退款","已取消"],["配送中","确认签收","已完成"],["配送中","物流异常","已取消"]];
+rows.forEach((row,ri)=>{
+row.forEach((cell,ci)=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",ox+ci*colW);r.setAttribute("y",oy+26+ri*rowH);r.setAttribute("width",colW);r.setAttribute("height",rowH);
+r.setAttribute("fill","var(--bg-soft)");r.setAttribute("stroke","var(--line)");r.setAttribute("stroke-width","1");
+svg.appendChild(r);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",ox+ci*colW+colW/2);t.setAttribute("y",oy+26+ri*rowH+20);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","11");t.setAttribute("fill",ci===1?"var(--grad)":"var(--fg)");
+t.textContent=cell;
+svg.appendChild(t);
+});
+// row number
+const rn=document.createElementNS("http://www.w3.org/2000/svg","text");
+rn.setAttribute("x","20");rn.setAttribute("y",oy+26+ri*rowH+20);rn.setAttribute("font-size","10");rn.setAttribute("fill","var(--fg-dim)");
+rn.textContent=(ri+1);
+svg.appendChild(rn);
+});
+// right panel: guard condition explanation
+const gp=document.createElementNS("http://www.w3.org/2000/svg","rect");
+gp.setAttribute("x","460");gp.setAttribute("y","50");gp.setAttribute("width","210");gp.setAttribute("height","200");
+gp.setAttribute("rx","8");gp.setAttribute("fill","var(--bg-soft)");gp.setAttribute("stroke","var(--grad)");gp.setAttribute("stroke-width","1.5");
+svg.appendChild(gp);
+const gt=document.createElementNS("http://www.w3.org/2000/svg","text");
+gt.setAttribute("x","565");gt.setAttribute("y","78");gt.setAttribute("text-anchor","middle");gt.setAttribute("font-size","13");gt.setAttribute("font-weight","700");gt.setAttribute("fill","var(--grad)");
+gt.textContent="守卫条件";
+svg.appendChild(gt);
+["事件只在特定状态下有效","例如：已支付状态不能","再次触发付款事件","也不能直接签收","必须先发货才能签收"].forEach((l,i)=>{
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x","475");t.setAttribute("y",105+i*22);t.setAttribute("font-size","11");t.setAttribute("fill","var(--fg-dim)");
+t.textContent=l;
+svg.appendChild(t);
+});
+}},
+{
+t:"游戏状态机：角色动画",
+l:"enum State { IDLE, RUN, JUMP, ATTACK }\nswitch(state): case IDLE: if(input.run) → RUN; case RUN: if(input.jump) → JUMP",
+d:"游戏角色的<strong>动画状态机</strong>是最经典的例子。站立、跑步、跳跃、攻击之间有限且明确的转移规则。",
+b:[{t:"游戏开发",c:"def"},{t:"动画状态机",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// Game character state machine
+const gs=[
+{cx:130,cy:110,r:28,label:"站立 (Idle)",col:"var(--accent)"},
+{cx:350,cy:50,r:28,label:"跑步 (Run)",col:"var(--accent-2)"},
+{cx:350,cy:200,r:28,label:"跳跃 (Jump)",col:"var(--grad)"},
+{cx:570,cy:110,r:28,label:"攻击 (Attack)",col:"var(--danger)"},
+];
+gs.forEach(s=>{
+const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+c.setAttribute("cx",s.cx);c.setAttribute("cy",s.cy);c.setAttribute("r",s.r);
+c.setAttribute("fill","var(--bg-soft)");c.setAttribute("stroke",s.col);c.setAttribute("stroke-width","2.5");
+svg.appendChild(c);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",s.cx);t.setAttribute("y",s.cy+5);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","10");t.setAttribute("font-weight","600");t.setAttribute("fill",s.col);
+t.textContent=s.label;
+svg.appendChild(t);
+});
+// directed edges
+const edges=[
+{x1:158,y1:110,x2:322,y2:50,label:"按W",col:"var(--accent-2)"},
+{x1:322,y1:50,x2:158,y2:110,label:"松W",col:"var(--accent)"},
+{x1:322,y1:78,x2:322,y2:172,label:"按空格",col:"var(--grad)"},
+{x1:322,y1:172,x2:322,y2:78,label:"落地",col:"var(--accent-2)"},
+{x1:378,y1:110,x2:542,y2:110,label:"按J",col:"var(--danger)"},
+{x1:542,y1:138,x2:378,y2:138,label:"动画完",col:"var(--accent-2)"},
+{x1:378,y1:50,x2:542,y2:80,label:"跑+J",col:"var(--danger)"},
+];
+edges.forEach(e=>{
+const l=document.createElementNS("http://www.w3.org/2000/svg","line");
+l.setAttribute("x1",e.x1);l.setAttribute("y1",e.y1);l.setAttribute("x2",e.x2);l.setAttribute("y2",e.y2);
+l.setAttribute("stroke",e.col);l.setAttribute("stroke-width","2");
+svg.appendChild(l);
+const midX=(e.x1+e.x2)/2,midY=(e.y1+e.y2)/2;
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",midX+(e.x1===e.x2?15:0));t.setAttribute("y",midY-(e.x1===e.x2?5:-10));t.setAttribute("font-size","9");t.setAttribute("fill",e.col);t.setAttribute("font-weight","600");
+t.textContent=e.label;
+svg.appendChild(t);
+});
+// legend bottom
+const lb=document.createElementNS("http://www.w3.org/2000/svg","text");
+lb.setAttribute("x","350");lb.setAttribute("y","280");lb.setAttribute("text-anchor","middle");lb.setAttribute("font-size","12");lb.setAttribute("fill","var(--fg-dim)");
+lb.textContent="游戏引擎每帧检查：当前状态 + 玩家输入 → 触发转移";
+svg.appendChild(lb);
+}},
+{
+t:"状态机的代码实现",
+l:"state = 'IDLE'\ndef on_event(event):\n    global state\n    state = TRANSITION[state][event]",
+d:"在代码中，状态机就是一张<strong>二维转移表</strong>：行是当前状态、列是事件、单元格是新状态。简单的查表即可。",
+b:[{t:"实现",c:"def"},{t:"查表驱动",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// CODE TABLE - transition matrix
+const colW=100,rowH=30,ox=30,oy=50;
+const colHeaders=["状态\\事件","付款","发货","签收","超时"];
+const rowHeaders=["待支付","已支付","配送中","已完成","已取消"];
+colHeaders.forEach((h,i)=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",ox+i*colW);r.setAttribute("y",oy);r.setAttribute("width",colW);r.setAttribute("height","26");
+r.setAttribute("fill",i===0?"var(--grad)":"var(--accent)");r.setAttribute("opacity","0.1");r.setAttribute("stroke",i===0?"var(--grad)":"var(--accent)");r.setAttribute("stroke-width","1");
+svg.appendChild(r);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",ox+i*colW+colW/2);t.setAttribute("y",oy+18);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","10");t.setAttribute("font-weight","700");t.setAttribute("fill",i===0?"var(--grad)":"var(--accent)");
+t.textContent=h;
+svg.appendChild(t);
+});
+const matrix=[
+["待支付","已支付","×","×","已取消"],
+["已支付","×","配送中","×","×"],
+["配送中","×","×","已完成","已取消"],
+["已完成","×","×","×","×"],
+["已取消","×","×","×","×"],
+];
+matrix.forEach((row,ri)=>{
+row.forEach((cell,ci)=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",ox+ci*colW);r.setAttribute("y",oy+26+ri*rowH);r.setAttribute("width",colW);r.setAttribute("height",rowH);
+const isX=cell==="×";
+r.setAttribute("fill",isX?"#f5f5f8":"var(--bg-soft)");r.setAttribute("stroke","var(--line)");r.setAttribute("stroke-width","1");
+svg.appendChild(r);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",ox+ci*colW+colW/2);t.setAttribute("y",oy+26+ri*rowH+20);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","10");
+t.setAttribute("fill",isX?"var(--fg-dim)":ci===0?"var(--grad)":"var(--fg)");
+t.textContent=cell;
+svg.appendChild(t);
+});
+});
+// code snippet on right
+const cr=document.createElementNS("http://www.w3.org/2000/svg","rect");
+cr.setAttribute("x","530");cr.setAttribute("y","50");cr.setAttribute("width","150");cr.setAttribute("height","140");
+cr.setAttribute("rx","6");cr.setAttribute("fill","var(--bg-soft)");cr.setAttribute("stroke","var(--accent)");cr.setAttribute("stroke-width","1.5");
+svg.appendChild(cr);
+["TRANSITION = {","  '待支付': {","    '付款': '已支付',","    '超时': '已取消'","  },","  ...","}"].forEach((l,i)=>{
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x","540");t.setAttribute("y",75+i*18);t.setAttribute("font-size","10");t.setAttribute("fill","var(--fg-dim)");t.setAttribute("font-family","JetBrains Mono,monospace");
+t.textContent=l;
+svg.appendChild(t);
+});
+// bottom note
+const bn=document.createElementNS("http://www.w3.org/2000/svg","text");
+bn.setAttribute("x","350");bn.setAttribute("y","270");bn.setAttribute("text-anchor","middle");bn.setAttribute("font-size","12");bn.setAttribute("fill","var(--success)");
+bn.textContent="TRANSITION[当前状态][事件] → 新状态 （O(1) 查表）";
+svg.appendChild(bn);
+}}
+];
+
+let step=0,autoTimer=null,autoOn=false;
+const stepTitle=document.getElementById("stepTitle");
+const stepDesc=document.getElementById("stepDesc");
+const badges=document.getElementById("badges");
+const codeLine=document.getElementById("codeLine");
+const stage=document.getElementById("stage");
+const dots=document.getElementById("dots");
+const btnPrev=document.getElementById("btnPrev");
+const btnNext=document.getElementById("btnNext");
+const btnAuto=document.getElementById("btnAuto");
+
+function renderDots(){
+dots.innerHTML='';
+S.forEach((_,i)=>{
+const d=document.createElement("span");
+d.className="step-dot"+(i===step?" active":i<step?" done":"");
+d.onclick=()=>goTo(i);
+dots.appendChild(d);
+});
+}
+function goTo(i){
+step=Math.max(0,Math.min(S.length-1,i));
+const s=S[step];
+stepTitle.textContent=s.t;
+stepDesc.innerHTML=s.d;
+badges.innerHTML=s.b.map(b=>`<span class="badge badge--${b.c}">${b.t}</span>`).join('');
+codeLine.textContent=s.l;
+const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+svg.setAttribute("viewBox","0 0 700 340");
+svg.setAttribute("preserveAspectRatio","xMidYMid meet");
+stage.innerHTML='';
+stage.appendChild(svg);
+s.r(svg);
+btnPrev.disabled=step===0;
+btnNext.disabled=step===S.length-1;
+renderDots();
+}
+btnPrev.onclick=()=>goTo(step-1);
+btnNext.onclick=()=>{if(step<S.length-1)goTo(step+1);else{autoOn=false;btnAuto.innerHTML="&#9654; 自动播放";clearInterval(autoTimer);}};
+btnAuto.onclick=()=>{autoOn=!autoOn;btnAuto.innerHTML=autoOn?"&#9632; 停止":"&#9654; 自动播放";if(autoOn){autoTimer=setInterval(()=>{if(step<S.length-1)goTo(step+1);else goTo(0);},3500);}else clearInterval(autoTimer);};
+document.addEventListener("keydown",e=>{if(e.key==="ArrowLeft")goTo(step-1);if(e.key==="ArrowRight"){if(step<S.length-1)goTo(step+1);}});
+goTo(0);
+</script>
+</body>
+</html>

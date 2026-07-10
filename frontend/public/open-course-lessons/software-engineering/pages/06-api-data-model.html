@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>06 API与数据对齐 - 软件工程互动课程</title>
+<style>
+:root{--bg:#1c2128;--bg-soft:#252c35;--bg-code:#141820;--fg:#e6edf3;--fg-dim:#8b949e;--line:#30363d;--accent:#539bf5;--accent-2:#57ab5a;--grad:#c69026;--success:#57ab5a;--danger:#e5534b;--purple:#986ee2}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(83,155,245,.18);color:var(--accent)}.badge--tip{background:rgba(87,171,90,.18);color:var(--success)}.badge--warn{background:rgba(198,144,38,.18);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>API与数据对齐</h1>
+<div class="breadcrumb"><a href="../index.html">软件工程</a> / 软件设计 / <span id="step-indicator">Step 1/3</span></div>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="panel-explain">
+<div class="step-title" id="step-title"></div>
+<div class="step-desc" id="step-desc"></div>
+<div class="badge-row" id="badge-row"></div>
+<div class="info-line" id="info-line"></div>
+</div>
+<div class="panel-stage"><svg id="stage" viewBox="0 0 800 500" style="width:100%;height:100%"></svg></div>
+</div>
+<div class="demo-controls">
+<button id="btn-prev" onclick="prev()">上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btn-next" onclick="next()">下一步</button>
+<button id="btn-auto" onclick="toggleAuto()" style="min-width:80px">自动播放</button>
+</div>
+</div>
+<script>
+const svgNS="http://www.w3.org/2000/svg";
+function T(t, a) { const e = document.createElementNS(svgNS, t); for (const [k, v] of Object.entries(a || {})) e.setAttribute(k, v); return e; }
+function tx(x, y, t, c, fs, a) { const e = T("text", { x, y, fill: c || "var(--fg)", "font-size": fs || "13", "text-anchor": a || "middle", "font-family": "-apple-system,'PingFang SC','Microsoft YaHei',sans-serif" }); e.textContent = t; return e; }
+function rct(x, y, w, h, f, s, rx) { return T("rect", { x, y, width: w, height: h, fill: f || "var(--bg-soft)", stroke: s || "var(--line)", "stroke-width": "1.5", rx: rx || 6 }); }
+
+function stageBlock(svg, x, y, w, h, title, color, detail) {
+  const g = T("g",{});
+  g.append(rct(x, y, w, h, "var(--bg)", color, 8));
+  g.append(T("rect",{x:x,y:y,width:w,height:28,fill:color,rx:8}));
+  g.append(T("rect",{x:x,y:y+16,width:w,height:12,fill:color}));
+  g.append(tx(x+w/2, y+19, title, "#fff", "13"));
+  detail.forEach((d,i) => g.append(tx(x+w/2, y+44+i*16, d, "var(--fg-dim)", "11")));
+  svg.append(g);
+}
+
+function r0(svg) {
+  // Step 1: API endpoint list
+  svg.append(tx(400,22,"API 端点清单","var(--accent)","14"));
+  const endpoints = [
+    ["GET","/api/courses","课程列表","公开"],
+    ["GET","/api/courses/:id","课程详情","公开"],
+    ["POST","/api/auth/login","用户登录","公开"],
+    ["POST","/api/orders","创建订单","Auth"],
+    ["GET","/api/me/courses","我的课程","Auth"],
+    ["POST","/api/courses/:id/reviews","提交评论","Auth"],
+    ["PUT","/api/admin/courses/:id","审核课程","Admin"],
+    ["GET","/api/ai/recommend","AI推荐","Auth"]
+  ];
+  endpoints.forEach((e,i)=>{
+    const y = 48+i*36;
+    svg.append(rct(20,y,760,30,"var(--bg)","var(--line)",4));
+    // Method badge
+    const mc = e[0]==="GET"?"var(--success)":e[0]==="POST"?"var(--accent)":"var(--grad)";
+    svg.append(rct(28,y+5,44,20,`rgba(${mc==="var(--success)"?"87,171,90":"83,155,245"},0.2)`,mc,4));
+    svg.append(tx(50,y+19,e[0],mc,"10"));
+    svg.append(tx(160,y+19,e[1],"var(--fg)","12","start"));
+    svg.append(tx(480,y+19,e[2],"var(--fg-dim)","11","start"));
+    const ac = e[3]==="Admin"?"var(--danger)":e[3]==="Auth"?"var(--grad)":"var(--success)";
+    svg.append(rct(710,y+5,60,20,`rgba(${ac==="var(--danger)"?"229,83,75":ac==="var(--grad)"?"198,144,38":"87,171,90"},0.15)`,ac,4));
+    svg.append(tx(740,y+19,e[3],ac,"10"));
+  });
+  svg.append(tx(400,345,"8个API端点，标注方法、路径、功能和权限级别","var(--fg-dim)"));
+}
+
+function r1(svg) {
+  // Step 2: Request trace
+  const layers = [
+    {x:30,y:20,w:170,h:320,t:"页面层",c:"var(--accent)",items:["课程详情页","  state: course","  state: reviews[]","  state: loading","触发: useEffect","→ fetchCourse(id)"]},
+    {x:220,y:20,w:170,h:320,t:"API层",c:"var(--success)",items:["GET /courses/:id","  鉴权: JWT Bearer","  限流: 100/min","  验证: id 为 UUID","  缓存: Redis 5min","→ courseService"]},
+    {x:410,y:20,w:170,h:320,t:"服务层",c:"var(--purple)",items:["courseService.get","  查询课程表","  关联查询教师","  关联查询评论","  组装响应 DTO","→ courseRepo"]},
+    {x:600,y:20,w:170,h:320,t:"数据层",c:"var(--grad)",items:["courses 表","  id UUID PK","  title VARCHAR","  price DECIMAL","  teacher_id FK","  status ENUM"]}
+  ];
+  layers.forEach(l => {
+    const g = T("g",{});
+    g.append(rct(l.x,l.y,l.w,l.h,"var(--bg)","var(--line)",8));
+    g.append(T("rect",{x:l.x,y:l.y,width:l.w,height:26,fill:l.c,rx:8}));
+    g.append(T("rect",{x:l.x,y:l.y+14,width:l.w,height:12,fill:l.c}));
+    g.append(tx(l.x+l.w/2,l.y+18,l.t,"#fff","12"));
+    l.items.forEach((item,j) => {
+      const el = tx(l.x+l.w/2, l.y+40+j*14, item, "var(--fg-dim)", "10");
+      if (item.includes("→")) el.setAttribute("fill","var(--accent)");
+      g.append(el);
+    });
+    svg.append(g);
+  });
+  // Request trace arrows
+  svg.append(T("line",{x1:200,y1:90,x2:220,y2:90,stroke:"var(--accent)","stroke-width":2,"marker-end":"url(#arrow-accent)"}));
+  svg.append(T("line",{x1:390,y1:90,x2:410,y2:90,stroke:"var(--accent)","stroke-width":2,"marker-end":"url(#arrow-accent)"}));
+  svg.append(T("line",{x1:580,y1:90,x2:600,y2:90,stroke:"var(--accent)","stroke-width":2,"marker-end":"url(#arrow-accent)"}));
+  // Auth/boundary marks
+  svg.append(rct(220,355,360,28,"rgba(198,144,38,0.1)","var(--grad)",4));
+  svg.append(tx(400,374,"鉴权点: JWT验证 → 限流点: 速率限制 → 验证点: UUID格式","var(--grad)","10"));
+}
+
+function r2(svg) {
+  // Step 3: Full trace with auth & validation
+  stageBlock(svg,30,20,160,180,"Page","var(--accent)",["课程详情页","course + reviews[]","onClick → buyNow()"]);
+  stageBlock(svg,210,20,160,180,"API Gateway","var(--success)",["GET /api/courses/:id","Auth: JWT Bearer","Rate: 100 req/min"]);
+  stageBlock(svg,390,20,160,180,"Service","var(--purple)",["courseService.findById","关联: teacher, reviews","DTO: CourseResponse"]);
+  stageBlock(svg,570,20,160,180,"Database","var(--grad)",["courses, users, reviews","ORM: Prisma","索引: teacher_id"]);
+
+  // Flow arrows
+  const arrows = [[190,110,210,110],[370,110,390,110],[550,110,570,110]];
+  arrows.forEach(([x1,y1,x2,y2]) => svg.append(T("line",{x1,y1,x2,y2,stroke:"var(--accent)","stroke-width":2})));
+
+  // Auth markers
+  svg.append(T("circle",{cx:300,cy:60,r:16,fill:"var(--grad)",opacity:0.2}));
+  svg.append(T("circle",{cx:300,cy:60,r:12,fill:"none",stroke:"var(--grad)","stroke-width":2}));
+  svg.append(tx(300,64,"鉴权","var(--grad)","9"));
+
+  // Validation marker
+  svg.append(T("circle",{cx:480,cy:120,r:16,fill:"var(--accent)",opacity:0.2}));
+  svg.append(T("circle",{cx:480,cy:120,r:12,fill:"none",stroke:"var(--accent)","stroke-width":2}));
+  svg.append(tx(480,124,"验证","var(--accent)","9"));
+
+  // Bottom: data flow diagram
+  svg.append(rct(30,240,730,240,"var(--bg-soft)","var(--line)"));
+  svg.append(tx(395,268,"请求追踪时序","var(--fg)","14"));
+
+  const trace = [
+    ["1", "Page mount → fetchCourse(id)", "var(--accent)", 60],
+    ["2", "API: validate JWT → check rate limit", "var(--grad)", 105],
+    ["3", "Service: query courses JOIN users", "var(--purple)", 150],
+    ["4", "DB: SELECT * WHERE id=? → rows[]", "var(--success)", 195],
+    ["5", "Service: map to CourseResponse DTO", "var(--purple)", 240],
+    ["6", "API: cache result in Redis (5min TTL)", "var(--grad)", 285],
+    ["7", "Page: setState(data) → re-render", "var(--accent)", 330]
+  ];
+  trace.forEach(([n,desc,c,y]) => {
+    svg.append(T("circle",{cx:70,cy:y+20,r:10,fill:c}));
+    svg.append(tx(80,y+24,n,"#fff","9"));
+    const el = tx(110, y+24, desc, "var(--fg-dim)", "12", "start");
+    svg.append(el);
+    if (y < 330) svg.append(T("line",{x1:70,y1:y+30,x2:70,y2:y+55,stroke:"var(--line)","stroke-width":1.5}));
+  });
+
+  // Coverage bar
+  svg.append(rct(30,470,730,12,"var(--bg)","var(--line)",6));
+  svg.append(rct(30,470,590,12,"var(--success)","var(--success)",6));
+  svg.append(tx(395,495,"对齐覆盖: 7步追踪完成 · 鉴权/验证点已标注 · 数据映射已确认","var(--success)","11"));
+}
+
+const S = [
+  {t:"API端点清单",l:"枚举",d:"列出系统中所有API端点，包括HTTP方法、路径、功能描述和访问权限级别（公开/认证/管理员）。这是API设计的起点。",b:["Endpoints","Auth Level"],r:r0},
+  {t:"请求全程追踪",l:"追踪",d:"追踪一个请求从页面发起到数据库返回的完整路径：页面→API Gateway→业务服务→数据层。标注每一层的职责和处理内容。",b:["Trace","Layers"],r:r1},
+  {t:"鉴权验证点标注",l:"安全",d:"在追踪路径上标注鉴权检查点、输入验证点和速率限制点。确保每个API端点都有完整的鉴权和验证流程。",b:["Auth","Validation","Security"],r:r2}
+];
+
+let cur = 0, autoTimer = null, autoOn = false;
+
+function setStep(i) {
+  cur = Math.max(0, Math.min(S.length - 1, i));
+  const s = S[cur];
+  document.getElementById("step-title").textContent = s.t;
+  document.getElementById("step-desc").textContent = s.d;
+  document.getElementById("step-indicator").textContent = `Step ${cur+1}/${S.length}`;
+  const br = document.getElementById("badge-row"); br.innerHTML = "";
+  s.b.forEach(b => { const sp = document.createElement("span"); sp.className = "badge badge--def"; sp.textContent = b; br.append(sp); });
+  document.getElementById("info-line").textContent = s.l;
+  const svg = document.getElementById("stage"); svg.innerHTML = ""; s.r(svg);
+  document.querySelectorAll(".step-dot").forEach((d,j) => d.className = "step-dot" + (j === cur ? " active" : j < cur ? " done" : ""));
+  document.getElementById("btn-prev").disabled = cur === 0;
+  document.getElementById("btn-next").disabled = cur === S.length - 1;
+}
+
+function next() { setStep(cur + 1); }
+function prev() { setStep(cur - 1); }
+function toggleAuto() {
+  if (autoOn) { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; return; }
+  autoOn = true; document.getElementById("btn-auto").textContent = "暂停";
+  autoTimer = setInterval(() => { if (cur < S.length - 1) next(); else { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; } }, 3000); }
+
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight") next();
+  else if (e.key === "ArrowLeft") prev();
+  else if (e.key === " ") { e.preventDefault(); toggleAuto(); }
+  else if (e.key >= "1" && e.key <= String(S.length)) setStep(parseInt(e.key) - 1);
+});
+
+const dotsEl = document.getElementById("dots");
+S.forEach((s,i) => { const d = document.createElement("span"); d.className = "step-dot"; d.title = s.l; d.onclick = () => setStep(i); dotsEl.append(d); });
+setStep(0);
+</script>
+</body>
+</html>

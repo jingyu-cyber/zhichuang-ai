@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>窗口函数 (Window Functions) — 数据库系统概论</title>
+<style>
+:root{--bg:#1a1e1d;--bg-soft:#25302d;--bg-code:#0d1111;--fg:#e0eee8;--fg-dim:#90a898;--line:#304038;--accent:#40c0b0;--accent-2:#4898e0;--grad:#4898e0;--success:#40c870;--danger:#e05050}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(72,152,224,.18);color:var(--grad)}.badge--tip{background:rgba(64,200,112,.18);color:var(--success)}.badge--warn{background:rgba(224,80,80,.18);color:var(--danger)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+  <div class="demo-header">
+    <h1>窗口函数 (Window Functions)</h1>
+    <div class="breadcrumb"><a href="../">数据库系统概论</a> &rsaquo; 第二章 &rsaquo; SQL 能力培养</div>
+  </div>
+  <div class="demo-main">
+    <div class="panel-explain" id="explain">
+      <div class="step-title" id="stepTitle">原始数据</div>
+      <div class="step-desc" id="stepDesc">Exam 成绩表包含 <strong>12 条记录</strong>：4 名学生 / 3 门科目。数据按 subject 分组、score 降序排列，为窗口函数计算做准备。</div>
+      <div class="badge-row" id="badges"></div>
+      <div class="info-line" id="sqlline">SELECT * FROM Exam ORDER BY subject, score DESC;</div>
+    </div>
+    <div class="panel-stage">
+      <svg viewBox="0 0 800 340" id="sv"></svg>
+    </div>
+  </div>
+  <div class="demo-controls">
+    <button id="btnPrev" onclick="S.changeStep(-1)">上一步</button>
+    <div class="step-dots" id="dots"></div>
+    <button id="btnNext" onclick="S.changeStep(1)">下一步</button>
+    <button onclick="S.resetStep()">重置</button>
+    <button id="btnAuto" onclick="S.toggleAuto()">自动播放</button>
+  </div>
+</div>
+
+<script>
+const S = {
+  step: 0,
+  total: 4,
+  autoTimer: null,
+  animTimer: null,
+  animFrame: 0,
+
+  data: [
+    { name: '张三', subject: '数学', score: 95 },
+    { name: '李四', subject: '数学', score: 88 },
+    { name: '王五', subject: '数学', score: 88 },
+    { name: '赵六', subject: '数学', score: 76 },
+    { name: '张三', subject: '英语', score: 92 },
+    { name: '李四', subject: '英语', score: 85 },
+    { name: '王五', subject: '英语', score: 78 },
+    { name: '赵六', subject: '英语', score: 78 },
+    { name: '李四', subject: '语文', score: 91 },
+    { name: '张三', subject: '语文', score: 88 },
+    { name: '王五', subject: '语文', score: 85 },
+    { name: '赵六', subject: '语文', score: 72 },
+  ],
+
+  // Pre-compute partition boundaries: [startIdx, endIdxExclusive]
+  partitions: (function() {
+    const data = [
+      { name: '张三', subject: '数学', score: 95 },
+      { name: '李四', subject: '数学', score: 88 },
+      { name: '王五', subject: '数学', score: 88 },
+      { name: '赵六', subject: '数学', score: 76 },
+      { name: '张三', subject: '英语', score: 92 },
+      { name: '李四', subject: '英语', score: 85 },
+      { name: '王五', subject: '英语', score: 78 },
+      { name: '赵六', subject: '英语', score: 78 },
+      { name: '李四', subject: '语文', score: 91 },
+      { name: '张三', subject: '语文', score: 88 },
+      { name: '王五', subject: '语文', score: 85 },
+      { name: '赵六', subject: '语文', score: 72 },
+    ];
+    const parts = [];
+    let start = 0;
+    for (let i = 1; i <= data.length; i++) {
+      if (i === data.length || data[i].subject !== data[start].subject) {
+        parts.push({ subject: data[start].subject, start: start, end: i, color: parts.length === 0 ? '#4898e0' : parts.length === 1 ? '#40c0b0' : '#40c870' });
+        start = i;
+      }
+    }
+    return parts;
+  })(),
+
+  // Pre-computed window function values per row
+  ranks: function() {
+    const ranks = [];
+    this.partitions.forEach(p => {
+      let r = 1;
+      for (let i = p.start; i < p.end; i++) {
+        if (i > p.start && this.data[i].score < this.data[i - 1].score) r = i - p.start + 1;
+        ranks[i] = r;
+      }
+    });
+    return ranks;
+  }.call(this),
+
+  runningSums: function() {
+    const sums = [];
+    this.partitions.forEach(p => {
+      let sum = 0;
+      for (let i = p.start; i < p.end; i++) {
+        sum += this.data[i].score;
+        sums[i] = sum;
+      }
+    });
+    return sums;
+  }.call(this),
+
+  lags: function() {
+    const lags = [];
+    this.partitions.forEach(p => {
+      for (let i = p.start; i < p.end; i++) {
+        lags[i] = (i === p.start) ? null : this.data[i - 1].score;
+      }
+    });
+    return lags;
+  }.call(this),
+
+  queries: [
+    'SELECT * FROM Exam ORDER BY subject, score DESC;',
+    'SELECT name, subject, score, RANK() OVER (PARTITION BY subject ORDER BY score DESC) AS rk FROM Exam;',
+    'SELECT name, subject, score, SUM(score) OVER (PARTITION BY subject ORDER BY score DESC) AS running_sum FROM Exam;',
+    'SELECT name, subject, score, LAG(score, 1) OVER (PARTITION BY subject ORDER BY score DESC) AS prev_score FROM Exam;',
+  ],
+
+  descs: [
+    { title: '原始数据 — 按科目分组排序', desc: '数据按 <strong>subject 分组、score 降序</strong>排列。同一科目的记录连续存放，这是窗口函数<strong>PARTITION BY</strong>的物理基础。每个分区（科目）用不同颜色标识。', badges: [{ t: 'PARTITION BY', c: 'def' }, { t: 'ORDER BY', c: 'tip' }] },
+    { title: 'RANK() — 排名函数', desc: '在每个分区内按 score 降序排名。<strong>相同分数并列同名次</strong>，下一名次跳过。如数学 88 分两人并列第 2，下一名直接是第 4。', badges: [{ t: 'RANK()', c: 'def' }, { t: '并列跳过', c: 'warn' }] },
+    { title: 'SUM() OVER — 累计求和', desc: '在每个分区内计算<strong>从分区首行到当前行</strong>的分数累计总和。移动累加展示数据的累积趋势，常用于财务报表。', badges: [{ t: 'SUM() OVER', c: 'def' }, { t: '累计聚合', c: 'tip' }] },
+    { title: 'LAG() — 行偏移引用', desc: '引用<strong>当前行向前偏移 1 行</strong>的 score 值。分区首行无前一行，返回 <strong style="color:#e05050">NULL</strong>。箭头表示引用关系：从上一行指向当前行。', badges: [{ t: 'LAG()', c: 'def' }, { t: '行间引用', c: 'warn' }] },
+  ],
+
+  stopAnim() { if (this.animTimer) { clearInterval(this.animTimer); this.animTimer = null; } },
+  stopAuto() { if (this.autoTimer) { clearInterval(this.autoTimer); this.autoTimer = null; } },
+
+  // ── main draw ──
+  draw(sv, step, frame) {
+    const D = this.data;
+    const parts = this.partitions;
+    const N = D.length;
+    let h = '';
+    h += '<rect width="800" height="340" fill="#0d1111"/>';
+
+    // ── query bar ──
+    h += '<rect x="10" y="4" width="780" height="22" rx="5" fill="#1a1e1d" stroke="#304038" stroke-width="0.5"/>';
+    h += `<text x="22" y="19" fill="#4898e0" font-size="10" font-family="monospace">${this.queries[step]}</text>`;
+
+    // ── Table layout ──
+    const TX = 50; // table left
+    const TH = 24, TRH = 19; // header height, row height
+    const TY = 30; // header top y
+
+    // Column definitions — varies by step
+    let cols;
+    if (step === 0) {
+      cols = [
+        { label: 'name', cx: TX + 10, cw: 80 },
+        { label: 'subject', cx: TX + 90, cw: 70 },
+        { label: 'score', cx: TX + 160, cw: 60 },
+      ];
+    } else if (step === 1) {
+      cols = [
+        { label: 'name', cx: TX + 10, cw: 80 },
+        { label: 'subject', cx: TX + 90, cw: 70 },
+        { label: 'score', cx: TX + 160, cw: 60 },
+        { label: 'rank', cx: TX + 220, cw: 70 },
+      ];
+    } else if (step === 2) {
+      cols = [
+        { label: 'name', cx: TX + 10, cw: 80 },
+        { label: 'subject', cx: TX + 90, cw: 70 },
+        { label: 'score', cx: TX + 160, cw: 60 },
+        { label: 'running_sum', cx: TX + 220, cw: 110 },
+      ];
+    } else {
+      cols = [
+        { label: 'name', cx: TX + 10, cw: 80 },
+        { label: 'subject', cx: TX + 90, cw: 70 },
+        { label: 'score', cx: TX + 160, cw: 60 },
+        { label: 'prev_score', cx: TX + 220, cw: 90 },
+      ];
+    }
+    const TW = cols[cols.length - 1].cx + cols[cols.length - 1].cw - TX + 10;
+
+    // ── Partition backgrounds ──
+    parts.forEach((p, pi) => {
+      const pTop = TY + TH + p.start * TRH;
+      const pHeight = (p.end - p.start) * TRH;
+      h += `<rect x="${TX}" y="${pTop}" width="${TW}" height="${pHeight}" fill="${p.color}" opacity="0.08" rx="3"/>`;
+      // partition label on left edge
+      h += `<text x="${TX - 2}" y="${pTop + pHeight / 2 + 4}" fill="${p.color}" font-size="10" font-weight="700" text-anchor="end" transform="rotate(-90,${TX - 8},${pTop + pHeight / 2})">${p.subject}</text>`;
+      // partition boundary line
+      if (pi < parts.length - 1) {
+        const by = pTop + pHeight;
+        h += `<line x1="${TX}" y1="${by}" x2="${TX + TW}" y2="${by}" stroke="${p.color}" stroke-width="2" opacity="0.4"/>`;
+      }
+    });
+
+    // ── Table header ──
+    h += `<rect x="${TX}" y="${TY}" width="${TW}" height="${TH}" rx="4" fill="#25302d" stroke="#304038" stroke-width="1"/>`;
+    cols.forEach((c, ci) => {
+      h += `<text x="${c.cx + c.cw / 2}" y="${TY + 17}" fill="#90a898" font-size="10" font-weight="600" text-anchor="middle">${c.label}</text>`;
+      if (ci > 0) {
+        h += `<line x1="${c.cx - 2}" y1="${TY + 3}" x2="${c.cx - 2}" y2="${TY + TH + N * TRH - 2}" stroke="#304038" stroke-width="0.5"/>`;
+      }
+    });
+    // right edge
+    h += `<line x1="${TX + TW}" y1="${TY + 3}" x2="${TX + TW}" y2="${TY + TH + N * TRH - 2}" stroke="#304038" stroke-width="0.5"/>`;
+
+    // ── Data rows ──
+    const animFrame = step === 0 ? N : Math.min(frame + 1, N);
+    for (let i = 0; i < N; i++) {
+      const ry = TY + TH + i * TRH;
+      const row = D[i];
+      const visible = i < animFrame;
+      const alpha = visible ? 1 : 0.15;
+      const isAlt = i % 2 === 0;
+
+      let rowBg = 'transparent';
+      if (visible) {
+        // tie highlight for step 1
+        if (step === 1 && i > 0 && row.score === D[i - 1].score && D[i].subject === D[i - 1].subject) {
+          rowBg = '#4898e015';
+        } else {
+          rowBg = isAlt ? '#ffffff04' : 'transparent';
+        }
+      }
+      h += `<rect x="${TX + 3}" y="${ry}" width="${TW - 6}" height="${TRH}" rx="2" fill="${rowBg}"/>`;
+
+      // name
+      h += `<text x="${cols[0].cx + cols[0].cw / 2}" y="${ry + 13}" fill="#e0eee8" font-size="11" text-anchor="middle" opacity="${alpha}">${row.name}</text>`;
+      // subject
+      h += `<text x="${cols[1].cx + cols[1].cw / 2}" y="${ry + 13}" fill="#90a898" font-size="11" text-anchor="middle" opacity="${alpha}">${row.subject}</text>`;
+      // score
+      h += `<text x="${cols[2].cx + cols[2].cw / 2}" y="${ry + 13}" fill="#e0eee8" font-size="11" text-anchor="middle" opacity="${alpha}">${row.score}</text>`;
+
+      // extra column (step-dependent)
+      if (step === 1 && visible) {
+        // RANK
+        const rk = this.ranks[i];
+        const isTie = i > 0 && row.score === D[i - 1].score && D[i].subject === D[i - 1].subject;
+        if (isTie) {
+          h += `<rect x="${cols[3].cx + 8}" y="${ry + 3}" width="${cols[3].cw - 16}" height="${TRH - 6}" rx="3" fill="#4898e022" stroke="#4898e0" stroke-width="1" stroke-dasharray="2,1"/>`;
+        }
+        h += `<text x="${cols[3].cx + cols[3].cw / 2}" y="${ry + 13}" fill="${isTie ? '#4898e0' : '#40c0b0'}" font-size="12" font-weight="700" text-anchor="middle">${rk}</text>`;
+      }
+      if (step === 2 && visible) {
+        // Running sum
+        const sum = this.runningSums[i];
+        const isLastInPartition = (i === N - 1) || D[i + 1].subject !== row.subject;
+        h += `<text x="${cols[3].cx + cols[3].cw / 2}" y="${ry + 13}" fill="${isLastInPartition ? '#40c870' : '#40c0b0'}" font-size="11" font-weight="${isLastInPartition ? '700' : '400'}" text-anchor="middle">${sum}</text>`;
+      }
+      if (step === 3 && visible) {
+        // LAG
+        const prev = this.lags[i];
+        if (prev === null) {
+          h += `<text x="${cols[3].cx + cols[3].cw / 2}" y="${ry + 13}" fill="#e05050" font-size="10" font-style="italic" text-anchor="middle">NULL</text>`;
+        } else {
+          h += `<text x="${cols[3].cx + cols[3].cw / 2}" y="${ry + 13}" fill="#4898e0" font-size="11" font-weight="600" text-anchor="middle">${prev}</text>`;
+          // Arrow from previous row's score to current row
+          const prevRowY = ry - TRH + TRH / 2;
+          const curRowY = ry + TRH / 2;
+          const arrowX = cols[3].cx + 15;
+          h += `<path d="M${arrowX},${prevRowY} Q${arrowX - 15},${(prevRowY + curRowY) / 2} ${arrowX},${curRowY}" fill="none" stroke="#4898e0" stroke-width="1.5" opacity="0.5" marker-end="url(#arrowBlue)"/>`;
+        }
+      }
+
+      // row divider
+      if (i < N - 1) {
+        h += `<line x1="${TX + 5}" y1="${ry + TRH}" x2="${TX + TW - 5}" y2="${ry + TRH}" stroke="#304038" stroke-width="0.3"/>`;
+      }
+    }
+
+    // ── Arrow marker definition for LAG step ──
+    if (step === 3) {
+      h += `<defs><marker id="arrowBlue" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#4898e0" opacity="0.6"/></marker></defs>`;
+    }
+
+    // ── Legend / annotation at bottom ──
+    if (step === 0) {
+      h += `<text x="400" y="${TY + TH + N * TRH + 20}" fill="#90a898" font-size="10" text-anchor="middle">3 个分区 · 12 条记录 · 按 subject 分组、score DESC 排序</text>`;
+    } else if (step === 1) {
+      h += `<text x="400" y="${TY + TH + N * TRH + 20}" fill="#90a898" font-size="10" text-anchor="middle">RANK(): 同分并列同名次（虚线框），下一名次跳过</text>`;
+    } else if (step === 2) {
+      // Sum label
+      const mathSum = this.runningSums[3];
+      const engSum = this.runningSums[7];
+      const chnSum = this.runningSums[11];
+      h += `<text x="400" y="${TY + TH + N * TRH + 20}" fill="#90a898" font-size="10" text-anchor="middle">分区累计: 数学=${mathSum} | 英语=${engSum} | 语文=${chnSum}（最后一行加粗）</text>`;
+    } else if (step === 3) {
+      h += `<text x="400" y="${TY + TH + N * TRH + 20}" fill="#90a898" font-size="10" text-anchor="middle">箭头 = 引用上一行 | NULL = 分区首行无前一行</text>`;
+    }
+
+    sv.innerHTML = h;
+  },
+
+  animate(sv) {
+    this.stopAnim();
+    this.animFrame = 0;
+    const self = this;
+    const step = this.step;
+    const totalFrames = this.data.length;
+    const drawFrame = () => { self.draw(sv, step, self.animFrame); };
+    drawFrame();
+    if (step === 0) return; // no animation for raw data
+    this.animTimer = setInterval(() => {
+      self.animFrame++;
+      drawFrame();
+      if (self.animFrame >= totalFrames) self.stopAnim();
+    }, 120);
+  },
+
+  updateUI() {
+    const d = this.descs[this.step];
+    document.getElementById('stepTitle').textContent = d.title;
+    document.getElementById('stepDesc').innerHTML = d.desc;
+    document.getElementById('sqlline').textContent = this.queries[this.step];
+    document.getElementById('badges').innerHTML = d.badges.map(b =>
+      `<span class="badge badge--${b.c}">${b.t}</span>`
+    ).join('');
+    document.getElementById('btnPrev').disabled = this.step === 0;
+    document.getElementById('btnNext').disabled = this.step === this.total - 1;
+    let dotsHtml = '';
+    for (let i = 0; i < this.total; i++) {
+      let cls = '';
+      if (i === this.step) cls = 'active';
+      else if (i < this.step) cls = 'done';
+      dotsHtml += `<span class="step-dot ${cls}" onclick="S.go(${i})"></span>`;
+    }
+    document.getElementById('dots').innerHTML = dotsHtml;
+  },
+
+  go(n) {
+    this.stopAnim();
+    this.stopAuto();
+    this.step = Math.max(0, Math.min(this.total - 1, n));
+    this.updateUI();
+    this.animate(document.getElementById('sv'));
+  },
+
+  changeStep(d) { this.go(this.step + d); },
+  resetStep() { this.go(0); },
+
+  toggleAuto() {
+    if (this.autoTimer) {
+      this.stopAuto();
+      document.getElementById('btnAuto').textContent = '自动播放';
+    } else {
+      document.getElementById('btnAuto').textContent = '停止';
+      this.autoTimer = setInterval(() => {
+        if (this.step < this.total - 1) this.go(this.step + 1);
+        else { this.stopAuto(); document.getElementById('btnAuto').textContent = '自动播放'; }
+      }, 4000);
+    }
+  },
+};
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft')  { e.preventDefault(); S.changeStep(-1); }
+  if (e.key === 'ArrowRight') { e.preventDefault(); S.changeStep(1); }
+  if (e.key === 'r' || e.key === 'R') { e.preventDefault(); S.resetStep(); }
+  if (e.key === ' ') { e.preventDefault(); S.toggleAuto(); }
+});
+
+S.go(0);
+</script>
+</body>
+</html>

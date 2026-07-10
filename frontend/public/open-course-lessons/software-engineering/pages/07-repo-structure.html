@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>07 仓库结构设计 - 软件工程互动课程</title>
+<style>
+:root{--bg:#1c2128;--bg-soft:#252c35;--bg-code:#141820;--fg:#e6edf3;--fg-dim:#8b949e;--line:#30363d;--accent:#539bf5;--accent-2:#57ab5a;--grad:#c69026;--success:#57ab5a;--danger:#e5534b;--purple:#986ee2}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(83,155,245,.18);color:var(--accent)}.badge--tip{background:rgba(87,171,90,.18);color:var(--success)}.badge--warn{background:rgba(198,144,38,.18);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+.tree-line{font-family:"JetBrains Mono","Cascadia Code",monospace;font-size:12px}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>仓库结构设计</h1>
+<div class="breadcrumb"><a href="../index.html">软件工程</a> / 实现与测试 / <span id="step-indicator">Step 1/4</span></div>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="panel-explain">
+<div class="step-title" id="step-title"></div>
+<div class="step-desc" id="step-desc"></div>
+<div class="badge-row" id="badge-row"></div>
+<div class="info-line" id="info-line"></div>
+</div>
+<div class="panel-stage"><svg id="stage" viewBox="0 0 800 500" style="width:100%;height:100%"></svg></div>
+</div>
+<div class="demo-controls">
+<button id="btn-prev" onclick="prev()">上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btn-next" onclick="next()">下一步</button>
+<button id="btn-auto" onclick="toggleAuto()" style="min-width:80px">自动播放</button>
+</div>
+</div>
+<script>
+const svgNS="http://www.w3.org/2000/svg";
+function T(t, a) { const e = document.createElementNS(svgNS, t); for (const [k, v] of Object.entries(a || {})) e.setAttribute(k, v); return e; }
+function tx(x, y, t, c, fs, a) { const e = T("text", { x, y, fill: c || "var(--fg)", "font-size": fs || "13", "text-anchor": a || "middle", "font-family": "-apple-system,'PingFang SC','Microsoft YaHei',sans-serif" }); e.textContent = t; return e; }
+function rct(x, y, w, h, f, s, rx) { return T("rect", { x, y, width: w, height: h, fill: f || "var(--bg-soft)", stroke: s || "var(--line)", "stroke-width": "1.5", rx: rx || 4 }); }
+
+const COLORS = {
+  entry: "var(--accent)",
+  business: "var(--success)",
+  test: "var(--grad)",
+  config: "var(--purple)",
+  docs: "var(--fg-dim)"
+};
+
+function treeNode(svg, x, y, indent, name, color, comment) {
+  const g = T("g",{});
+  const el = T("text",{x:x+indent*16,y:y,fill:color || "var(--fg)","font-size":"12","font-family":"'JetBrains Mono',monospace"});
+  el.textContent = name;
+  g.append(el);
+  if (comment) {
+    const c = T("text",{x:x+indent*16+name.length*7.3+10,y:y,fill:"var(--fg-dim)","font-size":"11","font-family":"-apple-system,'PingFang SC','Microsoft YaHei',sans-serif"});
+    c.textContent = "// "+comment;
+    g.append(c);
+  }
+  svg.append(g);
+}
+
+function treeLine(svg, x, y, prefix, name, color, comment) {
+  treeNode(svg, x, y, prefix.length, prefix+name, color, comment);
+}
+
+function r0(svg) {
+  // Flat list of all files
+  svg.append(tx(400,18,"混乱的项目结构 (反例)","var(--danger)","14"));
+  svg.append(rct(20,30,760,430,"rgba(229,83,75,0.05)","var(--danger)"));
+  const badFiles = [
+    "src/utils.js","src/helpers.js","src/api.js","src/App.js","src/index.js",
+    "test1.test.js","test_api.js","config.js","config.prod.js","db.sql",
+    "README.md","notes.txt","login.js","course.js","payment.js"
+  ];
+  badFiles.forEach((f,i)=>{
+    const col = i%3, row = Math.floor(i/3);
+    svg.append(rct(40+col*245,50+row*80,230,70,"var(--bg)","var(--line)"));
+    svg.append(tx(40+col*245+115,50+row*80+20,f,"var(--danger)","13"));
+    svg.append(tx(40+col*245+115,50+row*80+50,"无分类 · 命名混乱","var(--fg-dim)","10"));
+  });
+  svg.append(tx(400,470,"问题：文件散落、按类型组织、无分层概念 → 不可维护","var(--fg-dim)","11"));
+}
+
+function r1(svg) {
+  // Step 2: Layer categorization
+  const layers = [
+    {x:10,y:20,w:185,h:440,t:"入口层",c:COLORS.entry,items:["src/pages/","  LoginPage","  HomePage","  CoursePage","src/layouts/","src/middleware/","src/App.tsx","src/main.tsx"]},
+    {x:205,y:20,w:185,h:440,t:"业务层",c:COLORS.business,items:["src/features/","  auth/","    AuthService","    LoginForm","  course/","    CourseList","    CourseDetail","  payment/","  review/"]},
+    {x:400,y:20,w:185,h:440,t:"测试层",c:COLORS.test,items:["__tests__/","  auth.test.ts","  course.test.ts","  api.test.ts","  e2e/","    login.spec.ts","    purchase.spec.ts","__mocks__/"]},
+    {x:595,y:20,w:195,h:440,t:"配置+文档",c:COLORS.config,items:["config/","  env.development","  env.production","  db.config.ts","docs/","  ARCHITECTURE.md","  API.md","package.json","tsconfig.json"]}
+  ];
+  layers.forEach(l => {
+    const g = T("g",{});
+    g.append(rct(l.x,l.y,l.w,l.h,"var(--bg)","var(--line)",8));
+    g.append(T("rect",{x:l.x,y:l.y,width:l.w,height:24,fill:l.c,rx:8}));
+    g.append(T("rect",{x:l.x,y:l.y+12,width:l.w,height:12,fill:l.c}));
+    g.append(tx(l.x+l.w/2,l.y+17,l.t,"#fff","12"));
+    l.items.forEach((item,j) => {
+      const color = item.startsWith("  ") ? "var(--fg-dim)" : l.c;
+      treeNode(svg, l.x+6, l.y+32+j*16, 0, item, color);
+    });
+    svg.append(g);
+  });
+}
+
+function r2(svg) {
+  // Step 3: Standard project tree with color coding
+  svg.append(tx(400,18,"标准项目仓库结构","var(--accent)","14"));
+
+  const structure = [
+    {d:0,n:"edu-platform/",c:COLORS.entry,cm:"根目录"},
+    {d:1,n:"├── src/",c:COLORS.entry,cm:"源代码"},
+    {d:2,n:"│   ├── pages/",c:COLORS.entry,cm:"入口: 页面组件"},
+    {d:3,n:"│   │   ├── auth/",c:COLORS.entry,cm:""},
+    {d:3,n:"│   │   ├── courses/",c:COLORS.entry,cm:""},
+    {d:3,n:"│   │   └── admin/",c:COLORS.entry,cm:""},
+    {d:2,n:"│   ├── features/",c:COLORS.business,cm:"业务: 功能模块"},
+    {d:3,n:"│   │   ├── auth/",c:COLORS.business,cm:"认证模块"},
+    {d:3,n:"│   │   ├── course/",c:COLORS.business,cm:"课程模块"},
+    {d:3,n:"│   │   └── payment/",c:COLORS.business,cm:"支付模块"},
+    {d:2,n:"│   ├── shared/",c:COLORS.purple,cm:"共享: UI组件/工具"},
+    {d:3,n:"│   │   ├── components/",c:COLORS.purple,cm:""},
+    {d:3,n:"│   │   └── utils/",c:COLORS.purple,cm:""},
+    {d:2,n:"│   └── App.tsx",c:COLORS.entry,cm:""},
+    {d:1,n:"├── __tests__/",c:COLORS.test,cm:"测试: 单元+集成"},
+    {d:2,n:"│   ├── unit/",c:COLORS.test,cm:""},
+    {d:2,n:"│   └── e2e/",c:COLORS.test,cm:""},
+    {d:1,n:"├── config/",c:COLORS.config,cm:"配置: 环境/构建"},
+    {d:1,n:"├── docs/",c:COLORS.docs,cm:"文档: 架构/API"},
+    {d:1,n:"├── package.json",c:COLORS.config,cm:""},
+    {d:1,n:"└── README.md",c:COLORS.docs,cm:""}
+  ];
+  structure.forEach(({d,n,c,cm}) => treeLine(svg, 30, 44+d*22, "", n, c, cm));
+
+  // Color legend
+  const legend = [
+    [COLORS.entry,"入口层","pages/, layouts, App.tsx"],
+    [COLORS.business,"业务层","features/, services/"],
+    [COLORS.test,"测试层","__tests__/"],
+    [COLORS.config,"配置层","config/, *.json"],
+    [COLORS.docs,"文档层","docs/, README"]
+  ];
+  legend.forEach(([c,t,d],i)=>{
+    svg.append(rct(30+i*152,430,140,60,"var(--bg)","var(--line)",6));
+    svg.append(T("circle",{cx:100+i*152,cy:448,r:6,fill:c}));
+    svg.append(tx(100+i*152,470,t,"var(--fg)","11"));
+  });
+}
+
+function r3(svg) {
+  // Step 4: Best practices
+  svg.append(tx(400,20,"仓库结构最佳实践","var(--success)","14"));
+
+  const rules = [
+    {t:"按功能分层",d:"features/ 按业务模块组织，而非按技术类型（不是 components/, services/ 摊平）",c:"var(--success)"},
+    {t:"测试贴近源码",d:"__tests__/ 目录结构与 src/ 镜像，1:1 对应便于查找",c:"var(--success)"},
+    {t:"配置外置",d:"环境变量、构建配置放在 config/，不散落在源码中",c:"var(--accent)"},
+    {t:"共享代码独立",d:"shared/ 存放跨模块复用的组件和工具函数，避免循环依赖",c:"var(--accent)"},
+    {t:"文档与代码同仓",d:"docs/ 在 repo 根目录，架构决策、API 文档随代码版本更新",c:"var(--grad)"}
+  ];
+  rules.forEach((r,i) => {
+    const y = 48 + i*56;
+    svg.append(rct(20,y,760,48,"var(--bg)","var(--line)",6));
+    svg.append(T("circle",{cx:44,cy:y+24,r:10,fill:r.c}));
+    svg.append(tx(50,y+24,String(i+1),"#fff","11"));
+    svg.append(tx(76,y+16,r.t,"var(--fg)","13","start"));
+    svg.append(tx(76,y+34,r.d,"var(--fg-dim)","11","start"));
+  });
+
+  svg.append(rct(20,340,760,140,"var(--bg-soft)","var(--success)",8));
+  svg.append(tx(400,364,"目标结构评审检查","var(--success)"));
+  const checks = [
+    "新成员能否在 5 分钟内找到想要修改的文件？",
+    "每个目录是否职责单一、命名自解释？",
+    "是否有循环依赖（A import B, B import A）？",
+    "配置文件是否与业务代码分离？",
+    "测试文件是否能一一对应到源文件？"
+  ];
+  checks.forEach((c,i) => {
+    const el = tx(40,388+i*20,(i+1)+". "+c,"var(--fg-dim)","12","start");
+    svg.append(el);
+  });
+}
+
+const S = [
+  {t:"反例：混乱结构",l:"问题",d:"先看一个典型反面案例：文件散落、按技术类型而非业务分层、命名不一致。这种结构随项目增长会迅速失控。",b:["Anti-Pattern","Chaos"],r:r0},
+  {t:"五大分区",l:"分类",d:"按职责将文件分为五个大类：入口层(页面入口)、业务层(功能模块)、测试层、配置层、文档层。每层有明确边界。",b:["5 Layers","Category"],r:r1},
+  {t:"标准项目树",l:"结构",d:"建立标准化的目录树结构，按功能模块组织 features/，测试与源码镜像，配置与文档独立管理。",b:["Tree","Color-coded"],r:r2},
+  {t:"最佳实践评审",l:"评审",d:"用5个检查问题评审仓库结构：可发现性、职责单一性、无循环依赖、配置分离、测试对应。",b:["Review","Checklist"],r:r3}
+];
+
+let cur = 0, autoTimer = null, autoOn = false;
+
+function setStep(i) {
+  cur = Math.max(0, Math.min(S.length - 1, i));
+  const s = S[cur];
+  document.getElementById("step-title").textContent = s.t;
+  document.getElementById("step-desc").textContent = s.d;
+  document.getElementById("step-indicator").textContent = `Step ${cur+1}/${S.length}`;
+  const br = document.getElementById("badge-row"); br.innerHTML = "";
+  s.b.forEach(b => { const sp = document.createElement("span"); sp.className = "badge badge--def"; sp.textContent = b; br.append(sp); });
+  document.getElementById("info-line").textContent = s.l;
+  const svg = document.getElementById("stage"); svg.innerHTML = ""; s.r(svg);
+  document.querySelectorAll(".step-dot").forEach((d,j) => d.className = "step-dot" + (j === cur ? " active" : j < cur ? " done" : ""));
+  document.getElementById("btn-prev").disabled = cur === 0;
+  document.getElementById("btn-next").disabled = cur === S.length - 1;
+}
+
+function next() { setStep(cur + 1); }
+function prev() { setStep(cur - 1); }
+function toggleAuto() {
+  if (autoOn) { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; return; }
+  autoOn = true; document.getElementById("btn-auto").textContent = "暂停";
+  autoTimer = setInterval(() => { if (cur < S.length - 1) next(); else { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; } }, 2500); }
+
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight") next();
+  else if (e.key === "ArrowLeft") prev();
+  else if (e.key === " ") { e.preventDefault(); toggleAuto(); }
+  else if (e.key >= "1" && e.key <= String(S.length)) setStep(parseInt(e.key) - 1);
+});
+
+const dotsEl = document.getElementById("dots");
+S.forEach((s,i) => { const d = document.createElement("span"); d.className = "step-dot"; d.title = s.l; d.onclick = () => setStep(i); dotsEl.append(d); });
+setStep(0);
+</script>
+</body>
+</html>

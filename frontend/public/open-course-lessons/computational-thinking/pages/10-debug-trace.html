@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>10 调试追踪 — 计算思维</title>
+<style>
+:root{--bg:#f5f5f8;--bg-soft:#ffffff;--bg-code:#f0f0f4;--fg:#2c2c38;--fg-dim:#6c6c80;--line:#dcdce4;--accent:#5b6abf;--accent-2:#36a2b8;--grad:#f09840;--success:#40c878;--danger:#e04860;--shadow:0 2px 12px rgba(0,0,0,.06)}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:"Noto Sans SC","PingFang SC",-apple-system,sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(91,106,191,.12);color:var(--accent)}.badge--tip{background:rgba(64,200,120,.12);color:var(--success)}.badge--warn{background:rgba(240,152,64,.15);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--accent);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px;box-shadow:var(--shadow)}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 8px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>10 调试追踪</h1>
+<div class="breadcrumb"><a href="../index.html">计算思维</a> / 第4章 / 调试追踪</div>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="explain">
+<div class="step-title" id="stepTitle"></div>
+<div class="step-desc" id="stepDesc"></div>
+<div class="badge-row" id="badges"></div>
+<div class="info-line" id="codeLine"></div>
+</div>
+<div class="panel-stage" id="stage"></div>
+</div>
+<div class="demo-controls">
+<button id="btnPrev" aria-label="上一步">&larr; 上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btnNext" aria-label="下一步">下一步 &rarr;</button>
+<button id="btnAuto" aria-label="自动播放">&#9654; 自动播放</button>
+<span style="font-size:12px;color:var(--fg-dim)">键盘 &larr; &rarr;</span>
+</div>
+</div>
+<script>
+const S=[{
+t:"断点是什么？时间线上的快照",
+l:"# 在 line 5 设断点 → 程序暂停 → 查看变量状态 → 单步执行",
+d:"断点 (Breakpoint) 是你在代码中设置的一个<strong>暂停点</strong>。程序运行到此处会停住，让你检查此刻<em>所有变量的值</em>和<em>程序状态</em>。",
+b:[{t:"断点",c:"def"},{t:"快照",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// Timeline with breakpoints
+const tlY=200;
+// timeline bar
+const tl=document.createElementNS("http://www.w3.org/2000/svg","line");
+tl.setAttribute("x1","60");tl.setAttribute("y1",tlY);tl.setAttribute("x2","640");tl.setAttribute("y2",tlY);
+tl.setAttribute("stroke","var(--line)");tl.setAttribute("stroke-width","3");
+svg.appendChild(tl);
+// Timeline label
+const tll=document.createElementNS("http://www.w3.org/2000/svg","text");
+tll.setAttribute("x","350");tll.setAttribute("y",tlY+30);tll.setAttribute("text-anchor","middle");tll.setAttribute("font-size","12");tll.setAttribute("fill","var(--fg-dim)");
+tll.textContent="程序执行时间线 →";
+svg.appendChild(tll);
+// Breakpoints
+const bps=[
+{x:80,label:"line 1",var:"i=0, sum=0",status:"normal"},
+{x:180,label:"line 3",var:"i=1, sum=0",status:"normal"},
+{x:280,label:"line 5",var:"i=1, sum=3+7",status:"error",err:"sum = 3+7 = 10? 实际 sum=3"},
+{x:380,label:"line 6",var:"i=2, sum=3",status:"normal"},
+{x:480,label:"line 5",var:"i=2, sum=3+2",status:"error",err:"sum = 5? 实际 sum=3"},
+{x:580,label:"line 8",var:"return sum→3",status:"error",err:"期望 26, 得到 3"},
+];
+bps.forEach(bp=>{
+// dot on timeline
+const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+c.setAttribute("cx",bp.x);c.setAttribute("cy",tlY);c.setAttribute("r","8");
+c.setAttribute("fill",bp.status==="error"?"var(--danger)":"var(--accent)");
+c.setAttribute("stroke",bp.status==="error"?"var(--danger)":"var(--accent)");c.setAttribute("stroke-width","2");
+svg.appendChild(c);
+// line to info card
+let labelY=bp.x>350?80:120;
+const l=document.createElementNS("http://www.w3.org/2000/svg","line");
+l.setAttribute("x1",bp.x);l.setAttribute("y1",tlY-8);l.setAttribute("x2",bp.x);l.setAttribute("y2",labelY+40);
+l.setAttribute("stroke",bp.status==="error"?"var(--danger)":"var(--line)");l.setAttribute("stroke-width","1");l.setAttribute("stroke-dasharray","3,2");
+svg.appendChild(l);
+// info card
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",bp.x-55);r.setAttribute("y",labelY);r.setAttribute("width","110");r.setAttribute("height",bp.status==="error"?54:40);
+r.setAttribute("rx","6");r.setAttribute("fill","var(--bg-soft)");r.setAttribute("stroke",bp.status==="error"?"var(--danger)":"var(--accent)");r.setAttribute("stroke-width","1");
+svg.appendChild(r);
+const lt=document.createElementNS("http://www.w3.org/2000/svg","text");
+lt.setAttribute("x",bp.x);lt.setAttribute("y",labelY+18);lt.setAttribute("text-anchor","middle");lt.setAttribute("font-size","10");lt.setAttribute("fill",bp.status==="error"?"var(--danger)":"var(--accent)");lt.setAttribute("font-weight","600");
+lt.textContent=bp.var;
+svg.appendChild(lt);
+if(bp.err){
+const et=document.createElementNS("http://www.w3.org/2000/svg","text");
+et.setAttribute("x",bp.x);et.setAttribute("y",labelY+36);et.setAttribute("text-anchor","middle");et.setAttribute("font-size","8");et.setAttribute("fill","var(--danger)");
+et.textContent=bp.err;
+svg.appendChild(et);
+}
+});
+// Arrow pointing to the bug
+const ab=document.createElementNS("http://www.w3.org/2000/svg","text");
+ab.setAttribute("x","350");ab.setAttribute("y","65");ab.setAttribute("text-anchor","middle");ab.setAttribute("font-size","13");ab.setAttribute("fill","var(--danger)");ab.setAttribute("font-weight","700");
+ab.textContent="Bug 发现: sum = sum + arr[i] 写成了 sum = arr[i]";
+svg.appendChild(ab);
+}},
+{
+t:"变量值逐行追踪",
+l:"# 错误代码: sum = arr[i]       ← 缺少 sum +\n# 正确代码: sum = sum + arr[i]   ← 累加",
+d:"最常见的 Bug 就是<strong>变量值不对</strong>。逐行追踪变量值，对比<strong>期望值</strong>和<strong>实际值</strong>，差异所在就是 Bug 位置。",
+b:[{t:"变量追踪",c:"def"},{t:"期望vs实际",c:"warn"}],
+r(svg){
+svg.innerHTML='';
+// Comparison table: expected vs actual
+const colW=100,rowH=28,ox=30,oy=50;
+const headers=["迭代","i","arr[i]","期望sum","实际sum","差异"];
+headers.forEach((h,i)=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",ox+i*colW);r.setAttribute("y",oy);r.setAttribute("width",colW);r.setAttribute("height","26");
+r.setAttribute("fill","var(--accent)");r.setAttribute("opacity","0.12");r.setAttribute("stroke","var(--accent)");r.setAttribute("stroke-width","1");
+svg.appendChild(r);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",ox+i*colW+colW/2);t.setAttribute("y",oy+18);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","10");t.setAttribute("font-weight","700");t.setAttribute("fill","var(--accent)");
+t.textContent=h;
+svg.appendChild(t);
+});
+const data=[["1","1","3","3","3","✓"],[ "2","2","7","10","7","✗ 差3"],["3","3","2","12","2","✗ 差10"],["4","4","9","21","9","✗ 差12"],["5","5","5","26","5","✗ 差21"]];
+data.forEach((row,ri)=>{
+row.forEach((cell,ci)=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",ox+ci*colW);r.setAttribute("y",oy+26+ri*rowH);r.setAttribute("width",colW);r.setAttribute("height",rowH);
+const isError=cell.startsWith("✗");
+r.setAttribute("fill",isError?"var(--danger)":"var(--bg-soft)");
+r.setAttribute("fill-opacity",isError?"0.08":"1");
+r.setAttribute("stroke","var(--line)");r.setAttribute("stroke-width","1");
+svg.appendChild(r);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",ox+ci*colW+colW/2);t.setAttribute("y",oy+26+ri*rowH+19);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","10");
+t.setAttribute("fill",isError?"var(--danger)":"var(--fg)");
+t.textContent=cell;
+svg.appendChild(t);
+});
+});
+// highlight the divergence
+const dv=document.createElementNS("http://www.w3.org/2000/svg","text");
+dv.setAttribute("x","350");dv.setAttribute("y","250");dv.setAttribute("text-anchor","middle");dv.setAttribute("font-size","13");dv.setAttribute("fill","var(--danger)");dv.setAttribute("font-weight","700");
+dv.textContent="第2次迭代开始出现差异 → 第2次迭代的 sum 更新逻辑有 Bug";
+svg.appendChild(dv);
+const dv2=document.createElementNS("http://www.w3.org/2000/svg","text");
+dv2.setAttribute("x","350");dv2.setAttribute("y","275");dv2.setAttribute("text-anchor","middle");dv2.setAttribute("font-size","11");dv2.setAttribute("fill","var(--success)");
+dv2.textContent="调试技巧：先找到第一个出现异常的迭代，再检查该迭代的代码";
+svg.appendChild(dv2);
+}},
+{
+t:"条件断点与watch表达式",
+l:"# 条件断点: 只在 i==3 时暂停\n# watch表达式: 监视 sum 变量的每次变化",
+d:"<strong>条件断点</strong>让你只在满足特定条件时暂停（如 i==3），避免手动步进。 <strong>Watch 表达式</strong>自动追踪变量值的变化。",
+b:[{t:"高效调试",c:"def"},{t:"高级技巧",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// Left: conditional breakpoint
+const cl=document.createElementNS("http://www.w3.org/2000/svg","rect");
+cl.setAttribute("x","30");cl.setAttribute("y","40");cl.setAttribute("width","290");cl.setAttribute("height","120");
+cl.setAttribute("rx","8");cl.setAttribute("fill","var(--bg-soft)");cl.setAttribute("stroke","var(--accent)");cl.setAttribute("stroke-width","2");
+svg.appendChild(cl);
+const clt=document.createElementNS("http://www.w3.org/2000/svg","text");
+clt.setAttribute("x","175");clt.setAttribute("y","68");clt.setAttribute("text-anchor","middle");clt.setAttribute("font-size","13");clt.setAttribute("font-weight","700");clt.setAttribute("fill","var(--accent)");
+clt.textContent="条件断点";
+svg.appendChild(clt);
+["断点条件: i == 3","","只在 i=3 时暂停","之前自动跳过","省去手动点 2 次\"下一步\""].forEach((l,i)=>{
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x","45");t.setAttribute("y",90+i*18);t.setAttribute("font-size","11");t.setAttribute("fill","var(--fg-dim)");
+t.textContent=l;
+svg.appendChild(t);
+});
+// Right: watch expression
+const wr=document.createElementNS("http://www.w3.org/2000/svg","rect");
+wr.setAttribute("x","350");wr.setAttribute("y","40");wr.setAttribute("width","320");wr.setAttribute("height","120");
+wr.setAttribute("rx","8");wr.setAttribute("fill","var(--bg-soft)");wr.setAttribute("stroke","var(--success)");wr.setAttribute("stroke-width","2");
+svg.appendChild(wr);
+const wrt=document.createElementNS("http://www.w3.org/2000/svg","text");
+wrt.setAttribute("x","510");wrt.setAttribute("y","68");wrt.setAttribute("text-anchor","middle");wrt.setAttribute("font-size","13");wrt.setAttribute("font-weight","700");wrt.setAttribute("fill","var(--success)");
+wrt.textContent="Watch 表达式";
+svg.appendChild(wrt);
+["添加监视: sum","添加监视: arr[i]","","sum 值变化时会高亮","arr[i] 只读不写 → 始终不变"].forEach((l,i)=>{
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x","365");t.setAttribute("y",90+i*18);t.setAttribute("font-size","11");t.setAttribute("fill","var(--fg-dim)");
+t.textContent=l;
+svg.appendChild(t);
+});
+// Bottom: stop sign flow
+const ss=document.createElementNS("http://www.w3.org/2000/svg","text");
+ss.setAttribute("x","350");ss.setAttribute("y","200");ss.setAttribute("text-anchor","middle");ss.setAttribute("font-size","14");ss.setAttribute("fill","var(--grad)");ss.setAttribute("font-weight","700");
+ss.textContent="🛑 暂停 → 👀 观察 → 🤔 推理 → 🔧 修改 → ▶️ 继续";
+svg.appendChild(ss);
+// Code fragment
+const cf=document.createElementNS("http://www.w3.org/2000/svg","rect");
+cf.setAttribute("x","120");cf.setAttribute("y","225");cf.setAttribute("width","460");cf.setAttribute("height","60");
+cf.setAttribute("rx","6");cf.setAttribute("fill","var(--bg-soft)");cf.setAttribute("stroke","var(--line)");cf.setAttribute("stroke-width","1");
+svg.appendChild(cf);
+["for i in range(n):              # i=3 ← 条件断点触发","    sum = sum + arr[i]  # sum 从 12 变为 21 ← Watch 高亮"].forEach((l,i)=>{
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x","130");t.setAttribute("y",245+i*18);t.setAttribute("font-size","11");t.setAttribute("fill","var(--fg)");t.setAttribute("font-family","JetBrains Mono,monospace");
+t.textContent=l;
+svg.appendChild(t);
+});
+}},
+{
+t:"调试的系统化流程",
+l:"1.复现 → 2.缩小范围 → 3.定位根因 → 4.修复 → 5.回归测试 → 6.反思预防",
+d:"调试不是凭直觉乱试，而是<strong>系统化的科学方法</strong>：复现 Bug、二分缩小范围、定位根因（不只看表象）、修复并回归测试、反思为何发生。",
+b:[{t:"科学方法",c:"def"},{t:"流程",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// Debug workflow flowchart
+const steps=[
+{x:50,y:50,w:130,h:60,label:"1. 复现 Bug",desc:"稳定触发条件",col:"var(--danger)"},
+{x:220,y:50,w:130,h:60,label:"2. 缩小范围",desc:"二分法定位模块",col:"var(--grad)"},
+{x:390,y:50,w:130,h:60,label:"3. 定位根因",desc:"找到错误代码行",col:"var(--accent)"},
+{x:50,y:150,w:130,h:60,label:"4. 编写测试",desc:"先写失败测试",col:"var(--accent-2)"},
+{x:220,y:150,w:130,h:60,label:"5. 修复代码",desc:"最小改动原则",col:"var(--success)"},
+{x:390,y:150,w:130,h:60,label:"6. 回归验证",desc:"所有测试通过",col:"var(--success)"},
+];
+steps.forEach(s=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",s.x);r.setAttribute("y",s.y);r.setAttribute("width",s.w);r.setAttribute("height",s.h);
+r.setAttribute("rx","8");r.setAttribute("fill","var(--bg-soft)");r.setAttribute("stroke",s.col);r.setAttribute("stroke-width","2");
+svg.appendChild(r);
+const tt=document.createElementNS("http://www.w3.org/2000/svg","text");
+tt.setAttribute("x",s.x+s.w/2);tt.setAttribute("y",s.y+24);tt.setAttribute("text-anchor","middle");tt.setAttribute("font-size","12");tt.setAttribute("font-weight","700");tt.setAttribute("fill",s.col);
+tt.textContent=s.label;
+svg.appendChild(tt);
+const td=document.createElementNS("http://www.w3.org/2000/svg","text");
+td.setAttribute("x",s.x+s.w/2);td.setAttribute("y",s.y+44);td.setAttribute("text-anchor","middle");td.setAttribute("font-size","10");td.setAttribute("fill","var(--fg-dim)");
+td.textContent=s.desc;
+svg.appendChild(td);
+});
+// arrows
+const arrows=[
+{x1:180,y1:80,x2:213,y2:80},{x1:350,y1:80,x2:383,y2:80},
+{x1:175,y1:110,x2:175,y2:143},{x1:285,y1:110,x2:285,y2:143},
+{x1:455,y1:110,x2:455,y2:143},{x1:115,y1:210,x2:213,y2:210},{x1:350,y1:210,x2:383,y2:210},
+];
+arrows.forEach(a=>{
+const l=document.createElementNS("http://www.w3.org/2000/svg","line");
+l.setAttribute("x1",a.x1);l.setAttribute("y1",a.y1);l.setAttribute("x2",a.x2);l.setAttribute("y2",a.y2);
+l.setAttribute("stroke","var(--line)");l.setAttribute("stroke-width","1.5");
+l.setAttribute("marker-end","url(#arrowhead)");
+svg.appendChild(l);
+});
+// Arrow marker
+const defs=document.createElementNS("http://www.w3.org/2000/svg","defs");
+const mk=document.createElementNS("http://www.w3.org/2000/svg","marker");
+mk.setAttribute("id","arrowhead");mk.setAttribute("markerWidth","6");mk.setAttribute("markerHeight","4");
+mk.setAttribute("refX","6");mk.setAttribute("refY","2");mk.setAttribute("orient","auto");
+const mp=document.createElementNS("http://www.w3.org/2000/svg","polygon");
+mp.setAttribute("points","0 0, 6 2, 0 4");mp.setAttribute("fill","var(--fg-dim)");
+mk.appendChild(mp);defs.appendChild(mk);svg.appendChild(defs);
+// bottom insight
+const bi=document.createElementNS("http://www.w3.org/2000/svg","text");
+bi.setAttribute("x","350");bi.setAttribute("y","275");bi.setAttribute("text-anchor","middle");bi.setAttribute("font-size","13");bi.setAttribute("fill","var(--accent)");bi.setAttribute("font-weight","700");
+bi.textContent="先理解为什么错，再动手改 —— 对症下药，不是头痛医头";
+svg.appendChild(bi);
+const bi2=document.createElementNS("http://www.w3.org/2000/svg","text");
+bi2.setAttribute("x","350");bi2.setAttribute("y","298");bi2.setAttribute("text-anchor","middle");bi2.setAttribute("font-size","11");bi2.setAttribute("fill","var(--fg-dim)");
+bi2.textContent="每次修复后反思：这个 Bug 的根本原因是什么？如何预防类似问题？";
+svg.appendChild(bi2);
+}}
+];
+
+let step=0,autoTimer=null,autoOn=false;
+const stepTitle=document.getElementById("stepTitle");
+const stepDesc=document.getElementById("stepDesc");
+const badges=document.getElementById("badges");
+const codeLine=document.getElementById("codeLine");
+const stage=document.getElementById("stage");
+const dots=document.getElementById("dots");
+const btnPrev=document.getElementById("btnPrev");
+const btnNext=document.getElementById("btnNext");
+const btnAuto=document.getElementById("btnAuto");
+
+function renderDots(){
+dots.innerHTML='';
+S.forEach((_,i)=>{
+const d=document.createElement("span");
+d.className="step-dot"+(i===step?" active":i<step?" done":"");
+d.onclick=()=>goTo(i);
+dots.appendChild(d);
+});
+}
+function goTo(i){
+step=Math.max(0,Math.min(S.length-1,i));
+const s=S[step];
+stepTitle.textContent=s.t;
+stepDesc.innerHTML=s.d;
+badges.innerHTML=s.b.map(b=>`<span class="badge badge--${b.c}">${b.t}</span>`).join('');
+codeLine.textContent=s.l;
+const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+svg.setAttribute("viewBox","0 0 700 340");
+svg.setAttribute("preserveAspectRatio","xMidYMid meet");
+stage.innerHTML='';
+stage.appendChild(svg);
+s.r(svg);
+btnPrev.disabled=step===0;
+btnNext.disabled=step===S.length-1;
+renderDots();
+}
+btnPrev.onclick=()=>goTo(step-1);
+btnNext.onclick=()=>{if(step<S.length-1)goTo(step+1);else{autoOn=false;btnAuto.innerHTML="&#9654; 自动播放";clearInterval(autoTimer);}};
+btnAuto.onclick=()=>{autoOn=!autoOn;btnAuto.innerHTML=autoOn?"&#9632; 停止":"&#9654; 自动播放";if(autoOn){autoTimer=setInterval(()=>{if(step<S.length-1)goTo(step+1);else goTo(0);},3500);}else clearInterval(autoTimer);};
+document.addEventListener("keydown",e=>{if(e.key==="ArrowLeft")goTo(step-1);if(e.key==="ArrowRight"){if(step<S.length-1)goTo(step+1);}});
+goTo(0);
+</script>
+</body>
+</html>

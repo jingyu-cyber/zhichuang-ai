@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SELECT 与 WHERE 过滤 — 数据库系统概论</title>
+<style>
+:root{--bg:#1a1e1d;--bg-soft:#25302d;--bg-code:#0d1111;--fg:#e0eee8;--fg-dim:#90a898;--line:#304038;--accent:#40c0b0;--accent-2:#4898e0;--grad:#4898e0;--success:#40c870;--danger:#e05050}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(72,152,224,.18);color:var(--grad)}.badge--tip{background:rgba(64,200,112,.18);color:var(--success)}.badge--warn{background:rgba(224,80,80,.18);color:var(--danger)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+  <div class="demo-header">
+    <h1>SELECT 与 WHERE 过滤</h1>
+    <div class="breadcrumb"><a href="../">数据库系统概论</a> &rsaquo; 第二章 &rsaquo; SQL 能力培养</div>
+  </div>
+  <div class="demo-main">
+    <div class="panel-explain" id="explain">
+      <div class="step-title" id="stepTitle">全表浏览</div>
+      <div class="step-desc" id="stepDesc">查看 Student 表中的全部 8 条记录，了解表结构和数据内容。</div>
+      <div class="badge-row" id="badges"></div>
+      <div class="info-line" id="sqlline">SELECT * FROM Student;</div>
+    </div>
+    <div class="panel-stage">
+      <svg viewBox="0 0 800 340" id="sv"></svg>
+    </div>
+  </div>
+  <div class="demo-controls">
+    <button id="btnPrev" onclick="S.changeStep(-1)">上一步</button>
+    <div class="step-dots" id="dots"></div>
+    <button id="btnNext" onclick="S.changeStep(1)">下一步</button>
+    <button onclick="S.resetStep()">重置</button>
+    <button id="btnAuto" onclick="S.toggleAuto()">自动播放</button>
+  </div>
+</div>
+
+<script>
+const S = {
+  step: 0,
+  total: 4,
+  autoTimer: null,
+  animTimer: null,
+  animFrame: 0,
+
+  data: [
+    { sid: '2024001', name: '王小明', age: 19, dept: 'CS',  gpa: 3.2 },
+    { sid: '2024002', name: '李华',   age: 20, dept: 'CS',  gpa: 3.8 },
+    { sid: '2024003', name: '张伟',   age: 21, dept: 'Math',gpa: 3.5 },
+    { sid: '2024004', name: '王芳',   age: 20, dept: 'CS',  gpa: 3.9 },
+    { sid: '2024005', name: '刘洋',   age: 18, dept: 'Math',gpa: 2.8 },
+    { sid: '2024006', name: '陈静',   age: 22, dept: 'CS',  gpa: 3.6 },
+    { sid: '2024007', name: '王磊',   age: 21, dept: 'EE',  gpa: 3.1 },
+    { sid: '2024008', name: '赵敏',   age: 19, dept: 'EE',  gpa: 3.3 },
+  ],
+
+  queries: [
+    'SELECT * FROM Student;',
+    'SELECT * FROM Student WHERE age >= 20;',
+    "SELECT * FROM Student WHERE dept = 'CS' AND gpa > 3.5;",
+    "SELECT * FROM Student WHERE name LIKE '王%';",
+  ],
+
+  descs: [
+    { title: '全表浏览 — SELECT *', desc: '不加任何条件，返回 Student 表中<strong>全部 8 条</strong>记录。这是最简单的查询形式，相当于把整张表打印出来。', badges: [{ t: 'SELECT', c: 'def' }, { t: '全表扫描', c: 'tip' }] },
+    { title: '单条件过滤 — WHERE age >= 20', desc: '逐行检查 age 列的值：<strong>age &ge; 20 的行保留</strong>（绿色），age &lt; 20 的行丢弃（红色）。最终保留 5 行。', badges: [{ t: 'WHERE', c: 'def' }, { t: '比较运算', c: 'warn' }] },
+    { title: '多条件组合 — AND 连接', desc: '同时检查两个条件：<strong>dept = \'CS\' 且 gpa > 3.5</strong>。两个条件都满足才保留（绿色），任一不满足即丢弃（红色）。逻辑与（AND）让筛选更精确。', badges: [{ t: 'AND', c: 'def' }, { t: '多条件', c: 'warn' }] },
+    { title: '模式匹配 — LIKE', desc: '使用 <strong>LIKE \'王%\'</strong> 匹配以"王"开头的姓名。% 是通配符，代表任意字符序列。只保留 name 列匹配该模式的行。', badges: [{ t: 'LIKE', c: 'def' }, { t: '通配符 %', c: 'tip' }] },
+  ],
+
+  // ── helpers ──
+  stopAnim() { if (this.animTimer) { clearInterval(this.animTimer); this.animTimer = null; } },
+  stopAuto() { if (this.autoTimer) { clearInterval(this.autoTimer); this.autoTimer = null; } },
+
+  // ── SVG draw ──
+  draw(sv, step, frame) {
+    const D = this.data;
+    const N = D.length;
+    // Determine per-row pass/fail for each filter step
+    const checks = [
+      null, // step 0 – no filter
+      (r) => r.age >= 20,
+      (r) => r.dept === 'CS' && r.gpa > 3.5,
+      (r) => r.name.startsWith('王'),
+    ];
+    const chk = checks[step];
+
+    // Build SVG via innerHTML
+    let h = '';
+    h += '<rect width="800" height="340" fill="#0d1111"/>';
+
+    // ── query bar ──
+    h += '<rect x="16" y="6" width="768" height="28" rx="5" fill="#1a1e1d" stroke="#304038" stroke-width="1"/>';
+    h += `<text x="30" y="25" fill="#4898e0" font-size="13" font-family="monospace" font-weight="600">${this.queries[step]}</text>`;
+
+    // ── table header ──
+    const T = { x: 40, y: 40, w: 720, rh: 28 };
+    const cols = [
+      { label: 'sid',   cx: 40,  cw: 100 },
+      { label: 'name',  cx: 150, cw: 130 },
+      { label: 'age',   cx: 290, cw: 60  },
+      { label: 'dept',  cx: 360, cw: 100 },
+      { label: 'gpa',   cx: 470, cw: 60  },
+      { label: 'status',cx: 540, cw: 210 },
+    ];
+    // header bg
+    h += `<rect x="${T.x}" y="${T.y}" width="${T.w}" height="${T.rh}" rx="5" fill="#25302d" stroke="#304038" stroke-width="1"/>`;
+    cols.forEach(c => {
+      h += `<text x="${c.cx + c.cw/2}" y="${T.y + 19}" fill="#90a898" font-size="12" font-weight="600" text-anchor="middle">${c.label}</text>`;
+      // vertical divider
+      if (c.label !== 'sid') {
+        h += `<line x1="${c.cx}" y1="${T.y + 4}" x2="${c.cx}" y2="${340 - 20}" stroke="#304038" stroke-width="0.5"/>`;
+      }
+    });
+    // right edge of table
+    h += `<line x1="${T.x + T.w}" y1="${T.y + 4}" x2="${T.x + T.w}" y2="${340 - 20}" stroke="#304038" stroke-width="0.5"/>`;
+
+    // ── data rows ──
+    for (let i = 0; i < N; i++) {
+      const ry = T.y + T.rh + i * 30;
+      const row = D[i];
+      let passed = chk ? chk(row) : null;
+      let highlight = (step > 0 && frame <= i) ? 'pending' : (passed ? 'pass' : (passed === false ? 'fail' : 'normal'));
+      // row bg
+      let bg = 'transparent';
+      let textFill = '#e0eee8';
+      let textAlpha = 1;
+      if (step === 0) {
+        bg = i % 2 === 0 ? '#1a1e1d' : 'transparent';
+      } else if (highlight === 'pass') {
+        bg = '#40c87022';
+        textFill = '#40c870';
+      } else if (highlight === 'fail') {
+        bg = '#e0505022';
+        textFill = '#e05050';
+        textAlpha = 0.45;
+      } else if (highlight === 'pending') {
+        bg = '#4898e011';
+        textFill = '#4898e0';
+      }
+
+      h += `<rect x="${T.x + 2}" y="${ry}" width="${T.w - 4}" height="28" rx="3" fill="${bg}"/>`;
+
+      // row values
+      const vals = [row.sid, row.name, String(row.age), row.dept, String(row.gpa)];
+      for (let j = 0; j < 5; j++) {
+        const cx = cols[j].cx + cols[j].cw / 2;
+        h += `<text x="${cx}" y="${ry + 19}" fill="${textFill}" font-size="13" text-anchor="middle" opacity="${textAlpha}">${vals[j]}</text>`;
+      }
+
+      // status column
+      if (step > 0) {
+        let statusText = '';
+        let statusColor = '#90a898';
+        if (highlight === 'pending') { statusText = '⏳ 检查中...'; statusColor = '#4898e0'; }
+        else if (highlight === 'pass') { statusText = '✓ 保留'; statusColor = '#40c870'; }
+        else if (highlight === 'fail') { statusText = '✗ 丢弃'; statusColor = '#e05050'; }
+        h += `<text x="${cols[5].cx + 40}" y="${ry + 19}" fill="${statusColor}" font-size="12">${statusText}</text>`;
+        // condition detail for checked rows
+        if (highlight !== 'pending' && step === 1) {
+          h += `<text x="${cols[5].cx + 120}" y="${ry + 19}" fill="#90a898" font-size="11" opacity="0.7">age=${row.age} ${passed ? '≥20' : '<20'}</text>`;
+        }
+        if (highlight !== 'pending' && step === 2) {
+          const c1 = row.dept === 'CS';
+          const c2 = row.gpa > 3.5;
+          h += `<text x="${cols[5].cx + 110}" y="${ry + 19}" fill="#90a898" font-size="11" opacity="0.7">dept=${row.dept}${c1?'✓':'✗'} gpa=${row.gpa}${c2?'✓':'✗'}</text>`;
+        }
+        if (highlight !== 'pending' && step === 3) {
+          const m = row.name.startsWith('王');
+          h += `<text x="${cols[5].cx + 110}" y="${ry + 19}" fill="#90a898" font-size="11" opacity="0.7">name LIKE '王%' → ${m?'匹配':'不匹配'}</text>`;
+        }
+      }
+
+      // horizontal row separator
+      if (i < N - 1) {
+        h += `<line x1="${T.x + 6}" y1="${ry + 28}" x2="${T.x + T.w - 6}" y2="${ry + 28}" stroke="#304038" stroke-width="0.5"/>`;
+      }
+    }
+
+    // ── summary at bottom ──
+    if (step > 0) {
+      const kept = D.filter(chk).length;
+      const total = D.length;
+      const sy = 330;
+      h += `<rect x="200" y="${sy - 10}" width="400" height="22" rx="10" fill="#1a1e1d" stroke="#304038" stroke-width="0.5"/>`;
+      h += `<text x="400" y="${sy + 5}" fill="#90a898" font-size="12" text-anchor="middle">过滤结果: <tspan fill="#40c870" font-weight="600">${kept}</tspan> / ${total} 行保留</text>`;
+    }
+
+    sv.innerHTML = h;
+  },
+
+  // ── animation ──
+  animate(sv) {
+    this.stopAnim();
+    this.animFrame = 0;
+    const self = this;
+    const step = this.step;
+    const total = this.data.length;
+    const drawFrame = () => { self.draw(sv, step, self.animFrame); };
+    drawFrame();
+    if (step === 0) return; // no animation for step 0
+    this.animTimer = setInterval(() => {
+      self.animFrame++;
+      drawFrame();
+      if (self.animFrame > total) self.stopAnim();
+    }, 220);
+  },
+
+  // ── UI update ──
+  updateUI() {
+    const d = this.descs[this.step];
+    document.getElementById('stepTitle').textContent = d.title;
+    document.getElementById('stepDesc').innerHTML = d.desc;
+    document.getElementById('sqlline').textContent = this.queries[this.step];
+    document.getElementById('badges').innerHTML = d.badges.map(b =>
+      `<span class="badge badge--${b.c}">${b.t}</span>`
+    ).join('');
+    document.getElementById('btnPrev').disabled = this.step === 0;
+    document.getElementById('btnNext').disabled = this.step === this.total - 1;
+    // step dots
+    let dotsHtml = '';
+    for (let i = 0; i < this.total; i++) {
+      let cls = '';
+      if (i === this.step) cls = 'active';
+      else if (i < this.step) cls = 'done';
+      dotsHtml += `<span class="step-dot ${cls}" onclick="S.go(${i})"></span>`;
+    }
+    document.getElementById('dots').innerHTML = dotsHtml;
+  },
+
+  go(n) {
+    this.stopAnim();
+    this.stopAuto();
+    this.step = Math.max(0, Math.min(this.total - 1, n));
+    this.updateUI();
+    this.animate(document.getElementById('sv'));
+  },
+
+  changeStep(d) { this.go(this.step + d); },
+  resetStep() { this.go(0); },
+
+  toggleAuto() {
+    if (this.autoTimer) {
+      this.stopAuto();
+      document.getElementById('btnAuto').textContent = '自动播放';
+    } else {
+      document.getElementById('btnAuto').textContent = '停止';
+      this.autoTimer = setInterval(() => {
+        if (this.step < this.total - 1) this.go(this.step + 1);
+        else { this.stopAuto(); document.getElementById('btnAuto').textContent = '自动播放'; }
+      }, 3500);
+    }
+  },
+};
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft')  { e.preventDefault(); S.changeStep(-1); }
+  if (e.key === 'ArrowRight') { e.preventDefault(); S.changeStep(1); }
+  if (e.key === 'r' || e.key === 'R') { e.preventDefault(); S.resetStep(); }
+  if (e.key === ' ') { e.preventDefault(); S.toggleAuto(); }
+});
+
+// Init
+S.go(0);
+</script>
+</body>
+</html>

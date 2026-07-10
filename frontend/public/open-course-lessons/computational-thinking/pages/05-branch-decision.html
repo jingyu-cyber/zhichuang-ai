@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>05 分支决策树 — 计算思维</title>
+<style>
+:root{--bg:#f5f5f8;--bg-soft:#ffffff;--bg-code:#f0f0f4;--fg:#2c2c38;--fg-dim:#6c6c80;--line:#dcdce4;--accent:#5b6abf;--accent-2:#36a2b8;--grad:#f09840;--success:#40c878;--danger:#e04860;--shadow:0 2px 12px rgba(0,0,0,.06)}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:"Noto Sans SC","PingFang SC",-apple-system,sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(91,106,191,.12);color:var(--accent)}.badge--tip{background:rgba(64,200,120,.12);color:var(--success)}.badge--warn{background:rgba(240,152,64,.15);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--accent);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px;box-shadow:var(--shadow)}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 8px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>05 分支决策树</h1>
+<div class="breadcrumb"><a href="../index.html">计算思维</a> / 第2章 / 分支决策树</div>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="explain">
+<div class="step-title" id="stepTitle"></div>
+<div class="step-desc" id="stepDesc"></div>
+<div class="badge-row" id="badges"></div>
+<div class="info-line" id="codeLine"></div>
+</div>
+<div class="panel-stage" id="stage"></div>
+</div>
+<div class="demo-controls">
+<button id="btnPrev" aria-label="上一步">&larr; 上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btnNext" aria-label="下一步">下一步 &rarr;</button>
+<button id="btnAuto" aria-label="自动播放">&#9654; 自动播放</button>
+<span style="font-size:12px;color:var(--fg-dim)">键盘 &larr; &rarr;</span>
+</div>
+</div>
+<script>
+const S=[{
+t:"决策树结构：从根到叶",
+l:"if 分数>=90: grade='A' elif 分数>=80: grade='B' elif 分数>=70: grade='C' else: grade='D'",
+d:"每个 <strong>if/else</strong> 都是一个分叉节点。输入沿决策树从<em>根</em>走到<em>叶</em>，经过的路径就是程序执行的轨迹。",
+b:[{t:"决策树",c:"def"},{t:"分支",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// decision tree: root at top, branches down
+const nodes=[
+{cx:350,cy:30,r:20,label:"开始",col:"var(--fg)"},
+{cx:350,cy:90,r:24,label:"≥90?",col:"var(--accent)"},
+{cx:130,cy:160,r:22,label:"A",col:"var(--success)"},
+{cx:350,cy:160,r:24,label:"≥80?",col:"var(--accent-2)"},
+{cx:240,cy:230,r:22,label:"B",col:"var(--success)"},
+{cx:350,cy:230,r:24,label:"≥70?",col:"var(--grad)"},
+{cx:310,cy:300,r:22,label:"C",col:"var(--success)"},
+{cx:400,cy:300,r:22,label:"D",col:"var(--danger)"},
+];
+nodes.forEach(n=>{
+const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+c.setAttribute("cx",n.cx);c.setAttribute("cy",n.cy);c.setAttribute("r",n.r);
+c.setAttribute("fill","var(--bg-soft)");c.setAttribute("stroke",n.col);c.setAttribute("stroke-width","2");
+svg.appendChild(c);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",n.cx);t.setAttribute("y",n.cy+5);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","12");t.setAttribute("font-weight","600");t.setAttribute("fill",n.col);
+t.textContent=n.label;
+svg.appendChild(t);
+});
+// edges with labels
+const edges=[
+{x1:350,y1:50,x2:350,y2:66,label:"",col:"var(--fg-dim)"},
+{x1:330,y1:106,x2:152,y2:146,label:"Yes",col:"var(--success)"},
+{x1:370,y1:106,x2:370,y2:136,label:"No",col:"var(--fg-dim)"},
+{x1:330,y1:176,x2:262,y2:216,label:"Yes",col:"var(--success)"},
+{x1:370,y1:176,x2:370,y2:206,label:"No",col:"var(--fg-dim)"},
+{x1:327,y1:246,x2:332,y2:276,label:"Yes",col:"var(--success)"},
+{x1:373,y1:246,x2:378,y2:276,label:"No",col:"var(--fg-dim)"},
+];
+edges.forEach(e=>{
+const l=document.createElementNS("http://www.w3.org/2000/svg","line");
+l.setAttribute("x1",e.x1);l.setAttribute("y1",e.y1);l.setAttribute("x2",e.x2);l.setAttribute("y2",e.y2);
+l.setAttribute("stroke",e.col);l.setAttribute("stroke-width","1.5");
+svg.appendChild(l);
+if(e.label){
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",(e.x1+e.x2)/2-(e.x1===e.x2?15:5));t.setAttribute("y",(e.y1+e.y2)/2-4);
+t.setAttribute("font-size","9");t.setAttribute("fill",e.col);t.setAttribute("font-weight","600");
+t.textContent=e.label;
+svg.appendChild(t);
+}
+});
+// right: example trace
+const et=document.createElementNS("http://www.w3.org/2000/svg","text");
+et.setAttribute("x","520");et.setAttribute("y","60");et.setAttribute("font-size","12");et.setAttribute("fill","var(--accent)");et.setAttribute("font-weight","700");
+et.textContent="示例：分数=85";
+svg.appendChild(et);
+const et2=document.createElementNS("http://www.w3.org/2000/svg","text");
+et2.setAttribute("x","520");et2.setAttribute("y","82");et2.setAttribute("font-size","11");et2.setAttribute("fill","var(--fg-dim)");
+et2.textContent="85≥90? No";
+svg.appendChild(et2);
+const et3=document.createElementNS("http://www.w3.org/2000/svg","text");
+et3.setAttribute("x","520");et3.setAttribute("y","100");et3.setAttribute("font-size","11");et3.setAttribute("fill","var(--fg-dim)");
+et3.textContent="85≥80? Yes → B";
+svg.appendChild(et3);
+}},
+{
+t:"路径高亮：追踪一次执行",
+l:"输入: score=85 → 85≥90? False → 85≥80? True → grade='B'",
+d:"对于特定输入，<strong>高亮</strong>从根到叶子节点的路径。未被走到的分支保持灰色，帮助你理解程序的覆盖范围。",
+b:[{t:"路径追踪",c:"def"},{t:"覆盖",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// Highlight the path for score=85
+const pathNodes=[
+{cx:350,cy:30,r:20,label:"开始",highlight:false},
+{cx:350,cy:90,r:26,label:"≥90?",highlight:true,path:"分支1"},
+{cx:350,cy:160,r:26,label:"≥80?",highlight:true,path:"True"},
+{cx:240,cy:230,r:24,label:"B",highlight:true,result:true},
+];
+pathNodes.forEach(n=>{
+const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+c.setAttribute("cx",n.cx);c.setAttribute("cy",n.cy);c.setAttribute("r",n.r);
+c.setAttribute("fill",n.highlight?"var(--accent)":"var(--bg-soft)");
+c.setAttribute("fill-opacity",n.highlight?"0.15":"1");
+c.setAttribute("stroke",n.highlight?"var(--accent)":"var(--line)");c.setAttribute("stroke-width",n.highlight?"3":"1.5");
+svg.appendChild(c);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",n.cx);t.setAttribute("y",n.cy+5);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","12");t.setAttribute("font-weight",n.highlight?"700":"400");t.setAttribute("fill",n.highlight?"var(--accent)":"var(--fg-dim)");
+t.textContent=n.label;
+svg.appendChild(t);
+if(n.path){
+const pt=document.createElementNS("http://www.w3.org/2000/svg","text");
+pt.setAttribute("x",n.cx+35);pt.setAttribute("y",n.cy-5);pt.setAttribute("font-size","10");pt.setAttribute("fill","var(--accent)");pt.setAttribute("font-weight","600");
+pt.textContent=n.path;
+svg.appendChild(pt);
+}
+});
+// greyed-out nodes
+const greyNodes=[
+{cx:130,cy:160,r:20,label:"A"},{cx:350,cy:230,r:20,label:"≥70?"},{cx:310,cy:300,r:20,label:"C"},{cx:400,cy:300,r:20,label:"D"},
+];
+greyNodes.forEach(n=>{
+const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+c.setAttribute("cx",n.cx);c.setAttribute("cy",n.cy);c.setAttribute("r",n.r);
+c.setAttribute("fill","#e8e8ec");c.setAttribute("stroke","var(--line)");c.setAttribute("stroke-width","1");c.setAttribute("opacity","0.5");
+svg.appendChild(c);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",n.cx);t.setAttribute("y",n.cy+5);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","11");t.setAttribute("fill","var(--fg-dim)");t.setAttribute("opacity","0.5");
+t.textContent=n.label;
+svg.appendChild(t);
+});
+// highlighted edges
+[{x1:350,y1:50,x2:350,y2:64,col:"var(--accent)"},{x1:370,y1:106,x2:370,y2:134,col:"var(--accent)"},{x1:330,y1:176,x2:264,y2:214,col:"var(--accent)"}].forEach(e=>{
+const l=document.createElementNS("http://www.w3.org/2000/svg","line");
+l.setAttribute("x1",e.x1);l.setAttribute("y1",e.y1);l.setAttribute("x2",e.x2);l.setAttribute("y2",e.y2);
+l.setAttribute("stroke",e.col);l.setAttribute("stroke-width","3");
+svg.appendChild(l);
+});
+// info panel
+const ip=document.createElementNS("http://www.w3.org/2000/svg","rect");
+ip.setAttribute("x","460");ip.setAttribute("y","100");ip.setAttribute("width","210");ip.setAttribute("height","130");
+ip.setAttribute("rx","8");ip.setAttribute("fill","var(--bg-soft)");ip.setAttribute("stroke","var(--accent)");ip.setAttribute("stroke-width","2");
+svg.appendChild(ip);
+const it=document.createElementNS("http://www.w3.org/2000/svg","text");
+it.setAttribute("x","565");it.setAttribute("y","130");it.setAttribute("text-anchor","middle");it.setAttribute("font-size","14");it.setAttribute("font-weight","700");it.setAttribute("fill","var(--accent)");
+it.textContent="执行追踪";
+svg.appendChild(it);
+["输入: score = 85","第1步: 85≥90? → No","第2步: 85≥80? → Yes","最终: grade = B"].forEach((l,i)=>{
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x","475");t.setAttribute("y",155+i*20);t.setAttribute("font-size","11");t.setAttribute("fill","var(--fg-dim)");
+t.textContent=l;
+svg.appendChild(t);
+});
+}},
+{
+t:"决策树 vs 查表法",
+l:"# 方法1: if-elif-else 链\n# 方法2: grades = [(90,'A'),(80,'B'),(70,'C')]; for cut, g in grades: if score>=cut: return g",
+d:"除了 if-else 链，还可以用<strong>查表法</strong>：维护一个 (阈值, 等级) 列表，遍历找到匹配的。更灵活、易扩展。",
+b:[{t:"查表法",c:"def"},{t:"设计模式",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// left: if-else chain
+const left=document.createElementNS("http://www.w3.org/2000/svg","rect");
+left.setAttribute("x","30");left.setAttribute("y","40");left.setAttribute("width","280");left.setAttribute("height","200");
+left.setAttribute("rx","8");left.setAttribute("fill","var(--bg-soft)");left.setAttribute("stroke","var(--accent)");left.setAttribute("stroke-width","1.5");
+svg.appendChild(left);
+const lt=document.createElementNS("http://www.w3.org/2000/svg","text");
+lt.setAttribute("x","170");lt.setAttribute("y","65");lt.setAttribute("text-anchor","middle");lt.setAttribute("font-size","13");lt.setAttribute("font-weight","700");lt.setAttribute("fill","var(--accent)");
+lt.textContent="if-else 链 (硬编码)";
+svg.appendChild(lt);
+["if score>=90: return 'A'","elif score>=80: return 'B'","elif score>=70: return 'C'","elif score>=60: return 'D'","else: return 'F'"].forEach((l,i)=>{
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x","45");t.setAttribute("y",95+i*24);t.setAttribute("font-size","11");t.setAttribute("fill","var(--fg-dim)");t.setAttribute("font-family","JetBrains Mono,monospace");
+t.textContent=l;
+svg.appendChild(t);
+});
+// right: table lookup
+const right=document.createElementNS("http://www.w3.org/2000/svg","rect");
+right.setAttribute("x","360");right.setAttribute("y","40");right.setAttribute("width","310");right.setAttribute("height","200");
+right.setAttribute("rx","8");right.setAttribute("fill","var(--bg-soft)");right.setAttribute("stroke","var(--success)");right.setAttribute("stroke-width","1.5");
+svg.appendChild(right);
+const rt=document.createElementNS("http://www.w3.org/2000/svg","text");
+rt.setAttribute("x","515");rt.setAttribute("y","65");rt.setAttribute("text-anchor","middle");rt.setAttribute("font-size","13");rt.setAttribute("font-weight","700");rt.setAttribute("fill","var(--success)");
+rt.textContent("查表法 (灵活)");
+svg.appendChild(rt);
+["grades = [(90,'A'),(80,'B'),","         (70,'C'),(60,'D')]","for cut, g in grades:","    if score >= cut: return g","return 'F'"].forEach((l,i)=>{
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x","375");t.setAttribute("y",95+i*24);t.setAttribute("font-size","11");t.setAttribute("fill","var(--fg-dim)");t.setAttribute("font-family","JetBrains Mono,monospace");
+t.textContent=l;
+svg.appendChild(t);
+});
+// comparison arrows
+const vs=document.createElementNS("http://www.w3.org/2000/svg","text");
+vs.setAttribute("x","345");vs.setAttribute("y","145");vs.setAttribute("text-anchor","middle");vs.setAttribute("font-size","20");vs.setAttribute("font-weight","700");vs.setAttribute("fill","var(--grad)");
+vs.textContent="VS";
+svg.appendChild(vs);
+// bottom comparison table
+const bw=290,blx=30,bly=260;
+const compHeaders=["", "if-else链", "查表法"];
+const compData=[["新增等级","修改代码","添加一行"],["查找效率","O(等级数)","O(等级数)"],["可读性","中等","高"]];
+// header
+compHeaders.forEach((h,i)=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",blx+i*bw/compHeaders.length);r.setAttribute("y",bly);r.setAttribute("width",bw/compHeaders.length);r.setAttribute("height","24");
+r.setAttribute("fill","var(--accent)");r.setAttribute("opacity","0.1");r.setAttribute("stroke","var(--accent)");r.setAttribute("stroke-width","1");
+svg.appendChild(r);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",blx+i*bw/compHeaders.length+bw/compHeaders.length/2);t.setAttribute("y",bly+16);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","10");t.setAttribute("font-weight","700");t.setAttribute("fill","var(--accent)");
+t.textContent=h;
+svg.appendChild(t);
+});
+compData.forEach((row,ri)=>{
+row.forEach((cell,ci)=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",blx+ci*bw/compHeaders.length);r.setAttribute("y",bly+24+ri*26);r.setAttribute("width",bw/compHeaders.length);r.setAttribute("height","26");
+r.setAttribute("fill","var(--bg-soft)");r.setAttribute("stroke","var(--line)");r.setAttribute("stroke-width","1");
+svg.appendChild(r);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",blx+ci*bw/compHeaders.length+bw/compHeaders.length/2);t.setAttribute("y",bly+24+ri*26+17);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","10");t.setAttribute("fill","var(--fg)");
+t.textContent=cell;
+svg.appendChild(t);
+});
+});
+}}
+];
+
+let step=0,autoTimer=null,autoOn=false;
+const stepTitle=document.getElementById("stepTitle");
+const stepDesc=document.getElementById("stepDesc");
+const badges=document.getElementById("badges");
+const codeLine=document.getElementById("codeLine");
+const stage=document.getElementById("stage");
+const dots=document.getElementById("dots");
+const btnPrev=document.getElementById("btnPrev");
+const btnNext=document.getElementById("btnNext");
+const btnAuto=document.getElementById("btnAuto");
+
+function renderDots(){
+dots.innerHTML='';
+S.forEach((_,i)=>{
+const d=document.createElement("span");
+d.className="step-dot"+(i===step?" active":i<step?" done":"");
+d.onclick=()=>goTo(i);
+dots.appendChild(d);
+});
+}
+function goTo(i){
+step=Math.max(0,Math.min(S.length-1,i));
+const s=S[step];
+stepTitle.textContent=s.t;
+stepDesc.innerHTML=s.d;
+badges.innerHTML=s.b.map(b=>`<span class="badge badge--${b.c}">${b.t}</span>`).join('');
+codeLine.textContent=s.l;
+const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+svg.setAttribute("viewBox","0 0 700 340");
+svg.setAttribute("preserveAspectRatio","xMidYMid meet");
+stage.innerHTML='';
+stage.appendChild(svg);
+s.r(svg);
+btnPrev.disabled=step===0;
+btnNext.disabled=step===S.length-1;
+renderDots();
+}
+btnPrev.onclick=()=>goTo(step-1);
+btnNext.onclick=()=>{if(step<S.length-1)goTo(step+1);else{autoOn=false;btnAuto.innerHTML="&#9654; 自动播放";clearInterval(autoTimer);}};
+btnAuto.onclick=()=>{autoOn=!autoOn;btnAuto.innerHTML=autoOn?"&#9632; 停止":"&#9654; 自动播放";if(autoOn){autoTimer=setInterval(()=>{if(step<S.length-1)goTo(step+1);else goTo(0);},3500);}else clearInterval(autoTimer);};
+document.addEventListener("keydown",e=>{if(e.key==="ArrowLeft")goTo(step-1);if(e.key==="ArrowRight"){if(step<S.length-1)goTo(step+1);}});
+goTo(0);
+</script>
+</body>
+</html>

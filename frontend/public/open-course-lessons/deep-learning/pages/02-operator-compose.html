@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>算子组合与计算图 · 深度学习框架</title>
+<style>
+:root{--bg:#1e1a1a;--bg-soft:#2d2525;--bg-code:#141010;--fg:#f0e8e0;--fg-dim:#b0a090;--line:#3d3030;--accent:#ff9050;--accent-2:#ffc040;--grad:#7b8cff;--success:#50d890;--danger:#f05060;--shadow:0 10px 30px rgba(0,0,0,.35);--radius:14px;--radius-sm:8px}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}
+.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}
+.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.demo-header h1{font-size:20px;font-weight:700}
+.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}
+.demo-header .breadcrumb a{color:var(--accent);text-decoration:none}
+.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}
+.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:var(--radius);padding:20px;display:flex;flex-direction:column;gap:14px}
+.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}
+.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}
+.badge-row{display:flex;gap:8px;flex-wrap:wrap}
+.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.badge--def{background:rgba(123,140,255,.18);color:var(--grad)}
+.badge--tip{background:rgba(80,216,144,.18);color:var(--success)}
+.badge--warn{background:rgba(240,80,96,.18);color:var(--danger)}
+.panel-explain .shape-display{font-family:"JetBrains Mono","Fira Code",monospace;font-size:22px;color:var(--accent-2);text-align:center;padding:12px;background:var(--bg-code);border-radius:var(--radius-sm)}
+.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:var(--radius);padding:16px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.panel-stage svg{max-width:100%;max-height:100%}
+.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}
+.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:var(--radius-sm);cursor:pointer;font-size:14px;transition:.15s}
+.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}
+.demo-controls button:disabled{opacity:.35;cursor:default}
+.step-dots{display:flex;gap:8px;align-items:center}
+.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}
+.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}
+.step-dot.done{background:var(--success)}
+.node{transition:all .3s}
+.node rect{transition:all .3s}
+.node text{transition:all .3s}
+.edge-line{transition:all .3s}
+@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+  <div class="demo-header">
+    <div><h1>算子组合与计算图</h1><div class="breadcrumb"><a href="../index.html">深度学习框架</a> / 第一章 / 02</div></div>
+    <span class="badge badge--def">Linear → ReLU → Softmax</span>
+  </div>
+  <div class="demo-main">
+    <div class="panel-explain" id="explain">
+      <div class="step-title" id="stepTitle">输入层 Input</div>
+      <div class="shape-display" id="shapeDisplay">(1, 784)</div>
+      <div class="step-desc" id="stepDesc">构建神经网络 = 把<b>算子</b>串联成<b>计算图</b>。每个算子是一个节点，数据沿有向边流动。<br><br>我们以 MNIST 手写数字识别为例：输入是一张 28×28 的灰度图，被拉平成 784 维向量。</div>
+      <div class="badge-row" id="badges"><span class="badge badge--def">输入节点</span><span class="badge badge--tip">shape (1,784)</span></div>
+    </div>
+    <div class="panel-stage" id="stage"></div>
+  </div>
+  <div class="demo-controls">
+    <button id="btnPrev" onclick="changeStep(-1)">← 上一步</button>
+    <div class="step-dots" id="dots"></div>
+    <button id="btnNext" onclick="changeStep(1)">下一步 →</button>
+    <button onclick="resetStep()">⟳ 重置</button>
+    <button id="btnAuto" onclick="toggleAuto()">▶ 自动</button>
+  </div>
+</div>
+
+<script>
+function node(id,label,sh,x,y,w,h,color){return{id,label,sh,x,y,w,h,color};}
+const NODES=[
+  node('input','Input','(1, 784)',140,200,130,56,'grad'),
+  node('fc1','Linear₁','(784, 256)',140,40,130,56,'grad'),
+  node('relu','ReLU','(1, 256)',380,120,130,56,'success'),
+  node('fc2','Linear₂','(256, 128)',380,280,130,56,'grad'),
+  node('relu2','ReLU','(1, 128)',620,120,130,56,'success'),
+  node('fc3','Linear₃','(128, 10)',620,280,130,56,'accent'),
+  node('out','Softmax','(1, 10)',830,200,130,56,'accent-2'),
+];
+
+const EDGES=[
+  ['input','fc1'],['input','fc2'],['fc1','relu'],['fc2','relu2'],
+  ['relu','fc2'],['relu','fc3'],['relu2','fc3'],['relu2','out'],['fc3','out']
+];
+
+const steps=[
+  {title:"输入层 Input",shape:"(1, 784)",desc:'构建神经网络 = 把<b>算子</b>串联成<b>计算图</b>。每个算子是一个节点，数据沿有向边流动。<br><br>我们以 MNIST 手写数字识别为例：输入是一张 28×28 的灰度图，被拉平成 784 维向量。',badges:[{t:'输入节点',c:'def'},{t:'shape (1,784)',c:'tip'}],active:['input']},
+  {title:"全连接层 Linear",shape:"(784, 256)",desc:'第一个算子：<b>Linear(784, 256)</b>。这是一个全连接层，把 784 维输入映射到 256 维隐空间。<br><br>内部操作：<b>y = xWᵀ + b</b>，W 的形状是 (256, 784)，b 是 (256,)。输出 shape 变为 (1, 256)。',badges:[{t:'全连接',c:'def'},{t:'784→256',c:'tip'},{t:'y=xWᵀ+b',c:'warn'}],active:['input','fc1']},
+  {title:"激活函数 ReLU",shape:"(1, 256)",desc:'激活函数 <b>ReLU(x) = max(0, x)</b> 引入非线性。没有它，多层 Linear 叠再多也只是一个线性变换。<br><br>ReLU 不改变 shape，输出仍是 (1, 256)。负值被置零，正值原样通过。',badges:[{t:'非线性',c:'def'},{t:'max(0,x)',c:'tip'},{t:'shape不变',c:'def'}],active:['input','fc1','relu']},
+  {title:"第二层 Linear + ReLU",shape:"256 → 128",desc:'继续叠加：<b>Linear(256, 128) → ReLU</b>。这是 MLP 的标准模式——线性变换接激活函数。<br><br>shape 变化：<code>(1,256) → (1,128)</code>，维度逐步压缩，特征逐步抽象。',badges:[{t:'层叠模式',c:'def'},{t:'256→128',c:'tip'}],active:['input','fc1','relu','fc2','relu2']},
+  {title:"输出层 + Softmax",shape:"128 → 10",desc:'最后一层 <b>Linear(128, 10) → Softmax</b>。10 对应 0-9 十个数字类别。<br><br>Softmax 把 10 个原始分数转为概率分布：每个值在 0-1 之间，总和为 1。最大值对应的类别就是预测结果。',badges:[{t:'分类头',c:'def'},{t:'10类',c:'tip'},{t:'概率',c:'warn'}],active:['input','fc1','relu','fc2','relu2','fc3','out']},
+  {title:"完整计算图",shape:"总览: Input → 3×Linear → 2×ReLU → Softmax",desc:'一个三层的 MLP 完成。计算图是<b>有向无环图（DAG）</b>——数据只能沿箭头方向流动。<br><br>在 PyTorch 中，每次调用 <code>model(x)</code> 时框架自动构建计算图，forward 完成后保留图以备 backward 反向传播。',badges:[{t:'DAG',c:'def'},{t:'计算图',c:'tip'},{t:'forward',c:'warn'}],active:NODES.map(n=>n.id)}
+];
+
+let step=0,timer=null;
+const dotsEl=document.getElementById('dots'),svgEl=document.getElementById('stage');
+svgEl.innerHTML='<svg viewBox="0 0 1000 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%"><defs><marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="var(--fg-dim)"/></marker><marker id="arrowA" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="var(--accent)"/></marker></defs></svg>';
+const svg=svgEl.querySelector('svg');
+
+for(let i=0;i<steps.length;i++){let d=document.createElement('div');d.className='step-dot';d.onclick=()=>gotoStep(i);dotsEl.appendChild(d);}
+
+function drawGraph(activeIds){
+  svg.querySelectorAll('.edge-line,.node-g').forEach(e=>e.remove());
+  const activeSet=new Set(activeIds);
+  // Draw edges
+  EDGES.forEach(([from,to])=>{
+    const fn=NODES.find(n=>n.id===from),tn=NODES.find(n=>n.id===to);
+    if(!fn||!tn)return;
+    const bothActive=activeSet.has(from)&&activeSet.has(to);
+    const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1',fn.x+fn.w);line.setAttribute('y1',fn.y+fn.h/2);
+    line.setAttribute('x2',tn.x);line.setAttribute('y2',tn.y+tn.h/2);
+    line.setAttribute('stroke',bothActive?'var(--accent)':'var(--line)');
+    line.setAttribute('stroke-width',bothActive?'2.5':'1');
+    line.setAttribute('marker-end',bothActive?'url(#arrowA)':'url(#arrow)');
+    line.setAttribute('opacity',bothActive?'1':'.25');
+    line.classList.add('edge-line');
+    svg.appendChild(line);
+  });
+  // Draw nodes
+  NODES.forEach(n=>{
+    const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.classList.add('node-g');
+    const isActive=activeSet.has(n.id);
+    const colors={accent:'#ff9050','accent-2':'#ffc040',grad:'#7b8cff',success:'#50d890'};
+    const fill=colors[n.color]||'#7b8cff';
+    const r=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    r.setAttribute('x',n.x);r.setAttribute('y',n.y);r.setAttribute('width',n.w);r.setAttribute('height',n.h);
+    r.setAttribute('rx','10');r.setAttribute('fill',isActive?fill:'var(--bg-soft)');
+    r.setAttribute('stroke',isActive?fill:'var(--line)');r.setAttribute('stroke-width',isActive?'2':'1');
+    r.setAttribute('opacity',isActive?'1':'.45');
+    g.appendChild(r);
+    const t1=document.createElementNS('http://www.w3.org/2000/svg','text');
+    t1.setAttribute('x',n.x+n.w/2);t1.setAttribute('y',n.y+24);t1.setAttribute('text-anchor','middle');
+    t1.setAttribute('font-size','14');t1.setAttribute('font-weight','700');
+    t1.setAttribute('fill',isActive?'#1e1a1a':'var(--fg-dim)');t1.setAttribute('font-family','"JetBrains Mono",monospace');
+    t1.textContent=n.label;g.appendChild(t1);
+    const t2=document.createElementNS('http://www.w3.org/2000/svg','text');
+    t2.setAttribute('x',n.x+n.w/2);t2.setAttribute('y',n.y+42);t2.setAttribute('text-anchor','middle');
+    t2.setAttribute('font-size','10');t2.setAttribute('fill',isActive?'rgba(30,26,26,.7)':'var(--fg-dim)');
+    t2.setAttribute('font-family','"JetBrains Mono",monospace');t2.textContent=n.sh;g.appendChild(t2);
+    svg.appendChild(g);
+  });
+}
+
+function renderStep(){
+  const s=steps[step];
+  document.getElementById('stepTitle').textContent=s.title;
+  document.getElementById('shapeDisplay').textContent=s.shape;
+  document.getElementById('stepDesc').innerHTML=s.desc;
+  let bd=document.getElementById('badges');bd.innerHTML='';
+  s.badges.forEach(b=>{let sp=document.createElement('span');sp.className='badge badge--'+b.c;sp.textContent=b.t;bd.appendChild(sp);});
+  drawGraph(s.active);
+  document.querySelectorAll('.step-dot').forEach((d,i)=>{d.className='step-dot'+(i===step?' active':i<step?' done':'');});
+  document.getElementById('btnPrev').disabled=step===0;
+  document.getElementById('btnNext').disabled=step===steps.length-1;
+}
+function gotoStep(n){step=Math.max(0,Math.min(n,steps.length-1));renderStep();}
+function changeStep(d){gotoStep(step+d);}
+function resetStep(){stopAuto();gotoStep(0);}
+function toggleAuto(){timer?stopAuto():startAuto();}
+function startAuto(){timer=setInterval(()=>{if(step<steps.length-1)gotoStep(step+1);else stopAuto();},1600);document.getElementById('btnAuto').textContent='⏸ 暂停';}
+function stopAuto(){clearInterval(timer);timer=null;document.getElementById('btnAuto').textContent='▶ 自动';}
+document.addEventListener('keydown',e=>{if(e.key==='ArrowLeft')changeStep(-1);if(e.key==='ArrowRight')changeStep(1);if(e.key===' ')e.preventDefault(),toggleAuto();if(e.key==='r'||e.key==='R')resetStep();});
+renderStep();
+</script>
+</body>
+</html>

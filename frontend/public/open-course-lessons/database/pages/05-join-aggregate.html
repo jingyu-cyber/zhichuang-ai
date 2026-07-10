@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JOIN 连接类型 — 数据库系统概论</title>
+<style>
+:root{--bg:#1a1e1d;--bg-soft:#25302d;--bg-code:#0d1111;--fg:#e0eee8;--fg-dim:#90a898;--line:#304038;--accent:#40c0b0;--accent-2:#4898e0;--grad:#4898e0;--success:#40c870;--danger:#e05050}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(72,152,224,.18);color:var(--grad)}.badge--tip{background:rgba(64,200,112,.18);color:var(--success)}.badge--warn{background:rgba(224,80,80,.18);color:var(--danger)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+  <div class="demo-header">
+    <h1>JOIN 连接类型</h1>
+    <div class="breadcrumb"><a href="../">数据库系统概论</a> &rsaquo; 第二章 &rsaquo; SQL 能力培养</div>
+  </div>
+  <div class="demo-main">
+    <div class="panel-explain" id="explain">
+      <div class="step-title" id="stepTitle">INNER JOIN — 内连接</div>
+      <div class="step-desc" id="stepDesc">只返回两张表中<strong>匹配成功</strong>的行。只有 dept_id 相等的记录才会出现在结果中。Student 表和 Dept 表各有 1 行无法匹配，在内连接中被丢弃。</div>
+      <div class="badge-row" id="badges"></div>
+      <div class="info-line" id="sqlline">SELECT * FROM Student INNER JOIN Dept ON Student.dept_id = Dept.dept_id;</div>
+    </div>
+    <div class="panel-stage">
+      <svg viewBox="0 0 800 340" id="sv"></svg>
+    </div>
+  </div>
+  <div class="demo-controls">
+    <button id="btnPrev" onclick="S.changeStep(-1)">上一步</button>
+    <div class="step-dots" id="dots"></div>
+    <button id="btnNext" onclick="S.changeStep(1)">下一步</button>
+    <button onclick="S.resetStep()">重置</button>
+    <button id="btnAuto" onclick="S.toggleAuto()">自动播放</button>
+  </div>
+</div>
+
+<script>
+const S = {
+  step: 0,
+  total: 4,
+  autoTimer: null,
+  animTimer: null,
+  animFrame: 0,
+
+  students: [
+    { sid: '201', name: '张三', dept_id: 1 },
+    { sid: '202', name: '李四', dept_id: 2 },
+    { sid: '203', name: '王五', dept_id: 1 },
+    { sid: '204', name: '赵六', dept_id: 4 },
+  ],
+  depts: [
+    { dept_id: 1, dept_name: '计算机科学' },
+    { dept_id: 2, dept_name: '数学系' },
+    { dept_id: 3, dept_name: '物理系' },
+  ],
+
+  // Pre-compute matches: each match {sidx, didx}
+  matches: (function() {
+    const m = [];
+    const S = [{ sid: '201', name: '张三', dept_id: 1 },{ sid: '202', name: '李四', dept_id: 2 },{ sid: '203', name: '王五', dept_id: 1 },{ sid: '204', name: '赵六', dept_id: 4 }];
+    const D = [{ dept_id: 1, dept_name: '计算机科学' },{ dept_id: 2, dept_name: '数学系' },{ dept_id: 3, dept_name: '物理系' }];
+    S.forEach((s, si) => {
+      D.forEach((d, di) => { if (s.dept_id === d.dept_id) m.push({ sidx: si, didx: di }); });
+    });
+    return m;
+  })(),
+
+  queries: [
+    'SELECT * FROM Student INNER JOIN Dept ON Student.dept_id = Dept.dept_id;',
+    'SELECT * FROM Student LEFT JOIN Dept ON Student.dept_id = Dept.dept_id;',
+    'SELECT * FROM Student RIGHT JOIN Dept ON Student.dept_id = Dept.dept_id;',
+    'SELECT * FROM Student FULL OUTER JOIN Dept ON Student.dept_id = Dept.dept_id;',
+  ],
+
+  descs: [
+    { title: 'INNER JOIN — 内连接', desc: '只返回两张表中<strong>匹配成功</strong>的行。dept_id=4（赵六）和 dept_id=3（物理系）没有匹配对象，在内连接中<strong>被丢弃</strong>。结果只有 3 行。', badges: [{ t: 'INNER JOIN', c: 'def' }, { t: '只保留匹配行', c: 'tip' }] },
+    { title: 'LEFT JOIN — 左外连接', desc: '<strong>保留左表全部行</strong>。赵六的 dept_id=4 在 Dept 表中无匹配，dept_name 填入 <strong style="color:#e05050">NULL</strong>。左表（Student）4 行全部出现在结果中。', badges: [{ t: 'LEFT JOIN', c: 'def' }, { t: '左表全保留', c: 'warn' }] },
+    { title: 'RIGHT JOIN — 右外连接', desc: '<strong>保留右表全部行</strong>。物理系没有任何学生，sid 和 name 填入 <strong style="color:#e05050">NULL</strong>。右表（Dept）3 行全部出现在结果中。', badges: [{ t: 'RIGHT JOIN', c: 'def' }, { t: '右表全保留', c: 'warn' }] },
+    { title: 'FULL OUTER JOIN — 全外连接', desc: '<strong>保留两张表的所有行</strong>。赵六匹配不到系名→NULL；物理系匹配不到学生→NULL。两边无匹配的行都用 NULL 补齐。<strong>MySQL 不直接支持 FULL OUTER JOIN</strong>，需用 UNION 模拟。', badges: [{ t: 'FULL JOIN', c: 'def' }, { t: 'MySQL用UNION', c: 'warn' }] },
+  ],
+
+  stopAnim() { if (this.animTimer) { clearInterval(this.animTimer); this.animTimer = null; } },
+  stopAuto() { if (this.autoTimer) { clearInterval(this.autoTimer); this.autoTimer = null; } },
+
+  // ── draw table helper ──
+  table(svgNS, x, y, w, title, cols, rows, rowH, colorMap) {
+    const hdrH = 24;
+    let els = [];
+    // background
+    els.push(this.el('rect', { x: x, y: y, width: w, height: hdrH + rows.length * rowH, rx: 6, fill: '#1a1e1d', stroke: '#304038', 'stroke-width': 1 }));
+    // title bar
+    els.push(this.el('rect', { x: x + 1, y: y + 1, width: w - 2, height: hdrH - 1, rx: 5, fill: '#25302d' }));
+    els.push(this.el('text', { x: x + 8, y: y + 17, fill: '#40c0b0', 'font-size': 12, 'font-weight': 600 }, title));
+    // column headers
+    let cx = x + 12;
+    cols.forEach((col, ci) => {
+      els.push(this.el('text', { x: cx + col.w / 2, y: y + 40, fill: '#90a898', 'font-size': 10, 'font-weight': 600, 'text-anchor': 'middle' }, col.label));
+      if (ci > 0) {
+        els.push(this.el('line', { x1: cx - 4, y1: y + hdrH + 2, x2: cx - 4, y2: y + hdrH + rows.length * rowH - 2, stroke: '#304038', 'stroke-width': 0.5 }));
+      }
+      cx += col.w;
+    });
+    // rows
+    rows.forEach((row, ri) => {
+      const ry = y + hdrH + ri * rowH;
+      const rcolor = colorMap ? colorMap(ri) : null;
+      if (rcolor) {
+        els.push(this.el('rect', { x: x + 4, y: ry + 1, width: w - 8, height: rowH - 2, rx: 3, fill: rcolor }));
+      }
+      let vx = x + 12;
+      row.forEach((val, vi) => {
+        const colW = cols[vi].w;
+        const isNull = val === null || val === 'NULL';
+        els.push(this.el('text', {
+          x: vx + colW / 2, y: ry + 17, fill: isNull ? '#e05050' : '#e0eee8',
+          'font-size': 11, 'text-anchor': 'middle', 'font-style': isNull ? 'italic' : 'normal',
+        }, isNull ? 'NULL' : String(val)));
+        vx += colW;
+      });
+      if (ri < rows.length - 1) {
+        els.push(this.el('line', { x1: x + 8, y1: ry + rowH, x2: x + w - 8, y2: ry + rowH, stroke: '#304038', 'stroke-width': 0.5 }));
+      }
+    });
+    return els;
+  },
+
+  el(tag, attrs, text) {
+    let s = '<' + tag;
+    for (let k in attrs) { s += ' ' + k + '="' + attrs[k] + '"'; }
+    if (text !== undefined) { s += '>' + text + '</' + tag + '>'; }
+    else { s += '/>'; }
+    return s;
+  },
+
+  // ── Draw connecting bezier between two rows ──
+  connLine(x1, y1, x2, y2, color) {
+    const dx = x2 - x1;
+    const cx1 = x1 + dx * 0.4;
+    const cy1 = y1;
+    const cx2 = x2 - dx * 0.4;
+    const cy2 = y2;
+    return `<path d="M${x1},${y1} C${cx1},${cy1} ${cx2},${cy2} ${x2},${y2}" fill="none" stroke="${color}" stroke-width="1.5" stroke-dasharray="4,2" opacity="0.8"/>`;
+  },
+
+  // ── main draw ──
+  draw(sv, step, frame) {
+    const Sstudents = this.students;
+    const Sdepts = this.depts;
+    const matches = this.matches;
+    let h = '';
+    h += '<rect width="800" height="340" fill="#0d1111"/>';
+
+    // ── query bar ──
+    h += '<rect x="10" y="4" width="780" height="22" rx="5" fill="#1a1e1d" stroke="#304038" stroke-width="0.5"/>';
+    h += `<text x="22" y="19" fill="#4898e0" font-size="11" font-family="monospace">${this.queries[step]}</text>`;
+
+    // ── Student table (left) ──
+    const SL = 28, ST = 30, SW = 220, SRH = 22;
+    const sCols = [{ label: 'sid', w: 60 }, { label: 'name', w: 70 }, { label: 'dept_id', w: 60 }];
+    const sRows = Sstudents.map(s => [s.sid, s.name, s.dept_id]);
+    // Student table
+    h += this.table(null, SL, ST, SW, 'Student', sCols, sRows, SRH, null).join('');
+
+    // ── Dept table (right) ──
+    const DL = 480, DT = 30, DW = 210, DRH = 22;
+    const dCols = [{ label: 'dept_id', w: 60 }, { label: 'dept_name', w: 120 }];
+    const dRows = Sdepts.map(d => [d.dept_id, d.dept_name]);
+    h += this.table(null, DL, DT, DW, 'Dept', dCols, dRows, DRH, null).join('');
+
+    // ── Connecting lines ──
+    // Student right edge x = SL + SW = 248
+    // Dept left edge x = DL = 480
+    const sRight = SL + SW;
+    const dLeft = DL;
+    // Row center y positions
+    const sRowYC = (ri) => ST + 24 + ri * SRH + SRH / 2;
+    const dRowYC = (di) => DT + 24 + di * DRH + DRH / 2;
+
+    const maxLines = Math.min(frame, matches.length);
+    for (let i = 0; i < maxLines; i++) {
+      const m = matches[i];
+      const y1 = sRowYC(m.sidx);
+      const y2 = dRowYC(m.didx);
+      h += this.connLine(sRight, y1, dLeft, y2, '#4898e0');
+    }
+
+    // ── Join label between tables ──
+    if (frame >= 1) {
+      const labelY = ST + 12;
+      h += `<rect x="${sRight + 20}" y="${labelY}" width="190" height="18" rx="4" fill="#25302d" opacity="0.9"/>`;
+      h += `<text x="${sRight + 115}" y="${labelY + 13}" fill="#40c0b0" font-size="10" text-anchor="middle">ON dept_id = dept_id</text>`;
+    }
+
+    // ── Result table (bottom) ──
+    if (frame >= matches.length + 1 || step > 0 && frame >= 2) {
+      const RY = 195, RRH = 22;
+      const rCols = [{ label: 'sid', w: 70 }, { label: 'name', w: 90 }, { label: 'dept_name', w: 130 }];
+
+      let resultRows = [];
+      let resultTitle = '';
+
+      if (step === 0) {
+        // INNER JOIN
+        resultTitle = 'INNER JOIN 结果';
+        matches.forEach(m => {
+          resultRows.push([Sstudents[m.sidx].sid, Sstudents[m.sidx].name, Sdepts[m.didx].dept_name]);
+        });
+      } else if (step === 1) {
+        // LEFT JOIN
+        resultTitle = 'LEFT JOIN 结果';
+        Sstudents.forEach((s, si) => {
+          const m = matches.find(mm => mm.sidx === si);
+          resultRows.push([s.sid, s.name, m ? Sdepts[m.didx].dept_name : null]);
+        });
+      } else if (step === 2) {
+        // RIGHT JOIN
+        resultTitle = 'RIGHT JOIN 结果';
+        Sdepts.forEach((d, di) => {
+          const ms = matches.filter(mm => mm.didx === di);
+          if (ms.length > 0) {
+            ms.forEach(m => {
+              resultRows.push([Sstudents[m.sidx].sid, Sstudents[m.sidx].name, d.dept_name]);
+            });
+          } else {
+            resultRows.push([null, null, d.dept_name]);
+          }
+        });
+      } else if (step === 3) {
+        // FULL OUTER JOIN
+        resultTitle = 'FULL OUTER JOIN 结果';
+        const matchedS = new Set();
+        const matchedD = new Set();
+        matches.forEach(m => {
+          resultRows.push([Sstudents[m.sidx].sid, Sstudents[m.sidx].name, Sdepts[m.didx].dept_name]);
+          matchedS.add(m.sidx);
+          matchedD.add(m.didx);
+        });
+        Sstudents.forEach((s, si) => {
+          if (!matchedS.has(si)) resultRows.push([s.sid, s.name, null]);
+        });
+        Sdepts.forEach((d, di) => {
+          if (!matchedD.has(di)) resultRows.push([null, null, d.dept_name]);
+        });
+      }
+
+      const RW = 310;
+      const RX = (800 - RW) / 2;
+      const colorMap = (ri) => {
+        const row = resultRows[ri];
+        const hasNull = row.some(v => v === null);
+        return hasNull ? '#e0505018' : (ri % 2 === 0 ? '#1a1e1d' : 'transparent');
+      };
+      h += this.table(null, RX, RY, RW, resultTitle, rCols, resultRows, RRH, colorMap).join('');
+
+      // Row count badge
+      h += `<rect x="${RX + RW - 50}" y="${RY + 4}" width="42" height="16" rx="8" fill="#40c87022"/>`;
+      h += `<text x="${RX + RW - 29}" y="${RY + 16}" fill="#40c870" font-size="10" font-weight="600" text-anchor="middle">${resultRows.length}行</text>`;
+
+      // Highlight NULL rows
+      if (step >= 1) {
+        const hasNullLegend = resultRows.some(r => r.some(v => v === null));
+        if (hasNullLegend) {
+          const ly = RY + 24 + resultRows.length * RRH + 10;
+          h += `<rect x="${RX + 10}" y="${ly}" width="12" height="12" rx="2" fill="#e05050" opacity="0.3"/>`;
+          h += `<text x="${RX + 28}" y="${ly + 10}" fill="#e05050" font-size="10">= NULL（无匹配）</text>`;
+        }
+      }
+    }
+
+    // Step indicator: show which rows matched
+    if (frame >= matches.length && step === 0) {
+      // annotate unmatched rows in source tables
+      Sstudents.forEach((s, si) => {
+        if (!matches.some(m => m.sidx === si)) {
+          const ry = sRowYC(si) - 6;
+          h += `<rect x="${SL + 4}" y="${ry}" width="${SW - 8}" height="20" rx="3" fill="#e0505015" stroke="#e05050" stroke-width="1" stroke-dasharray="2,2"/>`;
+          h += `<text x="${SL + SW/2}" y="${ry + 14}" fill="#e05050" font-size="10" text-anchor="middle">✗ 无匹配</text>`;
+        }
+      });
+      Sdepts.forEach((d, di) => {
+        if (!matches.some(m => m.didx === di)) {
+          const ry = dRowYC(di) - 6;
+          h += `<rect x="${DL + 4}" y="${ry}" width="${DW - 8}" height="20" rx="3" fill="#e0505015" stroke="#e05050" stroke-width="1" stroke-dasharray="2,2"/>`;
+          h += `<text x="${DL + DW/2}" y="${ry + 14}" fill="#e05050" font-size="10" text-anchor="middle">✗ 无匹配</text>`;
+        }
+      });
+    }
+
+    sv.innerHTML = h;
+  },
+
+  animate(sv) {
+    this.stopAnim();
+    this.animFrame = 0;
+    const self = this;
+    const step = this.step;
+    const totalFrames = this.matches.length + 2; // lines + result
+    const drawFrame = () => { self.draw(sv, step, self.animFrame); };
+    drawFrame();
+    this.animTimer = setInterval(() => {
+      self.animFrame++;
+      drawFrame();
+      if (self.animFrame >= totalFrames) self.stopAnim();
+    }, 350);
+  },
+
+  updateUI() {
+    const d = this.descs[this.step];
+    document.getElementById('stepTitle').textContent = d.title;
+    document.getElementById('stepDesc').innerHTML = d.desc;
+    document.getElementById('sqlline').textContent = this.queries[this.step];
+    document.getElementById('badges').innerHTML = d.badges.map(b =>
+      `<span class="badge badge--${b.c}">${b.t}</span>`
+    ).join('');
+    document.getElementById('btnPrev').disabled = this.step === 0;
+    document.getElementById('btnNext').disabled = this.step === this.total - 1;
+    let dotsHtml = '';
+    for (let i = 0; i < this.total; i++) {
+      let cls = '';
+      if (i === this.step) cls = 'active';
+      else if (i < this.step) cls = 'done';
+      dotsHtml += `<span class="step-dot ${cls}" onclick="S.go(${i})"></span>`;
+    }
+    document.getElementById('dots').innerHTML = dotsHtml;
+  },
+
+  go(n) {
+    this.stopAnim();
+    this.stopAuto();
+    this.step = Math.max(0, Math.min(this.total - 1, n));
+    this.updateUI();
+    this.animate(document.getElementById('sv'));
+  },
+
+  changeStep(d) { this.go(this.step + d); },
+  resetStep() { this.go(0); },
+
+  toggleAuto() {
+    if (this.autoTimer) {
+      this.stopAuto();
+      document.getElementById('btnAuto').textContent = '自动播放';
+    } else {
+      document.getElementById('btnAuto').textContent = '停止';
+      this.autoTimer = setInterval(() => {
+        if (this.step < this.total - 1) this.go(this.step + 1);
+        else { this.stopAuto(); document.getElementById('btnAuto').textContent = '自动播放'; }
+      }, 5000);
+    }
+  },
+};
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft')  { e.preventDefault(); S.changeStep(-1); }
+  if (e.key === 'ArrowRight') { e.preventDefault(); S.changeStep(1); }
+  if (e.key === 'r' || e.key === 'R') { e.preventDefault(); S.resetStep(); }
+  if (e.key === ' ') { e.preventDefault(); S.toggleAuto(); }
+});
+
+S.go(0);
+</script>
+</body>
+</html>

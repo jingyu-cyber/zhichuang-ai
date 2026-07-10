@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>手写线性层 · 深度学习框架</title>
+<style>
+:root{
+  --bg:#1e1a1a; --bg-soft:#2d2525; --bg-code:#141010;
+  --fg:#f0e8e0; --fg-dim:#b0a090; --line:#3d3030;
+  --accent:#ff9050; --accent-2:#ffc040;
+  --success:#50d890; --danger:#f05060; --purple:#7b8cff;
+  --shadow:0 10px 30px rgba(0,0,0,0.35);
+  --radius:14px; --radius-sm:8px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);
+  font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;height:100%;overflow:hidden}
+code,.mono{font-family:"JetBrains Mono","Fira Code",Menlo,Consolas,monospace}
+.demo-shell{display:flex;flex-direction:column;height:100vh}
+.demo-header{display:flex;align-items:center;gap:16px;padding:12px 22px;background:linear-gradient(90deg,#2a2222,#352a2a);border-bottom:1px solid var(--line);box-shadow:var(--shadow)}
+.demo-header h1{font-size:18px;margin:0;letter-spacing:.5px}
+.demo-header h1 .sub{color:var(--fg-dim);font-weight:400;margin-left:8px;font-size:13px}
+.back-btn{color:var(--fg);text-decoration:none;padding:6px 12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--bg-soft);font-size:13px;transition:all .2s}
+.back-btn:hover{border-color:var(--accent);color:var(--accent)}
+.header-spacer{flex:1}
+.shape-badge{padding:6px 14px;background:var(--bg-code);border:1px solid var(--line);border-radius:var(--radius-sm);color:var(--accent);font-size:14px}
+.demo-main{flex:1;display:flex;min-height:0}
+.panel-explain{width:32%;min-width:340px;padding:18px 20px;overflow-y:auto;background:var(--bg-soft);border-right:1px solid var(--line)}
+.panel-stage{flex:1;position:relative;background:var(--bg);overflow:hidden}
+.phase-tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;background:rgba(255,144,80,.12);color:var(--accent);border:1px solid rgba(255,144,80,.35);margin-bottom:10px}
+.step-title{font-size:20px;margin:0 0 10px;line-height:1.4}
+.step-body{font-size:14px;line-height:1.75;color:var(--fg)}
+.step-body p{margin:8px 0}
+.step-body code{background:var(--bg-code);padding:1px 6px;border-radius:4px;color:var(--accent);font-size:13px}
+.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:4px;margin-right:6px;font-weight:600}
+.badge--def{background:rgba(123,140,255,.18);color:var(--purple);border:1px solid rgba(123,140,255,.4)}
+.badge--tip{background:rgba(80,216,144,.15);color:var(--success);border:1px solid rgba(80,216,144,.4)}
+.badge--warn{background:rgba(240,80,96,.15);color:var(--danger);border:1px solid rgba(240,80,96,.4)}
+.tip-block{border-left:3px solid var(--accent);padding:8px 12px;margin:10px 0;background:rgba(255,144,80,.06);border-radius:4px;font-size:13px;line-height:1.7}
+.stage-title{position:absolute;top:14px;left:24px;font-size:13px;color:var(--fg-dim);z-index:2;display:flex;align-items:center;gap:6px}
+.stage-title .num{display:inline-block;padding:2px 8px;border-radius:4px;background:var(--accent);color:var(--bg);font-weight:800;font-size:12px}
+.stage-svg{width:100%;height:100%}
+.demo-controls{display:flex;align-items:center;gap:10px;padding:10px 22px;background:var(--bg-soft);border-top:1px solid var(--line);box-shadow:var(--shadow)}
+.ctrl-btn{padding:6px 14px;font-size:13px;font-weight:600;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--bg);color:var(--fg-dim);cursor:pointer;transition:all .2s;font-family:inherit}
+.ctrl-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.ctrl-btn:disabled{opacity:.3;cursor:default}
+.ctrl-btn.primary{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.step-indicator{display:flex;gap:5px;flex:1;justify-content:center;align-items:center;overflow-x:auto}
+.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:all .3s;cursor:pointer;flex-shrink:0}
+.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent);transform:scale(1.3)}
+.step-dot.done{background:var(--success)}
+@media(max-width:860px){.demo-main{flex-direction:column}.panel-explain{width:100%;min-width:0;max-height:40vh}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<header class="demo-header"><a class="back-btn" href="../index.html">← 返回目录</a><h1>手写线性层<span class="sub">矩阵乘法 · 权重 · 偏置</span></h1><span class="header-spacer"></span><span class="shape-badge" id="stepBadge">1/15</span></header>
+<div class="demo-main">
+<section class="panel-explain" id="explainPanel"></section>
+<section class="panel-stage"><div class="stage-title"><span class="num">Linear</span> 可视化区域</div><svg class="stage-svg" id="stageSvg" viewBox="0 0 800 520"></svg></section>
+</div>
+<footer class="demo-controls">
+  <button class="ctrl-btn" id="btnReset" title="R">↺ 重置</button>
+  <button class="ctrl-btn" id="btnPrev" title="←">◀ 上一步</button>
+  <button class="ctrl-btn primary" id="btnNext" title="→">下一步 ▶</button>
+  <button class="ctrl-btn" id="btnAuto" title="Space">▶ 自动</button>
+  <div class="step-indicator" id="stepDots"></div>
+</footer>
+</div>
+<script>
+const steps=[
+  {phase:"核心公式",title:"nn.Linear 的本质",body:`<p>线性层执行一个<b>仿射变换</b>：</p>
+  <p><code>y = x · Wᵀ + b</code></p>
+  <p>这就是一个<b>矩阵乘法 + 加法</b>，没有魔法。</p>
+  <p><span class="badge badge--def">输入</span> x: (..., in_features)</p>
+  <p><span class="badge badge--def">权重</span> W: (out_features, in_features)</p>
+  <p><span class="badge badge--def">偏置</span> b: (out_features,)</p>`,
+   draw(g){g.formula()}},
+  {phase:"核心公式",title:"为什么是 Wᵀ 而不是 W？",body:`<p>PyTorch 存储 W 的形状是 <code>(out_features, in_features)</code></p>
+  <p>但矩阵乘法要求: <code>(..., in) @ (in, out) → (..., out)</code></p>
+  <p>所以需要转置：<code>x @ Wᵀ = x @ (out, in)ᵀ = x @ (in, out)</code></p>
+  <div class="tip-block">💡 这就是为什么代码里写 <code>x @ weight.T</code> 的原因</div>`,
+   draw(g){g.whyTranspose()}},
+  {phase:"矩阵乘法",title:"Step 1: 理解矩阵乘法",body:`<p>两个矩阵相乘的规则：</p>
+  <p><code>A(m×n) @ B(n×p) → C(m×p)</code></p>
+  <p><code>C[i,j] = Σₖ A[i,k] · B[k,j]</code></p>
+  <p><span class="badge badge--tip">记忆</span> 第一个矩阵的行 × 第二个矩阵的列</p>`,
+   draw(g){g.matmulRule()}},
+  {phase:"矩阵乘法",title:"Step 2: 具体例子 — 3→2 线性层",body:`<p>以 <code>nn.Linear(3, 2)</code> 为例：</p>
+  <p>输入 x 是 3 维向量，输出是 2 维向量</p>
+  <p>权重 W 是 2×3 矩阵，偏置 b 是 2 维向量</p>`,
+   draw(g){g.concreteExample()}},
+  {phase:"矩阵乘法",title:"Step 3: 手工计算第一个输出",body:`<p><code>y₁ = x₁·w₁₁ + x₂·w₁₂ + x₃·w₁₃ + b₁</code></p>
+  <p>第一个输出 = 输入向量 与 第一行权重 的点积 + 第一个偏置</p>
+  <p><span class="badge badge--def">本质</span> 每个输出神经元都是输入的<b>加权求和</b></p>`,
+   draw(g){g.firstOutput()}},
+  {phase:"矩阵乘法",title:"Step 4: 完整的输出向量",body:`<p><code>y = [x₁·w₁₁ + x₂·w₁₂ + x₃·w₁₃ + b₁,</code></p>
+  <p><code>     x₁·w₂₁ + x₂·w₂₂ + x₃·w₂₃ + b₂]</code></p>
+  <p>输出是 2 维向量，每个分量是独立的加权求和</p>`,
+   draw(g){g.fullOutput()}},
+  {phase:"从零实现",title:"实现 MyLinear (1/3) — __init__",body:`<p>定义类和初始化参数：</p>
+  <p><code>self.weight = nn.Parameter(torch.empty(out, in))</code></p>
+  <p><code>self.bias = nn.Parameter(torch.empty(out))</code></p>
+  <p><span class=\"badge badge--warn\">关键</span> 用 <code>nn.Parameter</code> 包装，告诉 PyTorch 这是可训练参数</p>`,
+   draw(g){g.initCode()}},
+  {phase:"从零实现",title:"实现 MyLinear (2/3) — 权重初始化",body:`<p>好的初始化决定训练速度和收敛质量：</p>
+  <p><code>nn.init.kaiming_uniform_(self.weight, a=√5)</code></p>
+  <p><code>nn.init.uniform_(self.bias, -bound, bound)</code></p>
+  <p><span class="badge badge--def">Kaiming初始化</span> 专为 ReLU 设计，是 nn.Linear 默认方案</p>`,
+   draw(g){g.weightInit()}},
+  {phase:"从零实现",title:"实现 MyLinear (3/3) — forward",body:`<p>前向传播方法 — 只有一行核心代码：</p>
+  <p><code>def forward(self, x):</code></p>
+  <p><code>    out = x @ self.weight.T</code></p>
+  <p><code>    if self.bias is not None: out += self.bias</code></p>
+  <p><code>    return out</code></p>`,
+   draw(g){g.forwardCode()}},
+  {phase:"验证",title:"与 PyTorch 原始实现对比",body:`<p>用随机输入同时通过两个层来验证：</p>
+  <p><code>torch.allclose(my_linear(x), nn_linear(x))</code></p>
+  <p>如果返回 <code>True</code>，说明你的实现完全正确！</p>`,
+   draw(g){g.verify()}},
+  {phase:"批处理",title:"Batch 维度自动处理",body:`<p>线性层天然支持批处理：</p>
+  <p>输入 shape: <code>(batch_size, in_features)</code></p>
+  <p>输出 shape: <code>(batch_size, out_features)</code></p>
+  <p><span class="badge badge--tip">关键</span> PyTorch 的 <code>@</code> 操作符自动处理 batch 维度</p>
+  <p>偏置 <code>b</code> 通过<b>广播 (broadcasting)</b>自动加到每个样本</p>`,
+   draw(g){g.batchProcessing()}},
+  {phase:"批处理",title:"更高维输入的处理",body:`<p>线性层也支持 3D+ 输入：</p>
+  <p>输入: <code>(batch, seq_len, hidden_dim)</code></p>
+  <p>W: <code>(out_dim, hidden_dim)</code></p>
+  <p>输出: <code>(batch, seq_len, out_dim)</code></p>
+  <p>Wᵀ 自动与<b>最后一维</b>相乘，其他维度保持</p>`,
+   draw(g){g.higherDim()}},
+  {phase:"参数量",title:"参数效率分析",body:`<p><code>nn.Linear(in, out)</code> 的参数量：</p>
+  <p>权重 W: <code>in × out</code> 个参数</p>
+  <p>偏置 b: <code>out</code> 个参数</p>
+  <p>总计: <code>in × out + out</code></p>
+  <p>例：Linear(512, 256) → <b>131,328</b> 个参数</p>`,
+   draw(g){g.paramCount()}},
+  {phase:"设计选择",title:"什么时候用 bias=False",body:`<p><span class="badge badge--tip">关闭偏置</span> 当后面紧跟着 BatchNorm 或 LayerNorm</p>
+  <p>因为这些归一化层有自己的可学习偏置</p>
+  <p><span class="badge badge--def">保留偏置</span> 最后的分类/回归输出层</p>
+  <p>偏置给模型一个"基准偏移"的自由度</p>`,
+   draw(g){g.biasChoice()}},
+  {phase:"总结",title:"Linear = 矩阵乘法 + 广播加法",body:`<p>手写一个线性层的完整流程：</p>
+  <p>① nn.Parameter 包装 weight 和 bias</p>
+  <p>② Kaiming 初始化（针对ReLU）</p>
+  <p>③ forward: <code>x @ weight.T + bias</code></p>
+  <p>④ 用 allclose 验证与 PyTorch 一致</p>
+  <div class="tip-block">🎯 理解了 Linear，你就理解了神经网络最基础的构建块。</div>`,
+   draw(g){g.summary()}},
+];
+
+const g={
+  svg:null,clear(){while(this.svg.firstChild)this.svg.removeChild(this.svg.firstChild)},
+  t(x,y,tx,o={}){const e=document.createElementNS("http://www.w3.org/2000/svg","text");e.setAttribute("x",x);e.setAttribute("y",y);e.setAttribute("fill",o.f||"#f0e8e0");e.setAttribute("font-size",o.s||14);e.setAttribute("text-anchor",o.a||"start");if(o.w)e.setAttribute("font-weight",o.w);if(o.m)e.setAttribute("font-family",o.m);e.textContent=tx;this.svg.appendChild(e);return e},
+  r(x,y,w,h,o={}){const e=document.createElementNS("http://www.w3.org/2000/svg","rect");e.setAttribute("x",x);e.setAttribute("y",y);e.setAttribute("width",w);e.setAttribute("height",h);e.setAttribute("fill",o.f||"#2d2525");e.setAttribute("rx",o.rx||4);if(o.s){e.setAttribute("stroke",o.s);e.setAttribute("stroke-width",o.sw||1)}if(o.d)e.setAttribute("stroke-dasharray",o.d);this.svg.appendChild(e);return e},
+  l(x1,y1,x2,y2,o={}){const e=document.createElementNS("http://www.w3.org/2000/svg","line");e.setAttribute("x1",x1);e.setAttribute("y1",y1);e.setAttribute("x2",x2);e.setAttribute("y2",y2);e.setAttribute("stroke",o.s||"#3d3030");e.setAttribute("stroke-width",o.sw||1.5);if(o.d)e.setAttribute("stroke-dasharray",o.d);this.svg.appendChild(e);return e},
+  c(cx,cy,r,o={}){const e=document.createElementNS("http://www.w3.org/2000/svg","circle");e.setAttribute("cx",cx);e.setAttribute("cy",cy);e.setAttribute("r",r);e.setAttribute("fill",o.f||"#ff9050");this.svg.appendChild(e);return e},
+
+  formula(){
+    this.r(80,120,640,320,{f:"#141010",s:"#ff9050",rx:10,sw:2});
+    this.t(400,170,"y = x · Wᵀ + b",{s:36,w:"700",f:"#ff9050",a:"middle"});
+    this.l(120,200,680,200,{s:"#3d3030"});
+    const items=[["x: 输入","(batch, in_features)","#7b8cff"],["W: 权重","(out_features, in_features)","#50d890"],["b: 偏置","(out_features,)","#ffc040"],["y: 输出","(batch, out_features)","#f05060"]];
+    items.forEach((it,i)=>{const y=225+i*55;this.r(150,y,500,42,{f:it[2]+"15",s:it[2],rx:6});this.t(170,y+28,it[0]+"   "+it[1],{s:14,w:"700",f:it[2],m:"JetBrains Mono"})});
+    this.t(150,480,"这是神经网络中最基础也是最核心的运算",{s:13,f:"#b0a090"});
+  },
+
+  whyTranspose(){
+    this.r(60,80,210,60,{f:"rgba(123,140,255,.15)",s:"#7b8cff",rx:8});this.t(165,115,"x [in]",{s:16,w:"700",f:"#7b8cff",a:"middle"});
+    this.r(370,80,210,60,{f:"rgba(255,144,80,.15)",s:"#ff9050",rx:8});this.t(475,110,"W [out, in]",{s:14,w:"700",f:"#ff9050",a:"middle"});this.t(475,130,"(需要转置)",{s:11,f:"#f05060",a:"middle"});
+    this.r(680,80,60,60,{f:"rgba(240,80,96,.15)",s:"#f05060",rx:8});this.t(710,115,"✗",{s:24,f:"#f05060",a:"middle"});
+    this.l(275,110,365,110,{s:"#7b8cff",sw:2});this.c(370,110,4,{f:"#7b8cff"});
+    this.l(585,110,675,110,{s:"#f05060",sw:2});this.c(680,110,4,{f:"#f05060"});
+    this.t(60,200,"正确做法：",{s:14,w:"700",f:"#50d890"});
+    this.r(60,230,210,60,{f:"rgba(123,140,255,.15)",s:"#7b8cff",rx:8});this.t(165,265,"x [in]",{s:16,w:"700",f:"#7b8cff",a:"middle"});
+    this.r(370,230,210,60,{f:"rgba(80,216,144,.15)",s:"#50d890",rx:8});this.t(475,260,"Wᵀ [in, out]",{s:14,w:"700",f:"#50d890",a:"middle"});this.t(475,280,"(转置后)",{s:11,f:"#50d890",a:"middle"});
+    this.r(680,230,60,60,{f:"rgba(80,216,144,.15)",s:"#50d890",rx:8});this.t(710,265,"✓",{s:24,f:"#50d890",a:"middle"});
+    this.l(275,260,365,260,{s:"#7b8cff",sw:2});this.l(585,260,675,260,{s:"#50d890",sw:2});
+    this.t(60,350,"规则: (..., a) @ (a, b) → (..., b)",{s:16,w:"700",f:"#ffc040",m:"JetBrains Mono"});
+    this.t(60,400,"x 的最后一维必须等于 Wᵀ 的第一维 (都是 in_features)",{s:12,f:"#b0a090"});
+  },
+
+  matmulRule(){
+    this.r(100,100,250,80,{f:"rgba(123,140,255,.15)",s:"#7b8cff",rx:8,sw:2});this.t(225,135,"A (m×n)",{s:20,w:"700",f:"#7b8cff",a:"middle"});
+    this.t(370,135,"@",{s:24,w:"700",f:"#ff9050",a:"middle"});
+    this.r(420,100,250,80,{f:"rgba(80,216,144,.15)",s:"#50d890",rx:8,sw:2});this.t(545,135,"B (n×p)",{s:20,w:"700",f:"#50d890",a:"middle"});
+    this.t(690,135,"=",{s:24,w:"700",f:"#ff9050",a:"middle"});
+    this.r(100,210,570,70,{f:"rgba(255,144,80,.15)",s:"#ff9050",rx:8,sw:2});this.t(385,250,"C (m×p)  其中 C[i,j] = Σₖ A[i,k] · B[k,j]",{s:16,w:"700",f:"#ff9050",a:"middle"});
+    this.t(100,330,"例: (4×3) @ (3×2) → (4×2)",{s:16,w:"700",f:"#ffc040",m:"JetBrains Mono"});
+    this.t(100,370,"A 的列数 (n) 必须等于 B 的行数 (n)",{s:14,f:"#b0a090"});
+    this.t(100,410,"输出 C 的行数 = A的行数，列数 = B的列数",{s:14,f:"#b0a090"});
+  },
+
+  concreteExample(){
+    // Input vector
+    this.r(60,100,100,50,{f:"rgba(123,140,255,.15)",s:"#7b8cff",rx:6});this.t(110,130,"x₁ x₂ x₃",{s:14,w:"700",f:"#7b8cff",a:"middle",m:"JetBrains Mono"});
+    this.t(60,175,"x : 3维向量",{s:11,f:"#b0a090",a:"middle"});
+    // Arrow
+    this.t(180,125,"→",{s:20,f:"#ff9050",a:"middle"});
+    // Weight matrix
+    this.r(220,70,250,110,{f:"rgba(80,216,144,.1)",s:"#50d890",rx:8,sw:2});
+    this.t(230,95,"W (2×3)",{s:12,w:"700",f:"#50d890",m:"JetBrains Mono"});
+    this.t(230,120,"[ w₁₁  w₁₂  w₁₃ ]",{s:13,m:"JetBrains Mono",f:"#f0e8e0"});
+    this.t(230,142,"[ w₂₁  w₂₂  w₂₃ ]",{s:13,m:"JetBrains Mono",f:"#f0e8e0"});
+    this.t(230,168,"2个输出神经元",{s:11,f:"#b0a090"});
+    // Arrow
+    this.t(490,125,"=",{s:20,f:"#ff9050",a:"middle"});
+    // Output vector
+    this.r(520,100,100,50,{f:"rgba(255,144,80,.15)",s:"#ff9050",rx:6});this.t(570,130,"y₁ y₂",{s:14,w:"700",f:"#ff9050",a:"middle",m:"JetBrains Mono"});
+    this.t(520,175,"y : 2维向量",{s:11,f:"#b0a090",a:"middle"});
+    // + bias
+    this.r(300,250,250,50,{f:"rgba(255,192,64,.15)",s:"#ffc040",rx:6});this.t(425,280,"+ b = [b₁, b₂]",{s:15,w:"700",f:"#ffc040",a:"middle",m:"JetBrains Mono"});
+    this.t(300,330,"in_features=3, out_features=2",{s:13,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(300,365,"full formula: y = x @ Wᵀ + b",{s:14,w:"700",f:"#ff9050",m:"JetBrains Mono"});
+  },
+
+  firstOutput(){
+    this.r(40,80,720,350,{f:"#141010",s:"#ff9050",rx:10,sw:2});
+    this.t(60,110,"y₁ 的计算 (第1个神经元输出)",{s:16,w:"700",f:"#ff9050"});
+    this.l(60,125,740,125,{s:"#3d3030"});
+    // Inputs
+    this.r(60,150,70,45,{f:"rgba(123,140,255,.2)",s:"#7b8cff",rx:6});this.t(95,178,"x₁",{s:16,w:"700",f:"#7b8cff",a:"middle"});
+    this.t(70,220,"×",{s:14,f:"#ff9050",a:"middle"});
+    this.r(60,240,70,45,{f:"rgba(80,216,144,.2)",s:"#50d890",rx:6});this.t(95,268,"w₁₁",{s:16,w:"700",f:"#50d890",a:"middle"});
+    this.t(150,210,"+",{s:16,w:"700",f:"#ff9050"});
+    // x2 * w12
+    this.r(180,150,70,45,{f:"rgba(123,140,255,.2)",s:"#7b8cff",rx:6});this.t(215,178,"x₂",{s:16,w:"700",f:"#7b8cff",a:"middle"});
+    this.t(190,220,"×",{s:14,f:"#ff9050",a:"middle"});
+    this.r(180,240,70,45,{f:"rgba(80,216,144,.2)",s:"#50d890",rx:6});this.t(215,268,"w₁₂",{s:16,w:"700",f:"#50d890",a:"middle"});
+    this.t(270,210,"+",{s:16,w:"700",f:"#ff9050"});
+    // x3 * w13
+    this.r(300,150,70,45,{f:"rgba(123,140,255,.2)",s:"#7b8cff",rx:6});this.t(335,178,"x₃",{s:16,w:"700",f:"#7b8cff",a:"middle"});
+    this.t(310,220,"×",{s:14,f:"#ff9050",a:"middle"});
+    this.r(300,240,70,45,{f:"rgba(80,216,144,.2)",s:"#50d890",rx:6});this.t(335,268,"w₁₃",{s:16,w:"700",f:"#50d890",a:"middle"});
+    this.t(390,210,"+",{s:16,w:"700",f:"#ff9050"});
+    this.r(420,180,60,45,{f:"rgba(255,192,64,.2)",s:"#ffc040",rx:6});this.t(450,208,"b₁",{s:16,w:"700",f:"#ffc040",a:"middle"});
+    this.t(500,210,"=",{s:16,w:"700",f:"#ff9050"});
+    this.r(530,180,80,45,{f:"rgba(255,144,80,.2)",s:"#ff9050",rx:6,sw:2});this.t(570,208,"y₁",{s:18,w:"700",f:"#ff9050",a:"middle"});
+    this.t(60,330,"每个输出 = 输入向量与一行权重的点积 + 对应偏置",{s:13,f:"#50d890"});
+    this.t(60,365,"本质是加权求和：权重系数 × 输入值 → 求和 → 加偏移",{s:12,f:"#b0a090"});
+  },
+
+  fullOutput(){
+    this.r(40,70,720,380,{f:"#141010",s:"#ff9050",rx:10,sw:2});
+    this.t(60,100,"完整计算 (2个输出)",{s:16,w:"700",f:"#ff9050"});
+    // Row 1
+    this.r(60,125,340,55,{f:"rgba(123,140,255,.1)",s:"#7b8cff",rx:6});this.t(75,157,"y₁ = x₁·w₁₁ + x₂·w₁₂ + x₃·w₁₃ + b₁",{s:13,m:"JetBrains Mono",f:"#7b8cff"});
+    // Row 2
+    this.r(60,200,340,55,{f:"rgba(80,216,144,.1)",s:"#50d890",rx:6});this.t(75,232,"y₂ = x₁·w₂₁ + x₂·w₂₂ + x₃·w₂₃ + b₂",{s:13,m:"JetBrains Mono",f:"#50d890"});
+    this.t(60,290,"代码实现：",{s:14,w:"700",f:"#ffc040"});
+    this.r(60,315,700,120,{f:"rgba(255,144,80,.08)",s:"#ff9050",rx:6,sw:1.5});
+    this.t(80,345,"# PyTorch 一行代码",{s:11,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(80,368,"y = x @ weight.T + bias  # shape: (batch, out_features)",{s:13,m:"JetBrains Mono",f:"#50d890"});
+    this.t(80,395,"# 手写展开版本（等价，不推荐用于训练）",{s:11,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(80,418,"y = torch.stack([torch.dot(x, w[i]) + b[i] for i in range(out)])",{s:12,m:"JetBrains Mono",f:"#f0e8e0"});
+  },
+
+  initCode(){
+    this.r(40,50,720,200,{f:"#141010",s:"#7b8cff",rx:8,sw:2});
+    const code=["class MyLinear(nn.Module):","    def __init__(self, in_features, out_features, bias=True):","        super().__init__()","        # 创建可训练参数 (形状与 nn.Linear 一致)","        self.weight = nn.Parameter(torch.empty(out_features, in_features))","        self.bias = nn.Parameter(torch.empty(out_features)) if bias else None","        self._init_params()  # ← 初始化权重"];
+    code.forEach((l,i)=>{this.t(60,80+i*24,l,{s:12,m:"JetBrains Mono",f:l.includes("#")?"#b0a090":"#f0e8e0"})});
+    this.t(60,290,"nn.Parameter 的作用：",{s:14,w:"700",f:"#ffc040"});
+    this.t(80,320,"• 将普通 tensor 标记为<b>模型参数</b>",{s:13,f:"#f0e8e0"});
+    this.t(80,348,"• 自动加入 model.parameters()，优化器可以更新它",{s:13,f:"#f0e8e0"});
+    this.t(80,376,"• 保存模型时自动序列化",{s:13,f:"#f0e8e0"});
+    this.t(60,430,"⭐ 没有 nn.Parameter，这个 tensor 就不会被训练！",{s:13,w:"700",f:"#ff9050"});
+  },
+
+  weightInit(){
+    this.r(40,60,720,180,{f:"#141010",s:"#50d890",rx:8,sw:2});
+    this.t(60,90,"初始化方法对比",{s:16,w:"700",f:"#50d890"});
+    const initMethods=[{n:"Kaiming Uniform",d:"U(-√(6/fan_in), √(6/fan_in))",u:"ReLU / LeakyReLU",c:"#50d890"},{n:"Kaiming Normal",d:"N(0, √(2/fan_in))",u:"ResNet / Deep ReLU",c:"#7b8cff"},{n:"Xavier Uniform",d:"U(-√(6/(fan_in+fan_out)), ...)",u:"Sigmoid / Tanh",c:"#ff9050"},{n:"Normal(0,0.02)",d:"N(0, 0.02²)",u:"GPT Transformer",c:"#ffc040"}];
+    initMethods.forEach((m,i)=>{const y=120+i*28;this.t(80,y,m.n,{s:12,w:"700",f:m.c,m:"JetBrains Mono"});this.t(280,y,m.d,{s:10,f:"#b0a090",m:"JetBrains Mono"});this.t(580,y,m.u,{s:10,f:"#b0a090"})});
+    this.t(60,280,"实现代码：",{s:13,w:"700",f:"#ffc040"});
+    this.t(80,310,"nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))",{s:12,m:"JetBrains Mono",f:"#50d890"});
+    this.t(80,340,"if self.bias is not None:",{s:12,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(100,368,"bound = 1 / math.sqrt(fan_in)",{s:12,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(100,396,"nn.init.uniform_(self.bias, -bound, bound)",{s:12,m:"JetBrains Mono",f:"#50d890"});
+  },
+
+  forwardCode(){
+    this.r(40,60,720,200,{f:"#141010",s:"#ff9050",rx:8,sw:2});
+    this.t(60,90,"forward 方法 —— 核心只有一行",{s:15,w:"700",f:"#ff9050"});
+    this.t(60,130,"def forward(self, x):",{s:14,w:"700",f:"#f0e8e0",m:"JetBrains Mono"});
+    this.t(80,160,"# x:  (..., in_features)",{s:11,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(80,185,"# weight: (out_features, in_features)",{s:11,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(80,210,"out = x @ self.weight.T  # ← 矩阵乘法",{s:13,m:"JetBrains Mono",f:"#50d890",w:"700"});
+    this.t(80,240,"if self.bias is not None:",{s:12,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(100,265,"out = out + self.bias     # ← 广播加法",{s:13,m:"JetBrains Mono",f:"#50d890"});
+    this.t(80,295,"return out",{s:12,m:"JetBrains Mono",f:"#f0e8e0"});
+    this.t(60,370,"这就是线性层的全部逻辑：矩阵乘 + 加偏置",{s:14,w:"700",f:"#ffc040"});
+    this.t(60,405,"没有任何隐藏的魔法或复杂操作",{s:13,f:"#b0a090"});
+    this.t(60,440,"⭐ PyTorch 内部还做了算子融合优化，但数学上完全等价",{s:12,f:"#ff9050",w:"700"});
+  },
+
+  verify(){
+    this.r(40,60,720,300,{f:"#141010",s:"#50d890",rx:10,sw:2});
+    this.t(60,90,"验证实现",{s:16,w:"700",f:"#50d890"});
+    this.t(60,130,"# 创建两个层",{s:11,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(80,155,"my_linear = MyLinear(3, 2)",{s:13,m:"JetBrains Mono",f:"#f0e8e0"});
+    this.t(80,180,"nn_linear = nn.Linear(3, 2)",{s:13,m:"JetBrains Mono",f:"#f0e8e0"});
+    this.t(60,210,"# 复制权重以确保公平对比",{s:11,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(80,235,"nn_linear.weight.data.copy_(my_linear.weight)",{s:12,m:"JetBrains Mono",f:"#f0e8e0"});
+    this.t(80,260,"nn_linear.bias.data.copy_(my_linear.bias)",{s:12,m:"JetBrains Mono",f:"#f0e8e0"});
+    this.t(60,290,"# 验证",{s:11,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(80,315,"x = torch.randn(4, 3)  # 4个样本",{s:13,m:"JetBrains Mono",f:"#f0e8e0"});
+    this.t(80,340,"assert torch.allclose(my_linear(x), nn_linear(x))",{s:12,m:"JetBrains Mono",f:"#50d890",w:"700"});
+    this.r(40,390,720,80,{f:"rgba(80,216,144,.1)",s:"#50d890",rx:6,sw:2});
+    this.t(60,420,"✅ allclose 返回 True → 两个实现数学上完全等价",{s:15,w:"700",f:"#50d890"});
+    this.t(60,450,"⚠ 实际训练中直接用 nn.Linear，手写版用于理解原理",{s:12,f:"#b0a090"});
+  },
+
+  batchProcessing(){
+    this.r(40,70,340,80,{f:"rgba(123,140,255,.15)",s:"#7b8cff",rx:8,sw:2});
+    this.t(60,100,"输入: (32, 3)",{s:18,w:"700",f:"#7b8cff",m:"JetBrains Mono"});
+    this.t(60,130,"32个样本，每样本3特征",{s:11,f:"#b0a090"});
+    this.t(400,110,"→",{s:24,f:"#ff9050",a:"middle"});
+    this.r(440,70,100,80,{f:"rgba(80,216,144,.15)",s:"#50d890",rx:8,sw:2});
+    this.t(490,115,"Wᵀ",{s:18,w:"700",f:"#50d890",a:"middle",m:"JetBrains Mono"});
+    this.t(560,110,"→",{s:24,f:"#ff9050",a:"middle"});
+    this.r(600,70,140,80,{f:"rgba(255,144,80,.15)",s:"#ff9050",rx:8,sw:2});
+    this.t(670,100,"输出: (32, 2)",{s:16,w:"700",f:"#ff9050",a:"middle",m:"JetBrains Mono"});
+    this.t(670,130,"32个样本×2输出",{s:10,f:"#b0a090",a:"middle"});
+    // Broadcasting explanation
+    this.r(60,200,680,140,{f:"rgba(255,192,64,.1)",s:"#ffc040",rx:8,sw:1.5});
+    this.t(80,230,"广播 (Broadcasting) 机制：",{s:15,w:"700",f:"#ffc040"});
+    this.t(80,265,"bias shape: (2,)  →  自动扩展为 (32, 2)  →  加到每行",{s:13,m:"JetBrains Mono",f:"#f0e8e0"});
+    this.t(80,300,"# 等价于 (但 PyTorch 自动处理)",{s:11,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(80,325,"out + bias.unsqueeze(0).expand(32, -1)",{s:12,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(60,390,"⭐ 同一个模型，不用改代码，batch=1 和 batch=1024 都能跑",{s:13,w:"700",f:"#ff9050"});
+  },
+
+  higherDim(){
+    this.r(40,80,300,70,{f:"rgba(123,140,255,.15)",s:"#7b8cff",rx:8,sw:2});
+    this.t(60,110,"Input: (B, S, H)",{s:16,w:"700",f:"#7b8cff",m:"JetBrains Mono"});
+    this.t(60,140,"Batch × Seq × Hidden",{s:10,f:"#b0a090"});
+    this.t(360,115,"→",{s:20,f:"#ff9050",a:"middle"});
+    this.r(400,80,160,70,{f:"rgba(80,216,144,.15)",s:"#50d890",rx:8,sw:2});
+    this.t(480,115,"Wᵀ (H, O)",{s:16,w:"700",f:"#50d890",a:"middle",m:"JetBrains Mono"});
+    this.t(580,115,"→",{s:20,f:"#ff9050",a:"middle"});
+    this.r(620,80,140,70,{f:"rgba(255,144,80,.15)",s:"#ff9050",rx:8,sw:2});
+    this.t(690,110,"(B, S, O)",{s:16,w:"700",f:"#ff9050",a:"middle",m:"JetBrains Mono"});
+    this.t(690,140,"Batch × Seq × Out",{s:10,f:"#b0a090",a:"middle"});
+    this.t(60,210,"B=批量, S=序列长度, H=隐藏维度, O=输出维度",{s:13,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(60,260,"Wᵀ 自动与最后一维 (H) 相乘，B 和 S 维度保持不变",{s:14,f:"#f0e8e0"});
+    this.t(60,310,"这就是为什么同一个 Linear 层可以处理：",{s:14,w:"700",f:"#ffc040"});
+    this.t(80,345,"• (3,) → (2,)  单个样本",{s:12,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(80,375,"• (32, 3) → (32, 2)  batch处理",{s:12,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(80,405,"• (8, 10, 3) → (8, 10, 2)  序列batch",{s:12,m:"JetBrains Mono",f:"#b0a090"});
+    this.t(60,460,"⭐ PyTorch @ 运算符自动处理任意多的前置维度",{s:13,w:"700",f:"#ff9050"});
+  },
+
+  paramCount(){
+    this.r(60,60,680,220,{f:"#141010",s:"#ff9050",rx:10,sw:2});
+    this.t(80,95,"参数计算：Linear(in, out)",{s:16,w:"700",f:"#ff9050"});
+    this.t(80,140,"weight:  in × out  个参数",{s:18,w:"700",f:"#7b8cff",m:"JetBrains Mono"});
+    this.t(80,185,"bias:    out  个参数",{s:18,w:"700",f:"#ffc040",m:"JetBrains Mono"});
+    this.t(80,230,"total:   in×out + out = (in+1)×out",{s:18,w:"700",f:"#50d890",m:"JetBrains Mono"});
+    this.l(80,250,720,250,{s:"#3d3030"});
+    const examples=[["Linear(3, 2)","6 + 2 = 8","微型"],["Linear(784, 256)","200,704 + 256 = 200,960","MNIST"],["Linear(512, 10)","5,120 + 10 = 5,130","分类头"],["Linear(4096, 4096)","16.7M + 4K ≈ 16.8M","LLM中一层"]];
+    examples.forEach((e,i)=>{const y=270+i*38;this.t(80,y,e[0],{s:13,w:"700",m:"JetBrains Mono",f:"#f0e8e0"});this.t(280,y,e[1],{s:13,m:"JetBrains Mono",f:"#50d890"});this.t(600,y,e[2],{s:12,f:"#b0a090"});});
+    this.t(60,470,"⭐ 大模型的参数量主要来自线性层(MLP)和注意力投影矩阵",{s:12,w:"700",f:"#ff9050"});
+  },
+
+  biasChoice(){
+    this.r(40,80,350,150,{f:"rgba(80,216,144,.1)",s:"#50d890",rx:8,sw:2});
+    this.t(60,110,"bias=False ✅",{s:16,w:"700",f:"#50d890"});
+    this.t(60,145,"• 后面有 BatchNorm",{s:13,f:"#f0e8e0"});
+    this.t(60,172,"• 后面有 LayerNorm",{s:13,f:"#f0e8e0"});
+    this.t(60,199,"• Q/K/V 注意力投影",{s:13,f:"#f0e8e0"});
+    this.t(60,226,"• 归一化层已有 bias",{s:13,f:"#f0e8e0"});
+    this.r(410,80,350,150,{f:"rgba(255,144,80,.1)",s:"#ff9050",rx:8,sw:2});
+    this.t(430,110,"bias=True ✅",{s:16,w:"700",f:"#ff9050"});
+    this.t(430,145,"• 最后的分类/回归层",{s:13,f:"#f0e8e0"});
+    this.t(430,172,"• 无归一化的中间层",{s:13,f:"#f0e8e0"});
+    this.t(430,199,"• 需要学习基准偏移",{s:13,f:"#f0e8e0"});
+    this.t(430,226,"• 不确定时就用 True",{s:13,f:"#f0e8e0"});
+    this.t(60,300,"bias 本质：给输出加一个<b>常量偏移</b>",{s:15,w:"700",f:"#ffc040"});
+    this.t(60,345,"没有 bias: y = xWᵀ (必须过原点，表达能力受限)",{s:13,f:"#b0a090"});
+    this.t(60,385,"有 bias: y = xWᵀ + b (可以学习任意的仿射变换)",{s:13,f:"#50d890"});
+  },
+
+  summary(){
+    this.r(40,50,720,420,{f:"#141010",s:"#ff9050",rx:10,sw:2});
+    this.t(60,85,"MyLinear = nn.Parameter + matmul + broadcasting",{s:15,w:"700",f:"#ff9050"});
+    this.l(60,100,740,100,{s:"#3d3030"});
+    const steps=["① __init__: 用 nn.Parameter 包装 weight(out,in) 和 bias(out)","② _init_params: Kaiming Uniform 初始化（ReLU专用）","③ forward: out = x @ self.weight.T  (矩阵乘法)","④ forward: if bias: out += self.bias  (广播加法)","⑤ 验证: torch.allclose(my_linear(x), nn.Linear(x))"];
+    steps.forEach((s,i)=>{this.t(70,130+i*45,s,{s:13,f:"#f0e8e0"})});
+    this.r(60,390,340,60,{f:"rgba(80,216,144,.15)",s:"#50d890",rx:6,sw:2});
+    this.t(80,425,"✅ 你已经理解了神经网络",{s:15,w:"700",f:"#50d890"});
+    this.t(80,445,"最基础的构建块！",{s:15,w:"700",f:"#50d890"});
+    this.r(430,390,310,60,{f:"rgba(255,144,80,.15)",s:"#ff9050",rx:6,sw:2});
+    this.t(450,425,"下一步：用 MyLinear",{s:13,w:"700",f:"#ff9050"});
+    this.t(450,445,"搭建完整 MLP！",{s:13,w:"700",f:"#ff9050"});
+  },
+};
+
+let cs=0,at=null,ia=false;const ts=steps.length;
+function init(){g.svg=document.getElementById("stageSvg");const dots=document.getElementById("stepDots");for(let i=0;i<ts;i++){const d=document.createElement("div");d.className="step-dot";d.onclick=()=>goTo(i);dots.appendChild(d)}render()}
+function goTo(i){if(i<0||i>=ts)return;cs=i;render()}
+function render(){g.clear();const s=steps[cs];document.getElementById("stepBadge").textContent=(cs+1)+"/"+ts;document.getElementById("explainPanel").innerHTML='<div class="phase-tag">'+s.phase+'</div><h2 class="step-title">'+s.title+'</h2><div class="step-body">'+s.body+'</div>';s.draw(g);document.querySelectorAll(".step-dot").forEach((d,i)=>{d.className="step-dot"+(i===cs?" active":i<cs?" done":"")});document.getElementById("btnPrev").disabled=cs===0;document.getElementById("btnNext").disabled=cs===ts-1}
+function next(){if(cs<ts-1){cs++;render()}else stopAuto()}
+function prev(){if(cs>0){cs--;render()}}
+function reset(){stopAuto();cs=0;render()}
+function toggleAuto(){ia?stopAuto():startAuto()}
+function startAuto(){ia=true;document.getElementById("btnAuto").textContent="⏸ 暂停";document.getElementById("btnAuto").classList.add("primary");at=setInterval(next,2200)}
+function stopAuto(){ia=false;if(at){clearInterval(at);at=null}document.getElementById("btnAuto").textContent="▶ 自动";document.getElementById("btnAuto").classList.remove("primary")}
+document.addEventListener("keydown",(e)=>{if(e.key==="ArrowRight"){e.preventDefault();next()}else if(e.key==="ArrowLeft"){e.preventDefault();prev()}else if(e.key===" "||e.key==="Spacebar"){e.preventDefault();toggleAuto()}else if(e.key==="r"||e.key==="R"){e.preventDefault();reset()}});
+document.getElementById("btnPrev").onclick=prev;document.getElementById("btnNext").onclick=next;document.getElementById("btnReset").onclick=reset;document.getElementById("btnAuto").onclick=toggleAuto;
+window.onload=init;
+</script>
+</body>
+</html>

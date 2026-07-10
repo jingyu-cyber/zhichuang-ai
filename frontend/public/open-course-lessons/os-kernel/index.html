@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>操作系统内核构建 — 交互式课程</title>
+<style>
+:root{--bg:#0d1117;--bg-soft:#161b22;--bg-code:#0a0c10;--fg:#e6edf3;--fg-dim:#8b949e;--line:#30363d;--accent:#58a6ff;--accent-2:#3fb950;--grad:#d29922;--success:#3fb950;--danger:#f85149}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}
+.container{max-width:1100px;margin:0 auto;padding:40px 24px}
+.hero{text-align:center;padding:60px 0 40px}
+.hero h1{font-size:36px;margin-bottom:12px;background:linear-gradient(135deg,var(--accent),var(--accent-2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero p{color:var(--fg-dim);font-size:16px}
+.chapter{margin-bottom:48px}
+.chapter h2{font-size:22px;padding-bottom:10px;border-bottom:2px solid var(--line);margin-bottom:20px;display:flex;align-items:center;gap:12px}
+.chapter h2 .ch-num{background:var(--accent);color:#fff;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700}
+.lesson-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+.lesson-card{background:var(--bg-soft);border:1px solid var(--line);border-radius:12px;padding:18px 20px;text-decoration:none;color:var(--fg);transition:border-color .25s,transform .25s;display:flex;flex-direction:column;gap:10px}
+.lesson-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.lesson-card .lesson-num{font-size:13px;color:var(--fg-dim);font-weight:600}
+.lesson-card .lesson-title{font-size:17px;font-weight:700}
+.lesson-card .lesson-desc{font-size:13px;color:var(--fg-dim);line-height:1.6}
+.lesson-card .lesson-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.tag{padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600}
+.tag--blue{background:rgba(88,166,255,.18);color:var(--accent)}
+.tag--green{background:rgba(63,185,80,.18);color:var(--success)}
+.tag--orange{background:rgba(210,153,34,.18);color:var(--grad)}
+.tag--red{background:rgba(248,81,73,.18);color:var(--danger)}
+footer{text-align:center;padding:40px 0;color:var(--fg-dim);font-size:13px;border-top:1px solid var(--line);margin-top:20px}
+footer a{color:var(--accent);text-decoration:none}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="hero">
+<h1>操作系统内核构建</h1>
+<p>12 节交互式课程 &mdash; 从启动到文件系统，用动画理解内核原理</p>
+</div>
+
+<div class="chapter">
+<h2><span class="ch-num">1</span> 内核启动与系统调用</h2>
+<div class="lesson-grid">
+<a class="lesson-card" href="pages/01-boot-sequence.html">
+<span class="lesson-num">第 1 节</span>
+<span class="lesson-title">启动流程</span>
+<span class="lesson-desc">bootloader &rarr; kernel entry &rarr; mm_init &rarr; clock &rarr; console，各阶段依次点亮时间线</span>
+<span class="lesson-tags"><span class="tag tag--blue">启动</span><span class="tag tag--green">时序</span></span>
+</a>
+<a class="lesson-card" href="pages/02-trap-syscall.html">
+<span class="lesson-num">第 2 节</span>
+<span class="lesson-title">Trap 陷入机制</span>
+<span class="lesson-desc">用户态 &rarr; trap &rarr; 内核态 &rarr; handler &rarr; 返回，寄存器/栈/特权级动画</span>
+<span class="lesson-tags"><span class="tag tag--orange">中断</span><span class="tag tag--blue">特权级</span></span>
+</a>
+<a class="lesson-card" href="pages/03-add-syscall.html">
+<span class="lesson-num">第 3 节</span>
+<span class="lesson-title">添加系统调用</span>
+<span class="lesson-desc">syscall 表条目 &rarr; dispatcher &rarr; 用户触发 &rarr; 内核处理 &rarr; 返回值</span>
+<span class="lesson-tags"><span class="tag tag--green">系统调用</span><span class="tag tag--blue">内核</span></span>
+</a>
+</div>
+</div>
+
+<div class="chapter">
+<h2><span class="ch-num">2</span> 进程管理</h2>
+<div class="lesson-grid">
+<a class="lesson-card" href="pages/04-process-states.html">
+<span class="lesson-num">第 4 节</span>
+<span class="lesson-title">进程状态机</span>
+<span class="lesson-desc">就绪/运行/阻塞/退出，点击事件触发状态转换</span>
+<span class="lesson-tags"><span class="tag tag--green">状态</span><span class="tag tag--red">阻塞</span></span>
+</a>
+<a class="lesson-card" href="pages/05-cpu-scheduler.html">
+<span class="lesson-num">第 5 节</span>
+<span class="lesson-title">CPU 调度器</span>
+<span class="lesson-desc">就绪队列 &rarr; CPU &rarr; 时间片耗尽 &rarr; 回队，FCFS/SJF/RR 甘特图</span>
+<span class="lesson-tags"><span class="tag tag--blue">调度</span><span class="tag tag--orange">时间片</span></span>
+</a>
+<a class="lesson-card" href="pages/06-context-switch.html">
+<span class="lesson-num">第 6 节</span>
+<span class="lesson-title">上下文切换</span>
+<span class="lesson-desc">进程 A 寄存器保存到 PCB &rarr; 进程 B PCB 恢复到寄存器</span>
+<span class="lesson-tags"><span class="tag tag--blue">PCB</span><span class="tag tag--orange">切换</span></span>
+</a>
+</div>
+</div>
+
+<div class="chapter">
+<h2><span class="ch-num">3</span> 内存管理</h2>
+<div class="lesson-grid">
+<a class="lesson-card" href="pages/07-vm-layout.html">
+<span class="lesson-num">第 7 节</span>
+<span class="lesson-title">虚拟地址空间布局</span>
+<span class="lesson-desc">text/data/heap/stack/mmap 各段地址范围与权限</span>
+<span class="lesson-tags"><span class="tag tag--blue">虚拟内存</span><span class="tag tag--green">段</span></span>
+</a>
+<a class="lesson-card" href="pages/08-page-table-walk.html">
+<span class="lesson-num">第 8 节</span>
+<span class="lesson-title">页表遍历</span>
+<span class="lesson-desc">虚拟地址拆分 &rarr; 4 级页表逐级查找 &rarr; 定位物理页</span>
+<span class="lesson-tags"><span class="tag tag--blue">MMU</span><span class="tag tag--orange">四级</span></span>
+</a>
+<a class="lesson-card" href="pages/09-page-fault.html">
+<span class="lesson-num">第 9 节</span>
+<span class="lesson-title">缺页异常处理</span>
+<span class="lesson-desc">访问未映射 &rarr; trap &rarr; 分配帧 &rarr; 更新页表 &rarr; 重试</span>
+<span class="lesson-tags"><span class="tag tag--red">异常</span><span class="tag tag--green">缓存</span></span>
+</a>
+</div>
+</div>
+
+<div class="chapter">
+<h2><span class="ch-num">4</span> 文件系统与 I/O</h2>
+<div class="lesson-grid">
+<a class="lesson-card" href="pages/10-file-descriptor.html">
+<span class="lesson-num">第 10 节</span>
+<span class="lesson-title">文件描述符</span>
+<span class="lesson-desc">fd 表 &rarr; 打开文件表 &rarr; inode 指针链，dup() 共享引用</span>
+<span class="lesson-tags"><span class="tag tag--green">fd</span><span class="tag tag--blue">inode</span></span>
+</a>
+<a class="lesson-card" href="pages/11-path-resolution.html">
+<span class="lesson-num">第 11 节</span>
+<span class="lesson-title">路径解析</span>
+<span class="lesson-desc">/home/user/file.txt 逐级 directory entry &rarr; inode 查找</span>
+<span class="lesson-tags"><span class="tag tag--blue">目录</span><span class="tag tag--orange">逐级</span></span>
+</a>
+<a class="lesson-card" href="pages/12-device-io.html">
+<span class="lesson-num">第 12 节</span>
+<span class="lesson-title">设备 I/O</span>
+<span class="lesson-desc">请求 &rarr; 设备队列 &rarr; DMA 传输 &rarr; 中断 &rarr; 进程唤醒</span>
+<span class="lesson-tags"><span class="tag tag--orange">DMA</span><span class="tag tag--red">中断</span></span>
+</a>
+</div>
+</div>
+
+<footer>
+<p>操作系统内核构建 &mdash; 交互式教学课程 | <a href="DESIGN_SPEC.md">设计规范</a></p>
+</footer>
+</div>
+</body>
+</html>

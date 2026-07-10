@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>优化器与参数更新 · 深度学习框架</title>
+<style>
+:root{--bg:#1e1a1a;--bg-soft:#2d2525;--bg-code:#141010;--fg:#f0e8e0;--fg-dim:#b0a090;--line:#3d3030;--accent:#ff9050;--accent-2:#ffc040;--grad:#7b8cff;--success:#50d890;--danger:#f05060;--shadow:0 10px 30px rgba(0,0,0,.35);--radius:14px;--radius-sm:8px}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}
+.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}
+.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.demo-header h1{font-size:20px;font-weight:700}
+.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}
+.demo-header .breadcrumb a{color:var(--accent);text-decoration:none}
+.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}
+.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:var(--radius);padding:20px;display:flex;flex-direction:column;gap:14px}
+.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}
+.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}
+.panel-explain .update-formula{font-family:"JetBrains Mono","Fira Code",monospace;font-size:22px;color:var(--accent-2);text-align:center;padding:12px;background:var(--bg-code);border-radius:var(--radius-sm)}
+.badge-row{display:flex;gap:8px;flex-wrap:wrap}
+.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.badge--def{background:rgba(123,140,255,.18);color:var(--grad)}
+.badge--tip{background:rgba(80,216,144,.18);color:var(--success)}
+.badge--warn{background:rgba(240,80,96,.18);color:var(--danger)}
+.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:var(--radius);padding:16px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.panel-stage svg{max-width:100%;max-height:100%}
+.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}
+.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:var(--radius-sm);cursor:pointer;font-size:14px;transition:.15s}
+.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}
+.demo-controls button:disabled{opacity:.35;cursor:default}
+.step-dots{display:flex;gap:8px;align-items:center}
+.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}
+.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}
+.step-dot.done{background:var(--success)}
+@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+  <div class="demo-header">
+    <div>
+      <h1>优化器与参数更新</h1>
+      <div class="breadcrumb"><a href="../index.html">深度学习框架</a> / 第二章 / 06</div>
+    </div>
+    <span class="badge badge--def">SGD · Adam · 学习率</span>
+  </div>
+
+  <div class="demo-main">
+    <div class="panel-explain" id="explain">
+      <div class="step-title" id="stepTitle">优化器 = 梯度消费者</div>
+      <div class="update-formula" id="formulaDisplay">W = W − lr × ∇W</div>
+      <div class="step-desc" id="stepDesc">backward() 算出梯度后，谁负责用梯度来更新参数？——<b>优化器（Optimizer）</b>。<br><br>optimizer.step() 拿到每个参数的梯度，按照特定的更新规则调整参数值。不同优化器的区别就在于「怎么用梯度来更新」。</div>
+      <div class="badge-row" id="badges">
+        <span class="badge badge--def">梯度→参数更新</span><span class="badge badge--tip">optimizer.step()</span>
+      </div>
+    </div>
+    <div class="panel-stage" id="stage"></div>
+  </div>
+
+  <div class="demo-controls">
+    <button id="btnPrev" onclick="changeStep(-1)">← 上一步</button>
+    <div class="step-dots" id="dots"></div>
+    <button id="btnNext" onclick="changeStep(1)">下一步 →</button>
+    <button onclick="resetStep()">⟳ 重置</button>
+    <button id="btnAuto" onclick="toggleAuto()">▶ 自动</button>
+  </div>
+</div>
+
+<script>
+const steps = [
+  {
+    title: "SGD：最朴素的更新规则",
+    formula: "W ← W − lr × ∇W",
+    desc: 'SGD（随机梯度下降）是最简单的优化器。<b>更新公式</b>：参数沿着梯度<b>反方向</b>移动一小步。<br><br>W_new = W_old − lr × dL/dW<br><br>lr（学习率）控制步长：太大→震荡不收敛，太小→收敛太慢。<b>选 lr 是训练中最关键的调参</b>。典型值：0.1、0.01、0.001。',
+    badges: [{t:'最简单',c:'def'},{t:'lr关键调参',c:'warn'}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="30" text-anchor="middle" font-size="14" fill="var(--fg-dim)">SGD 更新规则：W ← W − η × ∇L(W)</text>
+<rect x="80" y="60" width="150" height="70" rx="10" fill="var(--bg-soft)" stroke="var(--grad)" stroke-width="2"/>
+<text x="155" y="90" text-anchor="middle" font-size="14" fill="var(--grad)" font-weight="700">当前权重</text>
+<text x="155" y="115" text-anchor="middle" font-size="16" fill="var(--fg)" font-family="JetBrains Mono">W = 2.5</text>
+<text x="280" y="100" text-anchor="middle" font-size="22" fill="var(--fg-dim)">−</text>
+<rect x="320" y="60" width="150" height="70" rx="10" fill="var(--bg-soft)" stroke="var(--accent)" stroke-width="2"/>
+<text x="395" y="90" text-anchor="middle" font-size="14" fill="var(--accent)" font-weight="700">lr × 梯度</text>
+<text x="395" y="115" text-anchor="middle" font-size="16" fill="var(--fg)" font-family="JetBrains Mono">0.01 × 3.0</text>
+<text x="520" y="100" text-anchor="middle" font-size="22" fill="var(--fg-dim)">=</text>
+<rect x="560" y="60" width="150" height="70" rx="10" fill="var(--bg-soft)" stroke="var(--success)" stroke-width="2"/>
+<text x="635" y="90" text-anchor="middle" font-size="14" fill="var(--success)" font-weight="700">新权重</text>
+<text x="635" y="115" text-anchor="middle" font-size="16" fill="var(--success)" font-family="JetBrains Mono">W = 2.47</text>
+<text x="400" y="170" text-anchor="middle" font-size="13" fill="var(--fg-dim)">梯度 > 0（loss 随 W 增大而增大）→ 减小 W</text>
+<text x="400" y="195" text-anchor="middle" font-size="13" fill="var(--fg-dim)">梯度 < 0（loss 随 W 增大而减小）→ 增大 W</text>
+<rect x="100" y="220" width="250" height="90" rx="8" fill="var(--bg-soft)" stroke="var(--danger)" stroke-width="1"/>
+<text x="225" y="248" text-anchor="middle" font-size="12" fill="var(--danger)" font-weight="700">lr 太大</text>
+<text x="225" y="270" text-anchor="middle" font-size="11" fill="var(--fg-dim)">震荡剧烈,跳过最优点</text>
+<text x="225" y="292" text-anchor="middle" font-size="11" fill="var(--fg-dim)">loss 不收敛</text>
+<rect x="400" y="220" width="250" height="90" rx="8" fill="var(--bg-soft)" stroke="var(--accent)" stroke-width="1"/>
+<text x="525" y="248" text-anchor="middle" font-size="12" fill="var(--accent)" font-weight="700">lr 太小</text>
+<text x="525" y="270" text-anchor="middle" font-size="11" fill="var(--fg-dim)">收敛极慢,需要很多epoch</text>
+<text x="525" y="292" text-anchor="middle" font-size="11" fill="var(--fg-dim)">可能卡在局部最优</text>`;
+    }
+  },
+  {
+    title: "SGD + Momentum：加入惯性",
+    formula: "v = β×v − lr×∇W,  W ← W + v",
+    desc: '纯 SGD 在峡谷地形会来回震荡。加上<b>动量（Momentum）</b>：<br><br><b>v = β×v − lr×∇W</b>（速度更新）<br><b>W = W + v</b>（位置更新）<br><br>β（通常0.9）= 保留多少旧方向。类比：小球从山上滚下，惯性帮助冲过小的起伏和局部最优。',
+    badges: [{t:'动量',c:'def'},{t:'β=0.9',c:'tip'},{t:'冲过局部最优',c:'tip'}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="25" text-anchor="middle" font-size="14" fill="var(--fg-dim)">SGD + Momentum: 像小球滚下山坡</text>
+<rect x="30" y="50" width="350" height="100" rx="10" fill="var(--bg-soft)" stroke="var(--grad)" stroke-width="2"/>
+<text x="205" y="80" text-anchor="middle" font-size="14" fill="var(--grad)" font-weight="700">纯 SGD</text>
+<text x="205" y="105" text-anchor="middle" font-size="12" fill="var(--fg-dim)">每一步只看当前梯度</text>
+<text x="205" y="128" text-anchor="middle" font-size="12" fill="var(--fg-dim)">在峡谷中左右震荡，前进慢</text>
+<rect x="420" y="50" width="350" height="100" rx="10" fill="var(--bg-soft)" stroke="var(--accent)" stroke-width="2"/>
+<text x="595" y="80" text-anchor="middle" font-size="14" fill="var(--accent)" font-weight="700">SGD + Momentum</text>
+<text x="595" y="105" text-anchor="middle" font-size="12" fill="var(--fg-dim)">累积过去梯度的指数移动平均</text>
+<text x="595" y="128" text-anchor="middle" font-size="12" fill="var(--fg-dim)">震荡方向抵消,前进方向叠加</text>
+<text x="400" y="185" text-anchor="middle" font-size="13" fill="var(--accent-2)" font-family="JetBrains Mono">β = 0.9: 新方向 = 90%旧方向 + 10%当前梯度</text>
+<text x="400" y="215" text-anchor="middle" font-size="12" fill="var(--fg-dim)">PyTorch: torch.optim.SGD(params, lr=0.01, momentum=0.9)</text>`;
+    }
+  },
+  {
+    title: "Adam：自适应学习率",
+    formula: "W ← W − lr × m̂/(√v̂ + ε)",
+    desc: 'Adam（Adaptive Moment Estimation）是目前最常用的优化器，结合了 Momentum + RMSProp：<br><br><b>m</b>（一阶矩）= 梯度的指数移动平均 → 方向信号<br><b>v</b>（二阶矩）= 梯度平方的指数移动平均 → 自适应步长<br><br>每个参数有自己的学习率：梯度大的参数步长自动变小，梯度小的参数步长自动变大。默认 lr=0.001，大多数情况下不需调参。',
+    badges: [{t:'自适应',c:'def'},{t:'默认首选',c:'tip'},{t:'β₁=0.9,β₂=0.999',c:'def'}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="25" text-anchor="middle" font-size="14" fill="var(--fg-dim)">Adam = Momentum + RMSProp + 偏差修正</text>
+<rect x="20" y="45" width="240" height="110" rx="10" fill="var(--bg-soft)" stroke="var(--accent)" stroke-width="2"/>
+<text x="140" y="75" text-anchor="middle" font-size="14" fill="var(--accent)" font-weight="700">m = β₁×m+(1-β₁)×∇W</text>
+<text x="140" y="100" text-anchor="middle" font-size="12" fill="var(--fg-dim)">一阶矩估计</text>
+<text x="140" y="122" text-anchor="middle" font-size="11" fill="var(--fg-dim)">类似 Momentum: 平滑方向</text>
+<text x="140" y="144" text-anchor="middle" font-size="11" fill="var(--accent-2)">→ 保持前进方向</text>
+<rect x="280" y="45" width="240" height="110" rx="10" fill="var(--bg-soft)" stroke="var(--grad)" stroke-width="2"/>
+<text x="400" y="75" text-anchor="middle" font-size="14" fill="var(--grad)" font-weight="700">v = β₂×v+(1-β₂)×(∇W)²</text>
+<text x="400" y="100" text-anchor="middle" font-size="12" fill="var(--fg-dim)">二阶矩估计</text>
+<text x="400" y="122" text-anchor="middle" font-size="11" fill="var(--fg-dim)">类似 RMSProp: 统计幅度</text>
+<text x="400" y="144" text-anchor="middle" font-size="11" fill="var(--accent-2)">→ 自适应学习率</text>
+<rect x="540" y="45" width="240" height="110" rx="10" fill="var(--bg-soft)" stroke="var(--success)" stroke-width="2"/>
+<text x="660" y="75" text-anchor="middle" font-size="14" fill="var(--success)" font-weight="700">偏差修正</text>
+<text x="660" y="100" text-anchor="middle" font-size="12" fill="var(--fg-dim)">m̂=m/(1-β₁ᵗ)</text>
+<text x="660" y="122" text-anchor="middle" font-size="11" fill="var(--fg-dim)">v̂=v/(1-β₂ᵗ)</text>
+<text x="660" y="144" text-anchor="middle" font-size="11" fill="var(--accent-2)">→ 初始几步不偏</text>
+<text x="400" y="195" text-anchor="middle" font-size="14" fill="var(--accent-2)" font-family="JetBrains Mono">W ← W − lr × m̂ / (√v̂ + ε)</text>
+<text x="400" y="225" text-anchor="middle" font-size="12" fill="var(--fg-dim)">每个参数独立的学习率！梯度大→lr小, 梯度小→lr大</text>`;
+    }
+  },
+  {
+    title: "优化器对比总结",
+    formula: "SGD vs Adam: 什么时候用什么?",
+    desc: '<b>SGD + Momentum</b>：需要精心调 lr（常用 scheduler 逐步衰减），但泛化能力往往更好。很多 SOTA 视觉模型仍用 SGD。<br><br><b>Adam/AdamW</b>：开箱即用，收敛快，不挑初始 lr。90% 的情况下直接用 Adam 就行。AdamW 是改进版（权重衰减与自适应学习率解耦），效果更稳定。<br><br><b>经验法则</b>：原型开发用 Adam → 最终精调可考虑 SGD+Momentum。',
+    badges: [{t:'SGD=SOTA',c:'def'},{t:'Adam=默认',c:'tip'},{t:'AdamW=改进',c:'tip'}],
+    render(svg){
+      svg.innerHTML = `<rect x="10" y="15" width="380" height="170" rx="10" fill="var(--bg-soft)" stroke="var(--accent)" stroke-width="2"/>
+<text x="200" y="45" text-anchor="middle" font-size="15" fill="var(--accent)" font-weight="700">SGD + Momentum</text>
+<text x="30" y="75" font-size="12" fill="var(--fg-dim)">✓ 泛化能力强, SOTA 常用</text>
+<text x="30" y="98" font-size="12" fill="var(--fg-dim)">✓ 内存占用小 (0额外字节)</text>
+<text x="30" y="121" font-size="12" fill="var(--fg-dim)">✗ 学习率需要仔细调</text>
+<text x="30" y="144" font-size="12" fill="var(--fg-dim)">✗ 收敛比 Adam 慢</text>
+<text x="30" y="167" font-size="12" fill="var(--accent-2)">场景: 最终精调、视觉SOTA</text>
+<rect x="410" y="15" width="380" height="170" rx="10" fill="var(--bg-soft)" stroke="var(--grad)" stroke-width="2"/>
+<text x="600" y="45" text-anchor="middle" font-size="15" fill="var(--grad)" font-weight="700">Adam / AdamW</text>
+<text x="430" y="75" font-size="12" fill="var(--fg-dim)">✓ 开箱即用, 不挑 lr</text>
+<text x="430" y="98" font-size="12" fill="var(--fg-dim)">✓ 收敛快 (自适应学习率)</text>
+<text x="430" y="121" font-size="12" fill="var(--fg-dim)">✓ 适合稀疏梯度 (NLP/RL)</text>
+<text x="430" y="144" font-size="12" fill="var(--fg-dim)">✗ 额外内存: 2×参数量</text>
+<text x="430" y="167" font-size="12" fill="var(--accent-2)">场景: 原型开发、NLP、RL</text>
+<text x="400" y="225" text-anchor="middle" font-size="13" fill="var(--fg-dim)">PyTorch: torch.optim.SGD() | torch.optim.Adam() | torch.optim.AdamW()</text>`;
+    }
+  },
+  {
+    title: "学习率调度：动态调 lr",
+    formula: "lr 不是一成不变的",
+    desc: '训练过程中动态调整学习率是提升效果的关键技巧：<br><br><b>StepLR</b>：每 N 个 epoch lr×0.1<br><b>CosineAnnealing</b>：lr 沿余弦曲线从初始值衰减到0<br><b>ReduceLROnPlateau</b>：val_loss 不降时自动降低 lr<br><b>Warmup</b>：前几轮 lr 从 0 线性增长到目标值（避免初始不稳定）<br><br>现代训练标配：Warmup + CosineAnnealing。',
+    badges: [{t:'动态调整',c:'def'},{t:'warmup',c:'tip'},{t:'cosine',c:'tip'}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="20" text-anchor="middle" font-size="13" fill="var(--fg-dim)">常见 lr 调度策略</text>
+<rect x="15" y="40" width="185" height="70" rx="8" fill="var(--bg-soft)" stroke="var(--grad)" stroke-width="1"/>
+<text x="107" y="65" text-anchor="middle" font-size="13" fill="var(--grad)" font-weight="700">StepLR</text>
+<text x="107" y="88" text-anchor="middle" font-size="11" fill="var(--fg-dim)">每30epoch×0.1</text>
+<rect x="210" y="40" width="185" height="70" rx="8" fill="var(--bg-soft)" stroke="var(--accent)" stroke-width="1"/>
+<text x="302" y="65" text-anchor="middle" font-size="13" fill="var(--accent)" font-weight="700">Cosine</text>
+<text x="302" y="88" text-anchor="middle" font-size="11" fill="var(--fg-dim)">平滑衰减到0</text>
+<rect x="405" y="40" width="185" height="70" rx="8" fill="var(--bg-soft)" stroke="var(--accent-2)" stroke-width="1"/>
+<text x="497" y="65" text-anchor="middle" font-size="13" fill="var(--accent-2)" font-weight="700">ReduceLROnPlateau</text>
+<text x="497" y="88" text-anchor="middle" font-size="11" fill="var(--fg-dim)">指标不降时触发</text>
+<rect x="600" y="40" width="185" height="70" rx="8" fill="var(--bg-soft)" stroke="var(--success)" stroke-width="1"/>
+<text x="692" y="65" text-anchor="middle" font-size="13" fill="var(--success)" font-weight="700">Warmup</text>
+<text x="692" y="88" text-anchor="middle" font-size="11" fill="var(--fg-dim)">lr 从0递增</text>
+<text x="400" y="150" text-anchor="middle" font-size="12" fill="var(--fg-dim)">PyTorch: torch.optim.lr_scheduler.StepLR / CosineAnnealingLR / ReduceLROnPlateau</text>
+<text x="400" y="175" text-anchor="middle" font-size="13" fill="var(--accent-2)">现代标配: 前5% steps Warmup + CosineAnnealing → 稳定且高效</text>`;
+    }
+  }
+];
+
+let step=0,timer=null;
+const dotsEl=document.getElementById('dots'),svgEl=document.getElementById('stage');
+svgEl.innerHTML='<svg viewBox="0 0 800 380" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%"><defs><marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="var(--fg-dim)"/></marker></defs></svg>';
+const svg=svgEl.querySelector('svg');
+
+for(let i=0;i<steps.length;i++){let d=document.createElement('div');d.className='step-dot';d.onclick=()=>gotoStep(i);dotsEl.appendChild(d);}
+
+function renderStep(){
+  const s=steps[step  {
+    title: "学习率调度: StepLR vs CosineAnnealing",
+    info: "lr_scheduler: 训练中动态调整学习率",
+    desc: '<b>学习率调度器 (LR Scheduler)</b> 在每个 epoch 后调整学习率，是训练后期精细收敛的关键。<br><br><b>StepLR</b>: 每 N 个 epoch 将 lr 乘以 gamma (如 0.1)，阶梯式下降。<br><b>CosineAnnealing</b>: 按余弦曲线平滑降低 lr，从初始值降到 0，周期 T 个 epoch。<br><b>ReduceLROnPlateau</b>: 监控 val_loss，连续 patience 个 epoch 不降→lr 减半。<br><br><b>为什么需要调度？</b> 训练初期大步前进（高 lr），后期小步微调（低 lr）。固定 lr 在后期会在最优点附近振荡，无法收敛到最优。',
+    badges: [{t:"CosineAnnealing",c:"def"},{t:"StepLR",c:"tip"},{t:"ReduceLROnPlateau",c:"warn"}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="25" text-anchor="middle" font-size="14" fill="var(--accent)">Learning Rate Schedules</text><rect x="40" y="50" width="230" height="130" rx="8" fill="var(--bg-soft)" stroke="var(--grad)" stroke-width="1.5"/><text x="155" y="80" text-anchor="middle" font-size="13" fill="var(--grad)">StepLR</text><text x="155" y="105" text-anchor="middle" font-size="11" fill="var(--fg-dim)">lr = lr * gamma</text><text x="155" y="128" text-anchor="middle" font-size="11" fill="var(--fg-dim)">every step_size epochs</text><text x="155" y="155" text-anchor="middle" font-size="10" fill="var(--fg-dim)">阶梯式下降</text><rect x="285" y="50" width="230" height="130" rx="8" fill="var(--bg-soft)" stroke="var(--accent)" stroke-width="1.5"/><text x="400" y="80" text-anchor="middle" font-size="13" fill="var(--accent)">CosineAnnealing</text><text x="400" y="105" text-anchor="middle" font-size="11" fill="var(--fg-dim)">lr(t) = lr_min + (lr_max-lr_min)</text><text x="400" y="125" text-anchor="middle" font-size="11" fill="var(--fg-dim)">* (1+cos(pi*t/T)) / 2</text><text x="400" y="155" text-anchor="middle" font-size="10" fill="var(--accent-2)">平滑下降，SOTA首选</text><rect x="530" y="50" width="230" height="130" rx="8" fill="var(--bg-soft)" stroke="var(--success)" stroke-width="1.5"/><text x="645" y="80" text-anchor="middle" font-size="13" fill="var(--success)">ReduceLROnPlateau</text><text x="645" y="105" text-anchor="middle" font-size="11" fill="var(--fg-dim)">if val_loss plateaus:</text><text x="645" y="128" text-anchor="middle" font-size="11" fill="var(--fg-dim)">lr = lr * 0.5</text><text x="645" y="155" text-anchor="middle" font-size="10" fill="var(--success)">自适应调整</text><text x="400" y="220" text-anchor="middle" font-size="12" fill="var(--accent-2)">2024 Best Practice: CosineAnnealing + Warmup for most vision & NLP tasks</text><text x="400" y="245" text-anchor="middle" font-size="11" fill="var(--fg-dim)">scheduler.step() is called AFTER optimizer.step() in the training loop</text>`;
+    }
+  },
+  {
+    title: "Warmup: 训练启动的稳定器",
+    info: "lr从小线性增长到目标值 → 避免初期震荡",
+    desc: '<b>Warmup</b> 在训练的最初几千步中，将学习率从 0（或极小值）线性增长到目标 lr。这是 Transformer 和大模型训练的标配技术。<br><br><b>为什么需要 Warmup？</b> 训练初期，权重随机初始化，梯度方向不稳定。直接用大 lr 会导致参数剧烈更新，模型发散或陷入极差局部最优。Warmup 给优化器一个'预热期'——先用小步探索损失曲面，找到大致方向后再加速。<br><br><b>典型配置</b>: warmup_steps=4000, 从 lr/100 线性增长到 target_lr，之后接 CosineAnnealing 衰减。',
+    badges: [{t:"warmup=4000",c:"def"},{t:"Transformer标配",c:"tip"},{t:"防止早期发散",c:"warn"}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="20" text-anchor="middle" font-size="14" fill="var(--accent)">Learning Rate Warmup</text><text x="400" y="55" text-anchor="middle" font-size="13" fill="var(--fg-dim)">lr_schedule = LinearWarmup(warmup_steps=4000) + CosineAnnealing(T=total_steps-4000)</text><rect x="40" y="75" width="720" height="180" rx="8" fill="var(--bg-soft)" stroke="var(--grad)" stroke-width="1"/><text x="60" y="105" font-size="12" fill="var(--accent-2)">lr</text><text x="60" y="125" font-size="12" fill="var(--accent)">^</text><text x="60" y="145" font-size="12" fill="var(--accent)">|   /---------------</text><text x="60" y="165" font-size="12" fill="var(--accent)">|  /                 \</text><text x="60" y="185" font-size="12" fill="var(--accent)">| /                   \________</text><text x="60" y="205" font-size="12" fill="var(--accent)">|/_______________________________\</text><text x="60" y="230" font-size="10" fill="var(--fg-dim)">|<--warmup-->|<----cosine decay---->|</text><text x="250" y="250" font-size="10" fill="var(--fg-dim)">4000 steps     main training phase</text><text x="400" y="275" text-anchor="middle" font-size="12" fill="var(--accent-2)">Without warmup: initial gradients unstable -> training may diverge</text><text x="400" y="295" text-anchor="middle" font-size="12" fill="var(--accent-2)">With warmup: gradual lr increase -> stable convergence from step 0</text>`;
+    }
+  },
+  {
+    title: "Weight Decay vs L2 Regularization",
+    info: "AdamW: 解耦权重衰减的正确方式",
+    desc: '<b>Weight Decay</b> 在每次参数更新后额外衰减权重: w = w - lr * (grad + lambda * w)。它与 L2 正则化在 SGD 下等价，但在 Adam 下<b>不等价</b>。<br><br>Adam 的 L2 正则化（在 loss 中加 lambda*||w||^2）会被自适应学习率缩放，导致大梯度参数的正则化弱、小梯度参数的正则化强——不均匀。<br><br><b>AdamW</b> 将 weight decay 从 loss 梯度中解耦出来，直接在参数更新时应用: w = w - lr*m_hat/(sqrt(v_hat)+eps) - lr*lambda*w。这是 2024 年所有框架的默认行为。',
+    badges: [{t:"AdamW",c:"def"},{t:"decoupled",c:"tip"},{t:"!=L2 in Adam",c:"warn"}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="25" text-anchor="middle" font-size="14" fill="var(--accent)">Weight Decay: AdamW vs Adam+L2</text><rect x="30" y="50" width="350" height="120" rx="8" fill="var(--bg-soft)" stroke="var(--danger)" stroke-width="1.5"/><text x="205" y="78" text-anchor="middle" font-size="13" fill="var(--danger)">Adam + L2 Regularization</text><text x="205" y="105" text-anchor="middle" font-size="11" fill="var(--fg-dim)">loss = criterion(pred,y) + lambda*||w||^2</text><text x="205" y="128" text-anchor="middle" font-size="11" fill="var(--fg-dim)">grad = dL/dw + 2*lambda*w</text><text x="205" y="150" text-anchor="middle" font-size="11" fill="var(--danger)">Problem: scaled by adaptive lr!</text><rect x="420" y="50" width="350" height="120" rx="8" fill="var(--bg-soft)" stroke="var(--success)" stroke-width="1.5"/><text x="595" y="78" text-anchor="middle" font-size="13" fill="var(--success)">AdamW (Decoupled Weight Decay)</text><text x="595" y="105" text-anchor="middle" font-size="11" fill="var(--fg-dim)">grad = dL/dw  (no L2 in loss)</text><text x="595" y="128" text-anchor="middle" font-size="11" fill="var(--fg-dim)">w = w - lr*grad - lr*lambda*w</text><text x="595" y="150" text-anchor="middle" font-size="11" fill="var(--success)">Decoupled = uniform regularization</text><text x="400" y="210" text-anchor="middle" font-size="12" fill="var(--accent-2)">Rule of thumb: always use AdamW instead of Adam. torch.optim.AdamW is the default since PyTorch 1.10+.</text>`;
+    }
+  },
+  {
+    title: "学习率调度: StepLR vs CosineAnnealing",
+    info: "lr_scheduler: 训练中动态调整学习率",
+    desc: '<b>学习率调度器 (LR Scheduler)</b> 在每个 epoch 后调整学习率，是训练后期精细收敛的关键。<br><br><b>StepLR</b>: 每 N 个 epoch 将 lr 乘以 gamma (如 0.1)，阶梯式下降。<br><b>CosineAnnealing</b>: 按余弦曲线平滑降低 lr，从初始值降到 0，周期 T 个 epoch。<br><b>ReduceLROnPlateau</b>: 监控 val_loss，连续 patience 个 epoch 不降→lr 减半。<br><br><b>为什么需要调度？</b> 训练初期大步前进（高 lr），后期小步微调（低 lr）。固定 lr 在后期会在最优点附近振荡，无法收敛到最优。',
+    badges: [{t:"CosineAnnealing",c:"def"},{t:"StepLR",c:"tip"},{t:"ReduceLROnPlateau",c:"warn"}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="25" text-anchor="middle" font-size="14" fill="var(--accent)">Learning Rate Schedules</text><rect x="40" y="50" width="230" height="130" rx="8" fill="var(--bg-soft)" stroke="var(--grad)" stroke-width="1.5"/><text x="155" y="80" text-anchor="middle" font-size="13" fill="var(--grad)">StepLR</text><text x="155" y="105" text-anchor="middle" font-size="11" fill="var(--fg-dim)">lr = lr * gamma</text><text x="155" y="128" text-anchor="middle" font-size="11" fill="var(--fg-dim)">every step_size epochs</text><text x="155" y="155" text-anchor="middle" font-size="10" fill="var(--fg-dim)">阶梯式下降</text><rect x="285" y="50" width="230" height="130" rx="8" fill="var(--bg-soft)" stroke="var(--accent)" stroke-width="1.5"/><text x="400" y="80" text-anchor="middle" font-size="13" fill="var(--accent)">CosineAnnealing</text><text x="400" y="105" text-anchor="middle" font-size="11" fill="var(--fg-dim)">lr(t) = lr_min + (lr_max-lr_min)</text><text x="400" y="125" text-anchor="middle" font-size="11" fill="var(--fg-dim)">* (1+cos(pi*t/T)) / 2</text><text x="400" y="155" text-anchor="middle" font-size="10" fill="var(--accent-2)">平滑下降，SOTA首选</text><rect x="530" y="50" width="230" height="130" rx="8" fill="var(--bg-soft)" stroke="var(--success)" stroke-width="1.5"/><text x="645" y="80" text-anchor="middle" font-size="13" fill="var(--success)">ReduceLROnPlateau</text><text x="645" y="105" text-anchor="middle" font-size="11" fill="var(--fg-dim)">if val_loss plateaus:</text><text x="645" y="128" text-anchor="middle" font-size="11" fill="var(--fg-dim)">lr = lr * 0.5</text><text x="645" y="155" text-anchor="middle" font-size="10" fill="var(--success)">自适应调整</text><text x="400" y="220" text-anchor="middle" font-size="12" fill="var(--accent-2)">2024 Best Practice: CosineAnnealing + Warmup for most vision & NLP tasks</text><text x="400" y="245" text-anchor="middle" font-size="11" fill="var(--fg-dim)">scheduler.step() is called AFTER optimizer.step() in the training loop</text>`;
+    }
+  },
+  {
+    title: "Warmup: 训练启动的稳定器",
+    info: "lr从小线性增长到目标值 → 避免初期震荡",
+    desc: '<b>Warmup</b> 在训练的最初几千步中，将学习率从 0（或极小值）线性增长到目标 lr。这是 Transformer 和大模型训练的标配技术。<br><br><b>为什么需要 Warmup？</b> 训练初期，权重随机初始化，梯度方向不稳定。直接用大 lr 会导致参数剧烈更新，模型发散或陷入极差局部最优。Warmup 给优化器一个'预热期'——先用小步探索损失曲面，找到大致方向后再加速。<br><br><b>典型配置</b>: warmup_steps=4000, 从 lr/100 线性增长到 target_lr，之后接 CosineAnnealing 衰减。',
+    badges: [{t:"warmup=4000",c:"def"},{t:"Transformer标配",c:"tip"},{t:"防止早期发散",c:"warn"}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="20" text-anchor="middle" font-size="14" fill="var(--accent)">Learning Rate Warmup</text><text x="400" y="55" text-anchor="middle" font-size="13" fill="var(--fg-dim)">lr_schedule = LinearWarmup(warmup_steps=4000) + CosineAnnealing(T=total_steps-4000)</text><rect x="40" y="75" width="720" height="180" rx="8" fill="var(--bg-soft)" stroke="var(--grad)" stroke-width="1"/><text x="60" y="105" font-size="12" fill="var(--accent-2)">lr</text><text x="60" y="125" font-size="12" fill="var(--accent)">^</text><text x="60" y="145" font-size="12" fill="var(--accent)">|   /---------------</text><text x="60" y="165" font-size="12" fill="var(--accent)">|  /                 \</text><text x="60" y="185" font-size="12" fill="var(--accent)">| /                   \________</text><text x="60" y="205" font-size="12" fill="var(--accent)">|/_______________________________\</text><text x="60" y="230" font-size="10" fill="var(--fg-dim)">|<--warmup-->|<----cosine decay---->|</text><text x="250" y="250" font-size="10" fill="var(--fg-dim)">4000 steps     main training phase</text><text x="400" y="275" text-anchor="middle" font-size="12" fill="var(--accent-2)">Without warmup: initial gradients unstable -> training may diverge</text><text x="400" y="295" text-anchor="middle" font-size="12" fill="var(--accent-2)">With warmup: gradual lr increase -> stable convergence from step 0</text>`;
+    }
+  },
+  {
+    title: "Weight Decay vs L2 Regularization",
+    info: "AdamW: 解耦权重衰减的正确方式",
+    desc: '<b>Weight Decay</b> 在每次参数更新后额外衰减权重: w = w - lr * (grad + lambda * w)。它与 L2 正则化在 SGD 下等价，但在 Adam 下<b>不等价</b>。<br><br>Adam 的 L2 正则化（在 loss 中加 lambda*||w||^2）会被自适应学习率缩放，导致大梯度参数的正则化弱、小梯度参数的正则化强——不均匀。<br><br><b>AdamW</b> 将 weight decay 从 loss 梯度中解耦出来，直接在参数更新时应用: w = w - lr*m_hat/(sqrt(v_hat)+eps) - lr*lambda*w。这是 2024 年所有框架的默认行为。',
+    badges: [{t:"AdamW",c:"def"},{t:"decoupled",c:"tip"},{t:"!=L2 in Adam",c:"warn"}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="25" text-anchor="middle" font-size="14" fill="var(--accent)">Weight Decay: AdamW vs Adam+L2</text><rect x="30" y="50" width="350" height="120" rx="8" fill="var(--bg-soft)" stroke="var(--danger)" stroke-width="1.5"/><text x="205" y="78" text-anchor="middle" font-size="13" fill="var(--danger)">Adam + L2 Regularization</text><text x="205" y="105" text-anchor="middle" font-size="11" fill="var(--fg-dim)">loss = criterion(pred,y) + lambda*||w||^2</text><text x="205" y="128" text-anchor="middle" font-size="11" fill="var(--fg-dim)">grad = dL/dw + 2*lambda*w</text><text x="205" y="150" text-anchor="middle" font-size="11" fill="var(--danger)">Problem: scaled by adaptive lr!</text><rect x="420" y="50" width="350" height="120" rx="8" fill="var(--bg-soft)" stroke="var(--success)" stroke-width="1.5"/><text x="595" y="78" text-anchor="middle" font-size="13" fill="var(--success)">AdamW (Decoupled Weight Decay)</text><text x="595" y="105" text-anchor="middle" font-size="11" fill="var(--fg-dim)">grad = dL/dw  (no L2 in loss)</text><text x="595" y="128" text-anchor="middle" font-size="11" fill="var(--fg-dim)">w = w - lr*grad - lr*lambda*w</text><text x="595" y="150" text-anchor="middle" font-size="11" fill="var(--success)">Decoupled = uniform regularization</text><text x="400" y="210" text-anchor="middle" font-size="12" fill="var(--accent-2)">Rule of thumb: always use AdamW instead of Adam. torch.optim.AdamW is the default since PyTorch 1.10+.</text>`;
+    }
+  },
+  {
+    title: "学习率调度: StepLR vs CosineAnnealing",
+    info: "lr_scheduler: 训练中动态调整学习率",
+    desc: '<b>学习率调度器 (LR Scheduler)</b> 在每个 epoch 后调整学习率，是训练后期精细收敛的关键。<br><br><b>StepLR</b>: 每 N 个 epoch 将 lr 乘以 gamma (如 0.1)，阶梯式下降。<br><b>CosineAnnealing</b>: 按余弦曲线平滑降低 lr，从初始值降到 0，周期 T 个 epoch。<br><b>ReduceLROnPlateau</b>: 监控 val_loss，连续 patience 个 epoch 不降→lr 减半。<br><br><b>为什么需要调度？</b> 训练初期大步前进（高 lr），后期小步微调（低 lr）。固定 lr 在后期会在最优点附近振荡，无法收敛到最优。',
+    badges: [{t:"CosineAnnealing",c:"def"},{t:"StepLR",c:"tip"},{t:"ReduceLROnPlateau",c:"warn"}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="25" text-anchor="middle" font-size="14" fill="var(--accent)">Learning Rate Schedules</text><rect x="40" y="50" width="230" height="130" rx="8" fill="var(--bg-soft)" stroke="var(--grad)" stroke-width="1.5"/><text x="155" y="80" text-anchor="middle" font-size="13" fill="var(--grad)">StepLR</text><text x="155" y="105" text-anchor="middle" font-size="11" fill="var(--fg-dim)">lr = lr * gamma</text><text x="155" y="128" text-anchor="middle" font-size="11" fill="var(--fg-dim)">every step_size epochs</text><text x="155" y="155" text-anchor="middle" font-size="10" fill="var(--fg-dim)">阶梯式下降</text><rect x="285" y="50" width="230" height="130" rx="8" fill="var(--bg-soft)" stroke="var(--accent)" stroke-width="1.5"/><text x="400" y="80" text-anchor="middle" font-size="13" fill="var(--accent)">CosineAnnealing</text><text x="400" y="105" text-anchor="middle" font-size="11" fill="var(--fg-dim)">lr(t) = lr_min + (lr_max-lr_min)</text><text x="400" y="125" text-anchor="middle" font-size="11" fill="var(--fg-dim)">* (1+cos(pi*t/T)) / 2</text><text x="400" y="155" text-anchor="middle" font-size="10" fill="var(--accent-2)">平滑下降，SOTA首选</text><rect x="530" y="50" width="230" height="130" rx="8" fill="var(--bg-soft)" stroke="var(--success)" stroke-width="1.5"/><text x="645" y="80" text-anchor="middle" font-size="13" fill="var(--success)">ReduceLROnPlateau</text><text x="645" y="105" text-anchor="middle" font-size="11" fill="var(--fg-dim)">if val_loss plateaus:</text><text x="645" y="128" text-anchor="middle" font-size="11" fill="var(--fg-dim)">lr = lr * 0.5</text><text x="645" y="155" text-anchor="middle" font-size="10" fill="var(--success)">自适应调整</text><text x="400" y="220" text-anchor="middle" font-size="12" fill="var(--accent-2)">2024 Best Practice: CosineAnnealing + Warmup for most vision & NLP tasks</text><text x="400" y="245" text-anchor="middle" font-size="11" fill="var(--fg-dim)">scheduler.step() is called AFTER optimizer.step() in the training loop</text>`;
+    }
+  },
+  {
+    title: "Warmup: 训练启动的稳定器",
+    info: "lr从小线性增长到目标值 → 避免初期震荡",
+    desc: '<b>Warmup</b> 在训练的最初几千步中，将学习率从 0（或极小值）线性增长到目标 lr。这是 Transformer 和大模型训练的标配技术。<br><br><b>为什么需要 Warmup？</b> 训练初期，权重随机初始化，梯度方向不稳定。直接用大 lr 会导致参数剧烈更新，模型发散或陷入极差局部最优。Warmup 给优化器一个'预热期'——先用小步探索损失曲面，找到大致方向后再加速。<br><br><b>典型配置</b>: warmup_steps=4000, 从 lr/100 线性增长到 target_lr，之后接 CosineAnnealing 衰减。',
+    badges: [{t:"warmup=4000",c:"def"},{t:"Transformer标配",c:"tip"},{t:"防止早期发散",c:"warn"}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="20" text-anchor="middle" font-size="14" fill="var(--accent)">Learning Rate Warmup</text><text x="400" y="55" text-anchor="middle" font-size="13" fill="var(--fg-dim)">lr_schedule = LinearWarmup(warmup_steps=4000) + CosineAnnealing(T=total_steps-4000)</text><rect x="40" y="75" width="720" height="180" rx="8" fill="var(--bg-soft)" stroke="var(--grad)" stroke-width="1"/><text x="60" y="105" font-size="12" fill="var(--accent-2)">lr</text><text x="60" y="125" font-size="12" fill="var(--accent)">^</text><text x="60" y="145" font-size="12" fill="var(--accent)">|   /---------------</text><text x="60" y="165" font-size="12" fill="var(--accent)">|  /                 \</text><text x="60" y="185" font-size="12" fill="var(--accent)">| /                   \________</text><text x="60" y="205" font-size="12" fill="var(--accent)">|/_______________________________\</text><text x="60" y="230" font-size="10" fill="var(--fg-dim)">|<--warmup-->|<----cosine decay---->|</text><text x="250" y="250" font-size="10" fill="var(--fg-dim)">4000 steps     main training phase</text><text x="400" y="275" text-anchor="middle" font-size="12" fill="var(--accent-2)">Without warmup: initial gradients unstable -> training may diverge</text><text x="400" y="295" text-anchor="middle" font-size="12" fill="var(--accent-2)">With warmup: gradual lr increase -> stable convergence from step 0</text>`;
+    }
+  },
+  {
+    title: "Weight Decay vs L2 Regularization",
+    info: "AdamW: 解耦权重衰减的正确方式",
+    desc: '<b>Weight Decay</b> 在每次参数更新后额外衰减权重: w = w - lr * (grad + lambda * w)。它与 L2 正则化在 SGD 下等价，但在 Adam 下<b>不等价</b>。<br><br>Adam 的 L2 正则化（在 loss 中加 lambda*||w||^2）会被自适应学习率缩放，导致大梯度参数的正则化弱、小梯度参数的正则化强——不均匀。<br><br><b>AdamW</b> 将 weight decay 从 loss 梯度中解耦出来，直接在参数更新时应用: w = w - lr*m_hat/(sqrt(v_hat)+eps) - lr*lambda*w。这是 2024 年所有框架的默认行为。',
+    badges: [{t:"AdamW",c:"def"},{t:"decoupled",c:"tip"},{t:"!=L2 in Adam",c:"warn"}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="25" text-anchor="middle" font-size="14" fill="var(--accent)">Weight Decay: AdamW vs Adam+L2</text><rect x="30" y="50" width="350" height="120" rx="8" fill="var(--bg-soft)" stroke="var(--danger)" stroke-width="1.5"/><text x="205" y="78" text-anchor="middle" font-size="13" fill="var(--danger)">Adam + L2 Regularization</text><text x="205" y="105" text-anchor="middle" font-size="11" fill="var(--fg-dim)">loss = criterion(pred,y) + lambda*||w||^2</text><text x="205" y="128" text-anchor="middle" font-size="11" fill="var(--fg-dim)">grad = dL/dw + 2*lambda*w</text><text x="205" y="150" text-anchor="middle" font-size="11" fill="var(--danger)">Problem: scaled by adaptive lr!</text><rect x="420" y="50" width="350" height="120" rx="8" fill="var(--bg-soft)" stroke="var(--success)" stroke-width="1.5"/><text x="595" y="78" text-anchor="middle" font-size="13" fill="var(--success)">AdamW (Decoupled Weight Decay)</text><text x="595" y="105" text-anchor="middle" font-size="11" fill="var(--fg-dim)">grad = dL/dw  (no L2 in loss)</text><text x="595" y="128" text-anchor="middle" font-size="11" fill="var(--fg-dim)">w = w - lr*grad - lr*lambda*w</text><text x="595" y="150" text-anchor="middle" font-size="11" fill="var(--success)">Decoupled = uniform regularization</text><text x="400" y="210" text-anchor="middle" font-size="12" fill="var(--accent-2)">Rule of thumb: always use AdamW instead of Adam. torch.optim.AdamW is the default since PyTorch 1.10+.</text>`;
+    }
+  },
+];
+  document.getElementById('stepTitle').textContent=s.title;
+  document.getElementById('formulaDisplay').textContent=s.formula;
+  document.getElementById('stepDesc').innerHTML=s.desc;
+  let bd=document.getElementById('badges');bd.innerHTML='';
+  s.badges.forEach(b=>{let sp=document.createElement('span');sp.className='badge badge--'+b.c;sp.textContent=b.t;bd.appendChild(sp);});
+  s.render(svg);
+  document.querySelectorAll('.step-dot').forEach((d,i)=>{d.className='step-dot'+(i===step?' active':i<step?' done':'');});
+  document.getElementById('btnPrev').disabled=step===0;
+  document.getElementById('btnNext').disabled=step===steps.length-1;
+}
+function gotoStep(n){step=Math.max(0,Math.min(n,steps.length-1));renderStep();}
+function changeStep(d){gotoStep(step+d);}
+function resetStep(){stopAuto();gotoStep(0);}
+function toggleAuto(){timer?stopAuto():startAuto();}
+function startAuto(){timer=setInterval(()=>{if(step<steps.length-1)gotoStep(step+1);else stopAuto();},1800);document.getElementById('btnAuto').textContent='⏸ 暂停';}
+function stopAuto(){clearInterval(timer);timer=null;document.getElementById('btnAuto').textContent='▶ 自动';}
+document.addEventListener('keydown',e=>{if(e.key==='ArrowLeft')changeStep(-1);if(e.key==='ArrowRight')changeStep(1);if(e.key===' ')e.preventDefault(),toggleAuto();if(e.key==='r'||e.key==='R')resetStep();});
+renderStep();
+</script>
+</body>
+</html>

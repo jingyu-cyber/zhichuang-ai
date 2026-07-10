@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>08 测试矩阵 - 软件工程互动课程</title>
+<style>
+:root{--bg:#1c2128;--bg-soft:#252c35;--bg-code:#141820;--fg:#e6edf3;--fg-dim:#8b949e;--line:#30363d;--accent:#539bf5;--accent-2:#57ab5a;--grad:#c69026;--success:#57ab5a;--danger:#e5534b;--purple:#986ee2}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(83,155,245,.18);color:var(--accent)}.badge--tip{background:rgba(87,171,90,.18);color:var(--success)}.badge--warn{background:rgba(198,144,38,.18);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>测试矩阵</h1>
+<div class="breadcrumb"><a href="../index.html">软件工程</a> / 实现与测试 / <span id="step-indicator">Step 1/4</span></div>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="panel-explain">
+<div class="step-title" id="step-title"></div>
+<div class="step-desc" id="step-desc"></div>
+<div class="badge-row" id="badge-row"></div>
+<div class="info-line" id="info-line"></div>
+</div>
+<div class="panel-stage"><svg id="stage" viewBox="0 0 800 500" style="width:100%;height:100%"></svg></div>
+</div>
+<div class="demo-controls">
+<button id="btn-prev" onclick="prev()">上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btn-next" onclick="next()">下一步</button>
+<button id="btn-auto" onclick="toggleAuto()" style="min-width:80px">自动播放</button>
+</div>
+</div>
+<script>
+const svgNS="http://www.w3.org/2000/svg";
+function T(t, a) { const e = document.createElementNS(svgNS, t); for (const [k, v] of Object.entries(a || {})) e.setAttribute(k, v); return e; }
+function tx(x, y, t, c, fs, a) { const e = T("text", { x, y, fill: c || "var(--fg)", "font-size": fs || "13", "text-anchor": a || "middle", "font-family": "-apple-system,'PingFang SC','Microsoft YaHei',sans-serif" }); e.textContent = t; return e; }
+function rct(x, y, w, h, f, s, rx) { return T("rect", { x, y, width: w, height: h, fill: f || "var(--bg-soft)", stroke: s || "var(--line)", "stroke-width": "1.5", rx: rx || 4 }); }
+
+function matrixCell(svg, x, y, w, h, text, color, bg) {
+  svg.append(rct(x,y,w,h,bg||"var(--bg)",color||"var(--line)",2));
+  if (text) svg.append(tx(x+w/2,y+h/2+4,text,"var(--fg)","10"));
+}
+
+function r0(svg) {
+  // Step 1: Requirements list
+  svg.append(tx(400,22,"需求条目","var(--accent)","14"));
+  const reqs = [
+    {id:"R1",desc:"用户注册与登录",pri:"P0"},
+    {id:"R2",desc:"课程浏览与搜索",pri:"P0"},
+    {id:"R3",desc:"在线购买课程",pri:"P0"},
+    {id:"R4",desc:"视频播放",pri:"P0"},
+    {id:"R5",desc:"课程评论",pri:"P1"},
+    {id:"R6",desc:"教师上传课程",pri:"P1"},
+    {id:"R7",desc:"管理员审核",pri:"P1"},
+    {id:"R8",desc:"学习进度追踪",pri:"P2"}
+  ];
+  reqs.forEach((r,i) => {
+    const y = 48+i*36;
+    svg.append(rct(30,y,740,30,"var(--bg)","var(--line)",4));
+    svg.append(rct(36,y+4,36,22,r.id==="R1"||r.id==="R2"||r.id==="R3"||r.id==="R4"?"rgba(229,83,75,0.2)":"var(--bg-code)",r.pri==="P0"?"var(--danger)":"var(--grad)",4));
+    svg.append(tx(54,y+19,r.id,r.pri==="P0"?"var(--danger)":"var(--fg-dim)","11"));
+    svg.append(tx(140,y+19,r.desc,"var(--fg)","12","start"));
+    svg.append(tx(700,y+19,r.pri,"var(--fg-dim)","10"));
+  });
+  svg.append(tx(400,345,"8个需求，标注优先级（P0 必须覆盖）","var(--fg-dim)"));
+}
+
+function r1(svg) {
+  // Step 2: Test matrix table
+  svg.append(tx(400,18,"测试矩阵: 需求 × 测试类型","var(--accent)","14"));
+
+  const colW = 110, rowH = 36, startX = 35, startY = 40;
+  // Headers
+  const cols = ["需求","正常路径","边界条件","异常处理","安全","覆盖率"];
+  cols.forEach((c,i) => {
+    const x = i===0 ? startX : startX+130+(i-1)*colW;
+    const w = i===0 ? 130 : colW;
+    svg.append(rct(x,startY,w,28,"var(--bg)","var(--line)",4));
+    svg.append(tx(x+w/2,startY+19,c,"var(--accent)","11"));
+  });
+
+  const reqs = ["R1 注册登录","R2 课程浏览","R3 在线购买","R4 视频播放","R5 课程评论","R6 教师上传","R7 管理员审核","R8 进度追踪"];
+  const tests = [
+    ["✓","✓","✓","✓","80%"],
+    ["✓","✓","✓","-","75%"],
+    ["✓","✓","✓","✓","85%"],
+    ["✓","✓","-","-","60%"],
+    ["✓","✓","✓","-","70%"],
+    ["✓","-","✓","-","55%"],
+    ["✓","✓","✓","✓","90%"],
+    ["✓","-","-","-","40%"]
+  ];
+
+  reqs.forEach((r,ri) => {
+    const y = startY+32+ri*rowH;
+    svg.append(rct(startX,y,130,rowH,"var(--bg)","var(--line)",4));
+    svg.append(tx(startX+65,y+rowH/2+4,r,"var(--fg)","11"));
+
+    tests[ri].forEach((t,ti) => {
+      const x = startX+134+ti*colW;
+      const color = t==="✓"?"var(--success)":t==="-"?"var(--danger)":"var(--accent)";
+      svg.append(rct(x,y,colW,rowH,"var(--bg)","var(--line)",4));
+      svg.append(tx(x+colW/2,y+rowH/2+4,t,color,"13"));
+    });
+  });
+
+  // Legend
+  svg.append(tx(380,430,"✓ 已覆盖  |  - 未覆盖  |  % 代码覆盖率","var(--fg-dim)","11"));
+}
+
+function r2(svg) {
+  // Step 3: Detailed test cases for R3
+  svg.append(tx(400,20,"R3 在线购买课程 — 测试用例展开","var(--accent)","14"));
+
+  const cases = [
+    {cat:"正常路径",color:"var(--success)",tests:[
+      "已登录用户点击购买 → 进入支付页 → 支付成功 → 课程加入我的课程",
+      "购物车有多个课程 → 合并支付 → 全部成功"
+    ]},
+    {cat:"边界条件",color:"var(--grad)",tests:[
+      "课程价格 = 0 (免费课程) → 跳过支付 → 直接加入",
+      "购物车金额超过单笔限额 → 提示分次支付",
+      "同一课程重复购买 → 提示\"已购买\""
+    ]},
+    {cat:"异常处理",color:"var(--danger)",tests:[
+      "支付超时 → 订单取消 → 恢复库存",
+      "支付成功但回调失败 → 补偿机制确认购买状态",
+      "网络断开时提交订单 → 错误提示 + 重试"
+    ]}
+  ];
+
+  let yPos = 44;
+  cases.forEach(cat => {
+    svg.append(rct(20,yPos,760,26,"var(--bg)","var(--line)",4));
+    svg.append(T("rect",{x:20,y:yPos,width:6,height:26,fill:cat.color,rx:2}));
+    svg.append(tx(40,yPos+17,cat.cat,cat.color,"12","start"));
+    yPos += 32;
+    cat.tests.forEach(t => {
+      svg.append(tx(50,yPos+6,"• "+t,"var(--fg-dim)","11","start"));
+      yPos += 22;
+    });
+    yPos += 8;
+  });
+
+  svg.append(tx(400,yPos+6,"3类场景 × 8条用例 = 完整覆盖","var(--fg-dim)","11"));
+}
+
+function r3(svg) {
+  // Step 4: Coverage summary
+  svg.append(tx(400,22,"整体测试覆盖率仪表盘","var(--accent)","14"));
+
+  // Coverage bars
+  const metrics = [
+    {label:"需求覆盖率",value:7,total:8,color:"var(--success)"},
+    {label:"正常路径覆盖",value:8,total:8,color:"var(--success)"},
+    {label:"边界条件覆盖",value:5,total:8,color:"var(--grad)"},
+    {label:"异常处理覆盖",value:5,total:8,color:"var(--grad)"},
+    {label:"安全测试覆盖",value:3,total:8,color:"var(--danger)"},
+    {label:"代码覆盖率",value:68,total:100,color:"var(--accent)"}
+  ];
+
+  metrics.forEach((m,i) => {
+    const y = 56+i*44;
+    svg.append(tx(30,y+10,m.label,"var(--fg)","12","start"));
+    const pct = Math.round(m.value/m.total*100);
+    svg.append(rct(160,y,500,22,"var(--bg)","var(--line)",4));
+    svg.append(rct(160,y,500*pct/100,22,m.color,m.color,4));
+    svg.append(tx(410,y+15,m.value+"/"+m.total+" ("+pct+"%)","#fff","11"));
+  });
+
+  // Gap analysis
+  svg.append(rct(20,340,760,140,"var(--bg-soft)","var(--line)"));
+  svg.append(tx(400,364,"测试缺口分析","var(--fg)"));
+  const gaps = [
+    "安全测试覆盖不足 (3/8)：需补充SQL注入、XSS、CSRF等测试",
+    "课程评论和教师上传缺少异常处理测试",
+    "E2E测试仅覆盖核心流程，建议补充边界场景"
+  ];
+  gaps.forEach((g,i) => {
+    svg.append(tx(40,388+i*22,(i+1)+". "+g,"var(--fg-dim)","11","start"));
+  });
+
+  // Bottom bar
+  svg.append(rct(20,490,760,8,"var(--bg)","var(--line)",4));
+  svg.append(rct(20,490,570,8,"var(--accent)","var(--accent)",4));
+}
+
+const S = [
+  {t:"需求条目梳理",l:"枚举",d:"先列出所有需求条目，标注优先级。P0 需求必须100%覆盖测试，P1 覆盖正常+边界，P2 至少覆盖正常路径。",b:["Requirements","Priority"],r:r0},
+  {t:"测试矩阵构建",l:"矩阵",d:"构建需求×测试类型的矩阵：每个需求需覆盖正常路径、边界条件、异常处理、安全测试四个维度。标注覆盖状态。",b:["Matrix","Dimensions"],r:r1},
+  {t:"测试用例展开",l:"细化",d:"选取一个核心需求（如R3在线购买），展开为具体的测试用例。每个维度写出可执行的测试场景。",b:["Test Cases","Detail"],r:r2},
+  {t:"覆盖率仪表盘",l:"评估",d:"汇总每个维度的覆盖率，计算整体得分。识别测试缺口并制定补充计划。覆盖率 75%+ 为健康状态。",b:["Coverage","Gap Analysis"],r:r3}
+];
+
+let cur = 0, autoTimer = null, autoOn = false;
+
+function setStep(i) {
+  cur = Math.max(0, Math.min(S.length - 1, i));
+  const s = S[cur];
+  document.getElementById("step-title").textContent = s.t;
+  document.getElementById("step-desc").textContent = s.d;
+  document.getElementById("step-indicator").textContent = `Step ${cur+1}/${S.length}`;
+  const br = document.getElementById("badge-row"); br.innerHTML = "";
+  s.b.forEach(b => { const sp = document.createElement("span"); sp.className = "badge badge--def"; sp.textContent = b; br.append(sp); });
+  document.getElementById("info-line").textContent = s.l;
+  const svg = document.getElementById("stage"); svg.innerHTML = ""; s.r(svg);
+  document.querySelectorAll(".step-dot").forEach((d,j) => d.className = "step-dot" + (j === cur ? " active" : j < cur ? " done" : ""));
+  document.getElementById("btn-prev").disabled = cur === 0;
+  document.getElementById("btn-next").disabled = cur === S.length - 1;
+}
+
+function next() { setStep(cur + 1); }
+function prev() { setStep(cur - 1); }
+function toggleAuto() {
+  if (autoOn) { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; return; }
+  autoOn = true; document.getElementById("btn-auto").textContent = "暂停";
+  autoTimer = setInterval(() => { if (cur < S.length - 1) next(); else { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; } }, 2500); }
+
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight") next();
+  else if (e.key === "ArrowLeft") prev();
+  else if (e.key === " ") { e.preventDefault(); toggleAuto(); }
+  else if (e.key >= "1" && e.key <= String(S.length)) setStep(parseInt(e.key) - 1);
+});
+
+const dotsEl = document.getElementById("dots");
+S.forEach((s,i) => { const d = document.createElement("span"); d.className = "step-dot"; d.title = s.l; d.onclick = () => setStep(i); dotsEl.append(d); });
+setStep(0);
+</script>
+</body>
+</html>

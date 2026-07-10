@@ -1,0 +1,435 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>实体-联系建模 (ER Modeling)</title><style>:root{--bg:#1a1e1d;--bg-soft:#25302d;--bg-code:#0d1111;--fg:#e0eee8;--fg-dim:#90a898;--line:#304038;--accent:#40c0b0;--accent-2:#4898e0;--grad:#4898e0;--success:#40c870;--danger:#e05050}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(72,152,224,.18);color:var(--grad)}.badge--tip{background:rgba(64,200,112,.18);color:var(--success)}.badge--warn{background:rgba(224,80,80,.18);color:var(--danger)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}</style></head><body>
+<div class="demo-shell">
+<div class="demo-header"><div><h1>实体-联系建模 (ER Modeling)</h1><div class="breadcrumb"><a href="../index.html">数据库系统概论</a> / 第一章 · 数据建模 / 实体-联系建模</div></div><span class="badge" style="border:1px solid var(--line)">4 个步骤</span></div>
+<div class="demo-main">
+<div class="panel-explain"><div class="step-title" id="stepTitle"></div><div class="info-line" id="infoLine"></div><div class="step-desc" id="stepDesc"></div><div class="badge-row" id="badges"></div></div>
+<div class="panel-stage" id="stage"></div>
+</div>
+<div class="demo-controls">
+<button id="btnPrev" onclick="changeStep(-1)">◀ 上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btnNext" onclick="changeStep(1)">下一步 ▶</button>
+<button id="btnAuto" onclick="toggleAuto()">▶</button>
+<button onclick="resetStep()">↺ 重置</button>
+</div>
+</div>
+<script>
+function er0(sv){
+  while(sv.firstChild)sv.firstChild.remove();
+  // Background grid
+  for(let i=0;i<800;i+=40){let l=document.createElementNS('http://www.w3.org/2000/svg','line');l.setAttribute('x1',i);l.setAttribute('y1',0);l.setAttribute('x2',i);l.setAttribute('y2',340);l.setAttribute('stroke','#1a2824');l.setAttribute('stroke-width','0.5');sv.appendChild(l);}
+  for(let j=0;j<340;j+=40){let l=document.createElementNS('http://www.w3.org/2000/svg','line');l.setAttribute('x1',0);l.setAttribute('y1',j);l.setAttribute('x2',800);l.setAttribute('y2',j);l.setAttribute('stroke','#1a2824');l.setAttribute('stroke-width','0.5');sv.appendChild(l);}
+  // Scenario text box
+  let r=document.createElementNS('http://www.w3.org/2000/svg','rect');
+  r.setAttribute('x',20);r.setAttribute('y',10);r.setAttribute('width',760);r.setAttribute('height',100);
+  r.setAttribute('rx',10);r.setAttribute('fill','#1a2824');r.setAttribute('stroke','var(--line)');r.setAttribute('stroke-width',1.5);
+  sv.appendChild(r);
+  // Title
+  let t1=document.createElementNS('http://www.w3.org/2000/svg','text');
+  t1.setAttribute('x',40);t1.setAttribute('y',38);t1.setAttribute('fill','#e0eee8');t1.setAttribute('font-size',15);t1.setAttribute('font-weight','bold');
+  t1.textContent='场景描述：学生选课管理系统';
+  sv.appendChild(t1);
+  // Scenario text
+  let lines=['某大学有多个<学院>，每个<学院>有多名<教师>和<学生>。',
+             '<教师>教授<课程>，<学生>选修<课程>。',
+             '每位<教师>可教多门课，每门课有多位<教师>教授。',
+             '每个<学生>可选多门课，每门课可被多名<学生>选修。'];
+  lines.forEach((line,i)=>{
+    let parts=line.split(/(<[^>]+>)/g);
+    let x=40;
+    parts.forEach(part=>{
+      let isEntity=part.startsWith('<')&&part.endsWith('>');
+      let txt=document.createElementNS('http://www.w3.org/2000/svg','text');
+      txt.setAttribute('x',x);txt.setAttribute('y',62+i*18);
+      txt.setAttribute('font-size',13);
+      if(isEntity){
+        let word=part.slice(1,-1);
+        txt.setAttribute('fill','#40c0b0');
+        txt.setAttribute('font-weight','bold');
+        txt.textContent=word;
+        // Underline entity words
+        let ul=document.createElementNS('http://www.w3.org/2000/svg','line');
+        ul.setAttribute('x1',x);ul.setAttribute('y1',67+i*18);
+        ul.setAttribute('x2',x+word.length*13);ul.setAttribute('y2',67+i*18);
+        ul.setAttribute('stroke','#40c0b0');ul.setAttribute('stroke-width',1.5);
+        ul.setAttribute('stroke-dasharray','3,3');
+        sv.appendChild(ul);
+      }else{
+        txt.setAttribute('fill','#90a898');
+        txt.textContent=part;
+      }
+      sv.appendChild(txt);
+      x+=txt.getComputedTextLength?txt.getComputedTextLength():part.length*13;
+    });
+  });
+  // Legend
+  let lgx=40,lgy=125;
+  let lr=document.createElementNS('http://www.w3.org/2000/svg','rect');
+  lr.setAttribute('x',lgx-10);lr.setAttribute('y',lgy-5);lr.setAttribute('width',700);lr.setAttribute('height',40);
+  lr.setAttribute('rx',8);lr.setAttribute('fill','#0d1111');lr.setAttribute('stroke','var(--line)');lr.setAttribute('stroke-width',1);
+  sv.appendChild(lr);
+  let lt=document.createElementNS('http://www.w3.org/2000/svg','text');
+  lt.setAttribute('x',lgx);lt.setAttribute('y',lgy+14);lt.setAttribute('fill','#90a898');lt.setAttribute('font-size',13);
+  lt.textContent='图例：';
+  sv.appendChild(lt);
+  // Entity legend box
+  let eb=document.createElementNS('http://www.w3.org/2000/svg','rect');
+  eb.setAttribute('x',lgx+50);eb.setAttribute('y',lgy+2);eb.setAttribute('width',50);eb.setAttribute('height',22);
+  eb.setAttribute('rx',4);eb.setAttribute('fill','none');eb.setAttribute('stroke','#40c0b0');eb.setAttribute('stroke-width',2);
+  sv.appendChild(eb);
+  let elb=document.createElementNS('http://www.w3.org/2000/svg','text');
+  elb.setAttribute('x',lgx+110);elb.setAttribute('y',lgy+19);elb.setAttribute('fill','#40c0b0');elb.setAttribute('font-size',12);
+  elb.textContent='实体 (Entity)';
+  sv.appendChild(elb);
+  // Relationship legend box
+  let rb=document.createElementNS('http://www.w3.org/2000/svg','polygon');
+  rb.setAttribute('points','240,113 260,124 240,135 220,124');
+  rb.setAttribute('fill','none');rb.setAttribute('stroke','#4898e0');rb.setAttribute('stroke-width',2);
+  sv.appendChild(rb);
+  let rlb=document.createElementNS('http://www.w3.org/2000/svg','text');
+  rlb.setAttribute('x',270);rlb.setAttribute('y',lgy+19);rlb.setAttribute('fill','#4898e0');rlb.setAttribute('font-size',12);
+  rlb.textContent='联系 (Relationship)';
+  sv.appendChild(rlb);
+  // Attribute legend
+  let ab=document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+  ab.setAttribute('cx',455);ab.setAttribute('cy',124);ab.setAttribute('rx',22);ab.setAttribute('ry',12);
+  ab.setAttribute('fill','none');ab.setAttribute('stroke','#e0eee8');ab.setAttribute('stroke-width',1.5);
+  sv.appendChild(ab);
+  let alb=document.createElementNS('http://www.w3.org/2000/svg','text');
+  alb.setAttribute('x',485);alb.setAttribute('y',lgy+19);alb.setAttribute('fill','#e0eee8');alb.setAttribute('font-size',12);
+  alb.textContent='属性 (Attribute)';
+  sv.appendChild(alb);
+  // Step hint arrow area
+  let hint=document.createElementNS('http://www.w3.org/2000/svg','text');
+  hint.setAttribute('x',400);hint.setAttribute('y',310);hint.setAttribute('fill','#4898e0');hint.setAttribute('font-size',14);
+  hint.setAttribute('text-anchor','middle');
+  hint.textContent='从业务描述中识别实体、属性和联系 —— 这是 ER 建模的第一步';
+  sv.appendChild(hint);
+  // Subtle arrow
+  let arr=document.createElementNS('http://www.w3.org/2000/svg','text');
+  arr.setAttribute('x',400);arr.setAttribute('y',330);arr.setAttribute('fill','#40c0b0');arr.setAttribute('font-size',20);
+  arr.setAttribute('text-anchor','middle');
+  arr.textContent='↓↓↓ 点击"下一步"查看 ER 图绘制 ↓↓↓';
+  sv.appendChild(arr);
+}
+
+function er1(sv){
+  while(sv.firstChild)sv.firstChild.remove();
+  // Grid
+  for(let i=0;i<800;i+=40){let l=document.createElementNS('http://www.w3.org/2000/svg','line');l.setAttribute('x1',i);l.setAttribute('y1',0);l.setAttribute('x2',i);l.setAttribute('y2',340);l.setAttribute('stroke','#1a2824');l.setAttribute('stroke-width',0.5);sv.appendChild(l);}
+  for(let j=0;j<340;j+=40){let l=document.createElementNS('http://www.w3.org/2000/svg','line');l.setAttribute('x1',0);l.setAttribute('y1',j);l.setAttribute('x2',800);l.setAttribute('y2',j);l.setAttribute('stroke','#1a2824');l.setAttribute('stroke-width',0.5);sv.appendChild(l);}
+  function entity(cx,cy,w,h,label,attrs){
+    let r=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    r.setAttribute('x',cx-w/2);r.setAttribute('y',cy-h/2);r.setAttribute('width',w);r.setAttribute('height',h);
+    r.setAttribute('rx',8);r.setAttribute('fill','rgba(64,192,176,0.12)');r.setAttribute('stroke','#40c0b0');r.setAttribute('stroke-width',2.5);
+    sv.appendChild(r);
+    // Title bar
+    let tb=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    tb.setAttribute('x',cx-w/2);tb.setAttribute('y',cy-h/2);tb.setAttribute('width',w);tb.setAttribute('height',26);
+    tb.setAttribute('rx',8);tb.setAttribute('fill','rgba(64,192,176,0.25)');
+    sv.appendChild(tb);
+    let bl=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    bl.setAttribute('x',cx-w/2);bl.setAttribute('y',cy-h/2+26);bl.setAttribute('width',w);bl.setAttribute('height',h-26);
+    bl.setAttribute('fill','rgba(64,192,176,0.12)');
+    sv.appendChild(bl);
+    let t=document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x',cx);t.setAttribute('y',cy-h/2+18);t.setAttribute('fill','#40c0b0');t.setAttribute('font-size',13);
+    t.setAttribute('font-weight','bold');t.setAttribute('text-anchor','middle');
+    t.textContent=label;sv.appendChild(t);
+    if(attrs){
+      attrs.forEach((a,i)=>{
+        let at=document.createElementNS('http://www.w3.org/2000/svg','text');
+        at.setAttribute('x',cx);at.setAttribute('y',cy-h/2+44+i*18);at.setAttribute('fill','#e0eee8');
+        at.setAttribute('font-size',11);at.setAttribute('text-anchor','middle');
+        at.textContent='• '+a;sv.appendChild(at);
+      });
+    }
+  }
+  function diamond(cx,cy,sz,label){
+    let p=document.createElementNS('http://www.w3.org/2000/svg','polygon');
+    p.setAttribute('points',(cx)+','+(cy-sz)+' '+(cx+sz*0.7)+','+cy+' '+cx+','+(cy+sz)+' '+(cx-sz*0.7)+','+cy);
+    p.setAttribute('fill','rgba(72,152,224,0.12)');p.setAttribute('stroke','#4898e0');p.setAttribute('stroke-width',2);
+    sv.appendChild(p);
+    let t=document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x',cx);t.setAttribute('y',cy+5);t.setAttribute('fill','#4898e0');
+    t.setAttribute('font-size',12);t.setAttribute('font-weight','bold');t.setAttribute('text-anchor','middle');
+    t.textContent=label;sv.appendChild(t);
+  }
+  function line(x1,y1,x2,y2){
+    let l=document.createElementNS('http://www.w3.org/2000/svg','line');
+    l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2);
+    l.setAttribute('stroke','#90a898');l.setAttribute('stroke-width',1.5);
+    sv.appendChild(l);
+  }
+  // Entities
+  entity(130,120,100,105,'学生',['学号','姓名','年龄']);
+  entity(400,70,100,105,'教师',['工号','姓名','职称']);
+  entity(670,120,100,85,'课程',['课号','课名','学分']);
+  entity(400,220,100,85,'学院',['院号','院名']);
+  // Relationships
+  diamond(265,120,28,'属于');
+  diamond(400,147,28,'教授');
+  diamond(535,120,28,'选修');
+  diamond(400,180,28,'属于');
+  // Lines
+  line(180,120,237,120);
+  line(310,70,372,70);
+  line(310,170,372,170);
+  line(428,147,468,120);
+  line(510,120,550,120);
+  line(563,120,620,120);
+  line(350,120,372,120);
+  line(428,180,468,220);
+  // Title
+  let tl=document.createElementNS('http://www.w3.org/2000/svg','text');
+  tl.setAttribute('x',400);tl.setAttribute('y',305);tl.setAttribute('fill','#4898e0');
+  tl.setAttribute('font-size',13);tl.setAttribute('text-anchor','middle');
+  tl.textContent='矩形 = 实体 | 菱形 = 联系 | 连线表示关联';
+  sv.appendChild(tl);
+  // Step number
+  let sn=document.createElementNS('http://www.w3.org/2000/svg','text');
+  sn.setAttribute('x',400);sn.setAttribute('y',328);sn.setAttribute('fill','#40c0b0');
+  sn.setAttribute('font-size',18);sn.setAttribute('text-anchor','middle');
+  sn.textContent='↓↓↓ 还需标注基数约束 (Cardinality) ↓↓↓';
+  sv.appendChild(sn);
+}
+
+function er2(sv){
+  while(sv.firstChild)sv.firstChild.remove();
+  for(let i=0;i<800;i+=40){let l=document.createElementNS('http://www.w3.org/2000/svg','line');l.setAttribute('x1',i);l.setAttribute('y1',0);l.setAttribute('x2',i);l.setAttribute('y2',340);l.setAttribute('stroke','#1a2824');l.setAttribute('stroke-width',0.5);sv.appendChild(l);}
+  for(let j=0;j<340;j+=40){let l=document.createElementNS('http://www.w3.org/2000/svg','line');l.setAttribute('x1',0);l.setAttribute('y1',j);l.setAttribute('x2',800);l.setAttribute('y2',j);l.setAttribute('stroke','#1a2824');l.setAttribute('stroke-width',0.5);sv.appendChild(l);}
+  function entity(cx,cy,w,h,label,attrs){
+    let r=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    r.setAttribute('x',cx-w/2);r.setAttribute('y',cy-h/2);r.setAttribute('width',w);r.setAttribute('height',h);
+    r.setAttribute('rx',8);r.setAttribute('fill','rgba(64,192,176,0.12)');r.setAttribute('stroke','#40c0b0');r.setAttribute('stroke-width',2.5);
+    sv.appendChild(r);
+    let tb=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    tb.setAttribute('x',cx-w/2);tb.setAttribute('y',cy-h/2);tb.setAttribute('width',w);tb.setAttribute('height',26);
+    tb.setAttribute('rx',8);tb.setAttribute('fill','rgba(64,192,176,0.25)');
+    sv.appendChild(tb);
+    let bl=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    bl.setAttribute('x',cx-w/2);bl.setAttribute('y',cy-h/2+26);bl.setAttribute('width',w);bl.setAttribute('height',h-26);
+    bl.setAttribute('fill','rgba(64,192,176,0.12)');
+    sv.appendChild(bl);
+    let t=document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x',cx);t.setAttribute('y',cy-h/2+18);t.setAttribute('fill','#40c0b0');
+    t.setAttribute('font-size',13);t.setAttribute('font-weight','bold');t.setAttribute('text-anchor','middle');
+    t.textContent=label;sv.appendChild(t);
+    if(attrs){
+      attrs.forEach((a,i)=>{
+        let at=document.createElementNS('http://www.w3.org/2000/svg','text');
+        at.setAttribute('x',cx);at.setAttribute('y',cy-h/2+44+i*18);at.setAttribute('fill','#e0eee8');
+        at.setAttribute('font-size',11);at.setAttribute('text-anchor','middle');
+        at.textContent='• '+a;sv.appendChild(at);
+      });
+    }
+  }
+  function diamond(cx,cy,sz,label){
+    let p=document.createElementNS('http://www.w3.org/2000/svg','polygon');
+    p.setAttribute('points',(cx)+','+(cy-sz)+' '+(cx+sz*0.65)+','+cy+' '+cx+','+(cy+sz)+' '+(cx-sz*0.65)+','+cy);
+    p.setAttribute('fill','rgba(72,152,224,0.15)');p.setAttribute('stroke','#4898e0');p.setAttribute('stroke-width',2);
+    sv.appendChild(p);
+    let t=document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x',cx);t.setAttribute('y',cy+5);t.setAttribute('fill','#4898e0');
+    t.setAttribute('font-size',12);t.setAttribute('font-weight','bold');t.setAttribute('text-anchor','middle');
+    t.textContent=label;sv.appendChild(t);
+  }
+  function line(x1,y1,x2,y2,label,color,offsetY){
+    let l=document.createElementNS('http://www.w3.org/2000/svg','line');
+    l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2);
+    l.setAttribute('stroke','#90a898');l.setAttribute('stroke-width',1.5);
+    sv.appendChild(l);
+    if(label){
+      let midX=(x1+x2)/2,midY=(y1+y2)/2+(offsetY||-10);
+      let lt=document.createElementNS('http://www.w3.org/2000/svg','text');
+      lt.setAttribute('x',midX);lt.setAttribute('y',midY);lt.setAttribute('fill',color||'#e0eee8');
+      lt.setAttribute('font-size',11);lt.setAttribute('font-weight','bold');lt.setAttribute('text-anchor','middle');
+      lt.textContent=label;sv.appendChild(lt);
+    }
+  }
+  entity(140,100,100,105,'学生',['学号','姓名','年龄']);
+  entity(400,60,100,105,'教师',['工号','姓名','职称']);
+  entity(660,100,100,85,'课程',['课号','课名','学分']);
+  entity(400,210,100,85,'学院',['院号','院名']);
+  diamond(270,100,26,'属于');
+  diamond(400,130,26,'教授');
+  diamond(530,100,26,'选修');
+  diamond(400,170,24,'属于');
+  // Lines with cardinality labels
+  line(190,100,244,100,'N','#e0eee8',-10);
+  line(296,100,350,100,'1','#e0eee8',-10);
+  line(360,60,374,60,'1','#e0eee8',-10);
+  line(374,104,400,104);
+  line(426,130,460,100,'N','#e0eee8',-15);
+  line(504,100,538,100);
+  line(556,100,610,100,'M','#e0eee8',-10);
+  line(556,120,610,140,'N','#e0eee8',15);
+  line(374,170,400,170);
+  line(426,210,460,210,'N','#e0eee8',-10);
+  line(350,210,374,210,'1','#e0eee8',-10);
+  // N arrow for 教师->教授
+  line(420,76,450,76,'M','#e0eee8',15);
+  // ML line for 选修
+  // Cardinality explanation box
+  let eb=document.createElementNS('http://www.w3.org/2000/svg','rect');
+  eb.setAttribute('x',440);eb.setAttribute('y',255);eb.setAttribute('width',330);eb.setAttribute('height',75);
+  eb.setAttribute('rx',10);eb.setAttribute('fill','rgba(72,152,224,0.08)');eb.setAttribute('stroke','#4898e0');eb.setAttribute('stroke-width',1);
+  sv.appendChild(eb);
+  let etxts=[
+    '基数约束说明：',
+    '1:1 = 一对一   1:N = 一对多',
+    'M:N = 多对多 （最常见的关系类型）'
+  ];
+  etxts.forEach((t,i)=>{
+    let tt=document.createElementNS('http://www.w3.org/2000/svg','text');
+    tt.setAttribute('x',455);tt.setAttribute('y',278+i*18);tt.setAttribute('fill',i===0?'#4898e0':'#90a898');
+    tt.setAttribute('font-size',11);tt.setAttribute('font-weight',i===0?'bold':'normal');
+    tt.textContent=t;sv.appendChild(tt);
+  });
+}
+
+function er3(sv){
+  while(sv.firstChild)sv.firstChild.remove();
+  for(let i=0;i<800;i+=40){let l=document.createElementNS('http://www.w3.org/2000/svg','line');l.setAttribute('x1',i);l.setAttribute('y1',0);l.setAttribute('x2',i);l.setAttribute('y2',340);l.setAttribute('stroke','#1a2824');l.setAttribute('stroke-width',0.5);sv.appendChild(l);}
+  for(let j=0;j<340;j+=40){let l=document.createElementNS('http://www.w3.org/2000/svg','line');l.setAttribute('x1',0);l.setAttribute('y1',j);l.setAttribute('x2',800);l.setAttribute('y2',j);l.setAttribute('stroke','#1a2824');l.setAttribute('stroke-width',0.5);sv.appendChild(l);}
+  // Left: weak entity 成绩 with double-border rect
+  let weR=document.createElementNS('http://www.w3.org/2000/svg','rect');
+  weR.setAttribute('x',65);weR.setAttribute('y',60);weR.setAttribute('width',130);weR.setAttribute('height',85);
+  weR.setAttribute('rx',8);weR.setAttribute('fill','rgba(224,80,80,0.08)');weR.setAttribute('stroke','#e05050');weR.setAttribute('stroke-width',2.5);
+  sv.appendChild(weR);
+  let weR2=document.createElementNS('http://www.w3.org/2000/svg','rect');
+  weR2.setAttribute('x',59);weR2.setAttribute('y',54);weR2.setAttribute('width',142);weR2.setAttribute('height',97);
+  weR2.setAttribute('rx',10);weR2.setAttribute('fill','none');weR2.setAttribute('stroke','#e05050');weR2.setAttribute('stroke-width',1.5);
+  sv.appendChild(weR2);
+  let weT=document.createElementNS('http://www.w3.org/2000/svg','text');
+  weT.setAttribute('x',130);weT.setAttribute('y',86);weT.setAttribute('fill','#e05050');weT.setAttribute('font-size',14);
+  weT.setAttribute('font-weight','bold');weT.setAttribute('text-anchor','middle');
+  weT.textContent='成绩 (弱实体)';sv.appendChild(weT);
+  ['分数','排名'].forEach((a,i)=>{
+    let at=document.createElementNS('http://www.w3.org/2000/svg','text');
+    at.setAttribute('x',130);at.setAttribute('y',110+i*20);at.setAttribute('fill','#e0eee8');at.setAttribute('font-size',11);
+    at.setAttribute('text-anchor','middle');at.textContent='• '+a;sv.appendChild(at);
+  });
+  // Label above weak entity
+  let lbl=document.createElementNS('http://www.w3.org/2000/svg','text');
+  lbl.setAttribute('x',130);lbl.setAttribute('y',46);lbl.setAttribute('fill','#e05050');lbl.setAttribute('font-size',11);
+  lbl.setAttribute('text-anchor','middle');lbl.textContent='双线边框 = 弱实体';
+  sv.appendChild(lbl);
+  // Arrow pointing to student
+  let arr=document.createElementNS('http://www.w3.org/2000/svg','line');
+  arr.setAttribute('x1',195);arr.setAttribute('y1',100);arr.setAttribute('x2',235);arr.setAttribute('y2',100);
+  arr.setAttribute('stroke','#e05050');arr.setAttribute('stroke-width',1.5);arr.setAttribute('marker-end','url(#arrowRed)');
+  sv.appendChild(arr);
+  let arrL=document.createElementNS('http://www.w3.org/2000/svg','text');
+  arrL.setAttribute('x',215);arrL.setAttribute('y',92);arrL.setAttribute('fill','#e05050');arrL.setAttribute('font-size',10);
+  arrL.setAttribute('text-anchor','middle');arrL.textContent='依赖';
+  sv.appendChild(arrL);
+  // Right: student with composite attributes
+  let sE=document.createElementNS('http://www.w3.org/2000/svg','rect');
+  sE.setAttribute('x',260);sE.setAttribute('y',60);sE.setAttribute('width',140);sE.setAttribute('height',160);
+  sE.setAttribute('rx',8);sE.setAttribute('fill','rgba(64,192,176,0.12)');sE.setAttribute('stroke','#40c0b0');sE.setAttribute('stroke-width',2.5);
+  sv.appendChild(sE);
+  let sT=document.createElementNS('http://www.w3.org/2000/svg','text');
+  sT.setAttribute('x',330);sT.setAttribute('y',86);sT.setAttribute('fill','#40c0b0');sT.setAttribute('font-size',14);
+  sT.setAttribute('font-weight','bold');sT.setAttribute('text-anchor','middle');
+  sT.textContent='学生';sv.appendChild(sT);
+  // Composite attribute: 姓名
+  let cA=document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+  cA.setAttribute('cx',450);cA.setAttribute('cy',85);cA.setAttribute('rx',28);cA.setAttribute('ry',14);
+  cA.setAttribute('fill','rgba(72,152,224,0.12)');cA.setAttribute('stroke','#4898e0');cA.setAttribute('stroke-width',2);
+  sv.appendChild(cA);
+  let cAt=document.createElementNS('http://www.w3.org/2000/svg','text');
+  cAt.setAttribute('x',450);cAt.setAttribute('y',89);cAt.setAttribute('fill','#4898e0');cAt.setAttribute('font-size',11);
+  cAt.setAttribute('text-anchor','middle');cAt.textContent='姓名';sv.appendChild(cAt);
+  // Sub-attributes
+  let sA1=document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+  sA1.setAttribute('cx',510);sA1.setAttribute('cy',60);sA1.setAttribute('rx',24);sA1.setAttribute('ry',12);
+  sA1.setAttribute('fill','rgba(72,152,224,0.08)');sA1.setAttribute('stroke','#4898e0');sA1.setAttribute('stroke-width',1);sA1.setAttribute('stroke-dasharray','3,2');
+  sv.appendChild(sA1);
+  let sA1t=document.createElementNS('http://www.w3.org/2000/svg','text');
+  sA1t.setAttribute('x',510);sA1t.setAttribute('y',64);sA1t.setAttribute('fill','#90a898');sA1t.setAttribute('font-size',10);
+  sA1t.setAttribute('text-anchor','middle');sA1t.textContent='姓';sv.appendChild(sA1t);
+  let sA2=document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+  sA2.setAttribute('cx',510);sA2.setAttribute('cy',110);sA2.setAttribute('rx',24);sA2.setAttribute('ry',12);
+  sA2.setAttribute('fill','rgba(72,152,224,0.08)');sA2.setAttribute('stroke','#4898e0');sA2.setAttribute('stroke-width',1);sA2.setAttribute('stroke-dasharray','3,2');
+  sv.appendChild(sA2);
+  let sA2t=document.createElementNS('http://www.w3.org/2000/svg','text');
+  sA2t.setAttribute('x',510);sA2t.setAttribute('y',114);sA2t.setAttribute('fill','#90a898');sA2t.setAttribute('font-size',10);
+  sA2t.setAttribute('text-anchor','middle');sA2t.textContent='名';sv.appendChild(sA2t);
+  // Lines from composite to sub
+  let cl1=document.createElementNS('http://www.w3.org/2000/svg','line');
+  cl1.setAttribute('x1',462);cl1.setAttribute('y1',76);cl1.setAttribute('x2',492);cl1.setAttribute('y2',66);
+  cl1.setAttribute('stroke','#4898e0');cl1.setAttribute('stroke-width',1);
+  sv.appendChild(cl1);
+  let cl2=document.createElementNS('http://www.w3.org/2000/svg','line');
+  cl2.setAttribute('x1',462);cl2.setAttribute('y1',94);cl2.setAttribute('x2',492);cl2.setAttribute('y2',105);
+  cl2.setAttribute('stroke','#4898e0');cl2.setAttribute('stroke-width',1);
+  sv.appendChild(cl2);
+  // Line from student to composite name
+  let sln=document.createElementNS('http://www.w3.org/2000/svg','line');
+  sln.setAttribute('x1',375);sln.setAttribute('y1',85);sln.setAttribute('x2',425);sln.setAttribute('y2',85);
+  sln.setAttribute('stroke','#90a898');sln.setAttribute('stroke-width',1.5);
+  sv.appendChild(sln);
+  // Simple attributes
+  ['学号','年龄','性别'].forEach((a,i)=>{
+    let el=document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+    el.setAttribute('cx',450);el.setAttribute('cy',145+i*28);el.setAttribute('rx',22);el.setAttribute('ry',11);
+    el.setAttribute('fill','rgba(64,200,112,0.08)');el.setAttribute('stroke','#40c870');el.setAttribute('stroke-width',1.5);
+    sv.appendChild(el);
+    let elt=document.createElementNS('http://www.w3.org/2000/svg','text');
+    elt.setAttribute('x',450);elt.setAttribute('y',149+i*28);elt.setAttribute('fill','#e0eee8');elt.setAttribute('font-size',10);
+    elt.setAttribute('text-anchor','middle');elt.textContent=a;sv.appendChild(elt);
+    let elln=document.createElementNS('http://www.w3.org/2000/svg','line');
+    elln.setAttribute('x1',375);elln.setAttribute('y1',145+i*28);elln.setAttribute('x2',428);elln.setAttribute('y2',145+i*28);
+    elln.setAttribute('stroke','#90a898');elln.setAttribute('stroke-width',1);
+    sv.appendChild(elln);
+  });
+  // Right panel: explanation
+  let exp=document.createElementNS('http://www.w3.org/2000/svg','rect');
+  exp.setAttribute('x',550);exp.setAttribute('y',55);exp.setAttribute('width',230);exp.setAttribute('height',155);
+  exp.setAttribute('rx',10);exp.setAttribute('fill','rgba(224,80,80,0.06)');exp.setAttribute('stroke','#e05050');exp.setAttribute('stroke-width',1);
+  sv.appendChild(exp);
+  let headings=[
+    {y:78,t:'弱实体 (Weak Entity)',c:'#e05050',b:true},
+    {y:98,t:'不能独立存在，必须依赖',c:'#90a898',b:false},
+    {y:115,t:'另一个实体（父实体）的',c:'#90a898',b:false},
+    {y:132,t:'主键来唯一标识。',c:'#90a898',b:false},
+    {y:155,t:'组合属性',c:'#4898e0',b:true},
+    {y:175,t:'由多个子属性构成的属性',c:'#90a898',b:false},
+    {y:192,t:'如：姓名 = 姓 + 名',c:'#90a898',b:false}
+  ];
+  headings.forEach(h=>{
+    let ht=document.createElementNS('http://www.w3.org/2000/svg','text');
+    ht.setAttribute('x',565);ht.setAttribute('y',h.y);ht.setAttribute('fill',h.c);ht.setAttribute('font-size',11);
+    ht.setAttribute('font-weight',h.b?'bold':'normal');ht.textContent=h.t;sv.appendChild(ht);
+  });
+  // Bottom note
+  let nt=document.createElementNS('http://www.w3.org/2000/svg','text');
+  nt.setAttribute('x',400);nt.setAttribute('y',280);nt.setAttribute('fill','#40c0b0');nt.setAttribute('font-size',13);
+  nt.setAttribute('text-anchor','middle');
+  nt.textContent='弱实体用双线矩形表示 | 组合属性用椭圆并连接子属性';
+  sv.appendChild(nt);
+  let nt2=document.createElementNS('http://www.w3.org/2000/svg','text');
+  nt2.setAttribute('x',400);nt2.setAttribute('y',305);nt2.setAttribute('fill','#90a898');nt2.setAttribute('font-size',12);
+  nt2.setAttribute('text-anchor','middle');
+  nt2.textContent='ER 建模的核心：正确识别实体、属性、联系及其基数约束';
+  sv.appendChild(nt2);
+}
+
+const S=[
+  {t:'场景分析 - 识别实体',l:'从自然语言描述中提取实体和联系',d:'<p>在数据库设计中，我们首先从<span style="color:var(--accent);font-weight:700">业务需求描述</span>中识别关键概念。</p><p>步骤：</p><p><span style="color:var(--accent)">1.</span> 找出名词 → <span style="color:var(--accent)">实体</span></p><p><span style="color:var(--accent-2)">2.</span> 找出动词 → <span style="color:var(--accent-2)">联系</span></p><p><span style="color:var(--fg)">3.</span> 修饰词 → <span style="color:var(--fg)">属性</span></p><p style="margin-top:8px;color:var(--fg-dim);font-size:12px">提示：右侧图中用下划线标示了已识别的实体</p>',b:[{t:'概念',c:'def'},{t:'分析',c:'tip'}],r:er0},
+  {t:'绘制 ER 图 - 实体与联系',l:'实体(矩形) — 联系(菱形) — 属性(椭圆)',d:'<p>将上一步识别的元素用<span style="color:var(--accent)">标准 ER 符号</span>绘制：</p><p><span style="display:inline-block;width:12px;height:12px;background:var(--accent);border-radius:2px;margin-right:6px"></span> <span style="color:var(--accent)">矩形</span> = 实体（学生、教师、课程、学院）</p><p><span style="display:inline-block;width:12px;height:12px;background:var(--accent-2);margin-right:6px;transform:rotate(45deg)"></span> <span style="color:var(--accent-2)">菱形</span> = 联系（属于、教授、选修）</p><p style="color:var(--fg-dim);font-size:12px">椭圆虚线 = 属性（置于实体旁）</p>',b:[{t:'ER图',c:'def'},{t:'可视化',c:'tip'}],r:er1},
+  {t:'标注基数约束',l:'1:1, 1:N, M:N — 定义实体间的数量关系',d:'<p>基数约束定义了<span style="color:var(--accent)">实体间参与联系的数量关系</span>：</p><p><span style="color:var(--accent)">学生 属于 学院</span> = <b>N:1</b>（多对一）</p><p><span style="color:var(--accent)">教师 教授 课程</span> = <b>M:N</b>（多对多）</p><p><span style="color:var(--accent)">学生 选修 课程</span> = <b>M:N</b>（多对多）</p><p style="color:var(--fg-dim);font-size:12px">M:N 关系在转换时需要额外的中间表</p>',b:[{t:'基数约束',c:'def'},{t:'M:N',c:'warn'},{t:'1:N',c:'tip'}],r:er2},
+  {t:'弱实体与组合属性',l:'弱实体依赖父实体 | 组合属性分解',d:'<p><span style="color:var(--danger)">弱实体：</span>不能独立存在，必须依赖父实体的主键。如<em>成绩</em>依赖<em>学生</em>。</p><p><span style="color:var(--accent-2)">组合属性：</span>由多个子属性构成。如<em>姓名</em> = <em>姓</em> + <em>名</em>。</p><p style="margin-top:8px;color:var(--fg-dim);font-size:12px">双线矩形 = 弱实体 | 双线菱形 = 标识联系</p>',b:[{t:'弱实体',c:'warn'},{t:'组合属性',c:'def'},{t:'高级概念',c:'tip'}],r:er3}
+];
+let step=0,timer=null;
+const dotsEl=document.getElementById('dots'),svEl=document.getElementById('stage');
+svEl.innerHTML='<svg viewBox="0 0 800 340" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%"></svg>';
+const sv=svEl.querySelector('svg');
+for(let i=0;i<S.length;i++){let d=document.createElement('div');d.className='step-dot';d.onclick=()=>go(i);dotsEl.appendChild(d);}
+function render(){const s=S[step];document.getElementById('stepTitle').textContent=s.t;document.getElementById('infoLine').textContent=s.l;document.getElementById('stepDesc').innerHTML=s.d;let bd=document.getElementById('badges');bd.innerHTML='';s.b.forEach(b=>{let sp=document.createElement('span');sp.className='badge badge--'+b.c;sp.textContent=b.t;bd.appendChild(sp);});s.r(sv);document.querySelectorAll('.step-dot').forEach((d,i)=>{d.className='step-dot'+(i===step?' active':i<step?' done':'');});document.getElementById('btnPrev').disabled=step===0;document.getElementById('btnNext').disabled=step===S.length-1;}
+function go(n){step=Math.max(0,Math.min(n,S.length-1));render();}function changeStep(d){go(step+d);}function resetStep(){stop();go(0);}function toggleAuto(){timer?stop():start();}
+function start(){timer=setInterval(()=>{if(step<S.length-1)go(step+1);else stop();},1600);document.getElementById('btnAuto').textContent='⏸';}
+function stop(){clearInterval(timer);timer=null;document.getElementById('btnAuto').textContent='▶';}
+document.addEventListener('keydown',e=>{if(e.key==='ArrowLeft')changeStep(-1);if(e.key==='ArrowRight')changeStep(1);if(e.key===' ')e.preventDefault(),toggleAuto();if(e.key==='r'||e.key==='R')resetStep();});render();
+</script></body></html>

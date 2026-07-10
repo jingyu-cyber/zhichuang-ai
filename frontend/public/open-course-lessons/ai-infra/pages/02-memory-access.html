@@ -1,0 +1,100 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>内存访问模式 - AI基础设施</title>
+<style>
+:root{--bg:#0a0c14;--bg-soft:#141824;--bg-code:#080a10;--fg:#e0e8f0;--fg-dim:#8899aa;--line:#283040;--accent:#40a0ff;--accent2:#60d0ff;--success:#40d880;--danger:#f05060;--purple:#9080ff}
+*{box-sizing:border-box}html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;height:100%;overflow:hidden}
+.shell{display:flex;flex-direction:column;height:100vh}
+.bar{display:flex;align-items:center;gap:16px;padding:10px 22px;background:linear-gradient(90deg,#101520,#1a2030);border-bottom:1px solid var(--line)}
+.bar h1{font-size:17px;margin:0}.bar h1 span{color:var(--fg-dim);font-weight:400;margin-left:8px;font-size:13px}
+.bar a{color:var(--fg);text-decoration:none;padding:5px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg-soft);font-size:12px}.bar a:hover{border-color:var(--accent);color:var(--accent)}.spacer{flex:1}
+.badge-num{padding:5px 12px;background:var(--bg-code);border:1px solid var(--line);border-radius:6px;color:var(--accent);font-size:13px}
+.main{flex:1;display:flex;min-height:0}.left{width:420px;min-width:420px;padding:20px;overflow-y:auto;background:var(--bg-soft);border-right:1px solid var(--line)}.right{flex:1;position:relative;background:var(--bg);overflow:hidden}
+.tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;background:rgba(64,160,255,.12);color:var(--accent);border:1px solid rgba(64,160,255,.35);margin-bottom:10px}
+h2.step{font-size:18px;margin:0 0 8px;line-height:1.3;color:var(--fg)}.desc{font-size:13px;line-height:1.85;color:var(--fg)}.desc p{margin:6px 0}.desc code{background:var(--bg-code);padding:1px 5px;border-radius:3px;color:var(--accent);font-size:12px}
+.badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:3px;margin-right:4px;font-weight:600}
+.bd{background:rgba(144,128,255,.18);color:var(--purple);border:1px solid rgba(144,128,255,.4)}.bt{background:rgba(64,216,128,.15);color:var(--success);border:1px solid rgba(64,216,128,.4)}.bw{background:rgba(240,80,96,.15);color:var(--danger);border:1px solid rgba(240,80,96,.4)}
+.tip{border-left:3px solid var(--accent);padding:6px 10px;margin:8px 0;background:rgba(64,160,255,.06);border-radius:4px;font-size:12px;line-height:1.6}
+.stage-label{position:absolute;top:12px;left:20px;font-size:12px;color:var(--fg-dim);display:flex;align-items:center;gap:6px}.stage-label b{display:inline-block;padding:2px 6px;border-radius:3px;background:var(--accent);color:var(--bg);font-weight:800;font-size:10px}
+.ctrl{display:flex;align-items:center;gap:8px;padding:8px 20px;background:var(--bg-soft);border-top:1px solid var(--line)}.ctrl button{padding:5px 12px;font-size:12px;font-weight:600;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg-dim);cursor:pointer;transition:all .2s;font-family:inherit}.ctrl button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}.ctrl button:disabled{opacity:.3;cursor:default}.ctrl button.go{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.dots{display:flex;gap:4px;flex:1;justify-content:center}.dot{width:8px;height:8px;border-radius:50%;background:var(--line);transition:all .3s;cursor:pointer}.dot.on{background:var(--accent);box-shadow:0 0 8px var(--accent);transform:scale(1.3)}.dot.ok{background:var(--success)}
+@media(max-width:940px){.main{flex-direction:column}.left{width:100%;min-width:0;max-height:35vh}}
+</style></head><body>
+<div class="shell"><div class="bar"><a href="../index.html">← Back</a><h1>Memory Access Patterns<span>· Sequential · Strided · Random</span></h1><span class="spacer"></span><span class="badge-num" id="sn">1/6</span></div>
+<div class="main"><div class="left" id="panel"></div><div class="right"><div class="stage-label"><b>MEM</b> Memory Access Patterns</div><svg id="s" viewBox="0 0 720 480" preserveAspectRatio="xMidYMid meet" style="max-width:100%;max-height:100%"></svg></div></div>
+<div class="ctrl"><button id="br">↺ Reset</button><button id="bp">◀ Prev</button><button class="go" id="bn">Next ▶</button><button id="ba">▶ Auto</button><div class="dots" id="dots"></div></div></div>
+<script>
+var SVG_NS="http://www.w3.org/2000/svg",sv;
+function R(x,y,w,h,f,s,rx,sw){var e=document.createElementNS(SVG_NS,"rect");e.setAttribute("x",x);e.setAttribute("y",y);e.setAttribute("width",w);e.setAttribute("height",h);e.setAttribute("fill",f);e.setAttribute("rx",rx||4);if(s){e.setAttribute("stroke",s);e.setAttribute("stroke-width",sw||1.5)}sv.appendChild(e)}
+function TC(x,y,w,t,sz,c,pad){pad=pad||15;var mw=w-2*pad,ew=t.length*(sz||13)*0.85;if(ew>mw)sz=(sz||13)*mw/ew;if(sz<8)sz=8;var e=document.createElementNS(SVG_NS,"text");e.setAttribute("x",x+w/2);e.setAttribute("y",y);e.setAttribute("fill",c||"#e0e8f0");e.setAttribute("font-size",sz);e.setAttribute("text-anchor","middle");e.setAttribute("font-weight","bold");e.textContent=t;sv.appendChild(e)}
+function TL(x,y,w,t,sz,c,pad){pad=pad||15;var mw=w-2*pad,ew=t.length*(sz||12)*0.85;if(ew>mw){var mc=Math.floor(mw/((sz||12)*0.85))-2;if(mc<3)mc=3;t=t.substring(0,mc)+".."}var e=document.createElementNS(SVG_NS,"text");e.setAttribute("x",x+pad);e.setAttribute("y",y);e.setAttribute("fill",c||"#e0e8f0");e.setAttribute("font-size",sz);e.setAttribute("text-anchor","start");e.textContent=t;sv.appendChild(e)}
+function L(x1,y1,x2,y2,c,sw){var e=document.createElementNS(SVG_NS,"line");e.setAttribute("x1",x1);e.setAttribute("y1",y1);e.setAttribute("x2",x2);e.setAttribute("y2",y2);e.setAttribute("stroke",c||"#283040");e.setAttribute("stroke-width",sw||1);sv.appendChild(e)}
+
+var S=[{t:"Why Memory Access Patterns Matter",p:"Foundation",
+b:'<p>Modern GPUs can compute <b>100x faster than they can read from HBM</b>. The A100 has 312 TFLOPS of FP16 compute but only 2 TB/s of HBM bandwidth. This means memory access patterns — not compute capacity — are the <b>primary bottleneck</b> in most AI workloads.</p><p><span class="badge bd">Key Concept</span> <b>Arithmetic Intensity</b> = FLOPs / Bytes Accessed. High arithmetic intensity (>100) = compute-bound. Low intensity (<10) = memory-bound.</p><p>Understanding access patterns lets you predict whether an operator will be compute-bound or memory-bound — and choose the right optimization strategy.</p>',
+d:function(){var W=720,H=480,P=15;R(P,P,W-2*P,H-2*P,"#080a10","#40a0ff",8,2);
+TC(P,30,W-2*P,"The Memory Wall: Compute 100x > HBM Bandwidth",14,"#40a0ff",P);
+TC(P,70,W-2*P,"A100: 312 TFLOPS (FP16) vs 2 TB/s HBM = 156 FLOPs per byte loaded",12,"#8899aa",P);
+TC(P,110,W-2*P,"Arithmetic Intensity = FLOPs / Bytes_Accessed",14,"#60d0ff",P);
+var zones=["AI < 10: Memory-bound (element-wise ops, normalization)","10 < AI < 100: Balanced (most convolutions, moderate matmuls)","AI > 100: Compute-bound (large matmuls, attention with large dims)"];
+var bx=60,by=160,bw=600;for(var i=0;i<3;i++){R(bx,by+i*50,bw,42,"rgba(255,255,255,.03)","#40a0ff",4,1);TL(bx,by+i*50+28,bw,zones[i],12,i===0?"#f05060":i===1?"#ff9050":"#40d880",15)}
+TC(P,340,W-2*P,"Goal: maximize arithmetic intensity via operator fusion and tiling",13,"#60d0ff",P);
+TC(P,390,W-2*P,"Next slides: how sequential, strided, and random access patterns affect bandwidth",12,"#8899aa",P);}},
+
+{t:"Sequential Access: The Ideal Pattern",p:"Access Patterns",
+b:'<p><b>Sequential access</b> reads contiguous memory addresses — the optimal pattern for HBM. GPUs are designed for coalesced memory access: threads in a warp accessing consecutive addresses can be combined into a single wide memory transaction.</p><p>HBM achieves ~80-90% of peak bandwidth with sequential access (~1.8 TB/s on A100). This is why operations that stride through tensors in <b>row-major order</b> are much faster than column-major.</p><p><span class="badge bt">PyTorch note</span> Tensors are row-major (C order). Accessing <code>x[i, j]</code> with i varying in the inner loop = sequential = fast. Accessing with j varying in the inner loop = strided = slow.</p>',
+d:function(){var W=720,H=480,P=15;R(P,P,W-2*P,H-2*P,"#080a10","#40d880",8,2);
+TC(P,30,W-2*P,"Sequential Access: ~1.8 TB/s (90% peak bandwidth)",14,"#40d880",P);
+// Memory layout visualization
+var bx=80,by=70;for(var i=0;i<8;i++){for(var j=0;j<8;j++){R(bx+j*32,by+i*32,28,28,i===0?"rgba(64,216,128,.15)":"rgba(64,160,255,.06)","#40d880",3,1);TC(bx+j*32+14,by+i*32+20,28,String.fromCharCode(65+i*8+j),8,"#8899aa",3)}}
+TC(bx+128,by+280,256,"Row-major: read [A,B,C,...] -> contiguous -> coalesced access",11,"#40d880",10);
+// Bandwidth comparison
+TC(P,380,W-2*P,"Coalesced access: 32 threads × 4 bytes = 128 bytes in ONE transaction",12,"#60d0ff",P);
+TC(P,420,W-2*P,"This is why torch operations are row-major by default",11,"#8899aa",P);}},
+
+{t:"Strided Access: The Performance Killer",p:"Access Patterns",
+b:'<p><b>Strided access</b> reads memory with a constant gap (stride) between elements. When stride > 1, each warp thread reads from a different cache line, preventing coalescing — bandwidth drops dramatically.</p><p>Example: accessing a matrix column-by-column in row-major storage. Each element is separated by <code>row_stride × sizeof(element)</code> bytes, forcing the GPU to issue separate memory transactions per element.</p><p><span class="badge bw">Impact</span> A stride of 2 can halve effective bandwidth. Stride > 8 drops to near-random-access speeds (~10% peak).</p><p>This is why <b>transposing a matrix</b> is expensive — it converts sequential reads into strided reads (or vice versa).</p>',
+d:function(){var W=720,H=480,P=15;R(P,P,W-2*P,H-2*P,"#080a10","#f05060",8,2);
+TC(P,30,W-2*P,"Strided Access: Bandwidth Drops with Stride Length",14,"#f05060",P);
+// Matrix with column access arrows
+var bx=100,by=70;for(var i=0;i<6;i++){for(var j=0;j<6;j++){R(bx+j*45,by+i*42,40,38,i===0?"rgba(240,80,96,.12)":"rgba(255,255,255,.03)","#f05060",3,1);TC(bx+j*45+20,by+i*42+24,40,String.fromCharCode(65+i*6+j),8,"#8899aa",3)}}
+// Arrows showing column access
+for(var i=0;i<6;i++){L(bx+20,by+i*42+38,bx+20,by+(i+1)*42-2,"#f05060",2)}
+TC(bx+135,by+280,270,"Column-major: read [A,G,M,S,Y,E4] -> scattered -> many transactions",10,"#f05060",10);
+TC(P,360,W-2*P,"Stride > 1: each element in different cache line -> no coalescing",12,"#f05060",P);
+TC(P,400,W-2*P,"Solution: use .contiguous() before operations that need sequential access",11,"#40d880",P);}},
+
+{t:"Random Access: Worst-Case Scenario",p:"Access Patterns",
+b:'<p><b>Random (gather/scatter) access</b> reads from unpredictable memory locations. Each access may require a separate HBM transaction — bandwidth drops to <5% of peak.</p><p>Operations that cause random access: <b>gather</b> (<code>x[indices]</code>), <b>scatter</b> (<code>x[indices] = values</code>), <b>sparse matrix multiplication</b>, <b>hash table lookups</b> in embeddings.</p><p><span class="badge bw">Embedding layers</span> are the poster child — each token index triggers a random HBM read of its embedding vector. For large vocabularies (50K+), this dominates training time.</p>',
+d:function(){var W=720,H=480,P=15;R(P,P,W-2*P,H-2*P,"#080a10","#f05060",8,2);
+TC(P,30,W-2*P,"Random (Gather/Scatter) Access: <5% Peak Bandwidth",14,"#f05060",P);
+var bx=100,by=70;for(var i=0;i<6;i++){for(var j=0;j<6;j++){R(bx+j*45,by+i*42,40,38,"rgba(255,255,255,.03)","#f05060",3,1);TC(bx+j*45+20,by+i*42+24,40,Math.random()>0.5?"X":"",8,"#f05060",3)}}
+TC(bx+135,by+280,270,"Random indices: each read = separate HBM transaction",10,"#f05060",10);
+TC(P,360,W-2*P,"Example: embedding lookup with 50K vocabulary -> random 50K reads per batch",12,"#f05060",P);
+TC(P,400,W-2*P,"Mitigation: FlashAttention, sparse kernels, quantization to reduce memory footprint",11,"#40a0ff",P);}},
+
+{t:"Bandwidth Comparison: Visual Scale",p:"Analysis",
+b:'<p>Quantifying the impact of access patterns on effective HBM bandwidth:</p><p><b>Sequential</b>: ~1800 GB/s (90% of 2 TB/s peak) — the gold standard.<br><b>Strided (stride=2)</b>: ~1200 GB/s — 33% drop from sequential.<br><b>Strided (stride=8)</b>: ~400 GB/s — 78% drop.<br><b>Random</b>: ~100 GB/s — 95% drop. Effectively idle for compute.</p><p><span class="badge bt">Key Insight</span> The cost of a memory access is dominated by <b>latency hiding via parallelism</b>, not the access pattern itself. Warp schedulers hide memory latency by switching to other warps — but this only works if there are enough warps to hide the latency.</p>',
+d:function(){var W=720,H=480,P=15;R(P,P,W-2*P,H-2*P,"#080a10","#40a0ff",8,2);
+TC(P,30,W-2*P,"Effective Bandwidth by Access Pattern (A100 HBM ~2 TB/s)",14,"#40a0ff",P);
+var bars=[{l:"Sequential",v:1800,c:"#40d880",p:90},{l:"Stride=2",v:1200,c:"#60d0ff",p:60},{l:"Stride=8",v:400,c:"#ff9050",p:20},{l:"Random",v:80,c:"#f05060",p:4}];
+var bx=80,by=70,mx=500;
+for(var i=0;i<4;i++){var bw=Math.round(bars[i].v/10),cy=by+i*60;R(bx,cy,mx,50,bars[i].c+"15",bars[i].c,6,1.5);R(bx,cy,bw,50,bars[i].c+"30",bars[i].c,6,1);TL(bx+10,cy+32,mx,bars[i].l+" ("+bars[i].v+" GB/s, "+bars[i].p+"%)",12,"#e0e8f0",10)}
+TC(P,340,W-2*P,"The gap between sequential and random access is >20x on modern GPUs",13,"#f05060",P);
+TC(P,380,W-2*P,"Latency hiding: warp schedulers switch contexts during memory stalls",11,"#8899aa",P);}},
+
+{t:"Optimization Strategies: Maximizing Bandwidth",p:"Practice",
+b:'<p>Practical strategies to improve memory access patterns in AI code:</p><p><b>1. Favor row-major ordering</b>: PyTorch tensors are C-order. Inner loop should vary the rightmost dimension.</p><p><b>2. Use .contiguous()</b>: After transpose/permute, tensors may be non-contiguous. Call .contiguous() before compute-heavy ops.</p><p><b>3. Operator fusion</b>: Fused kernels keep intermediates in registers — eliminates HBM round-trips entirely.</p><p><b>4. Kernel tiling</b>: Load tiles into shared memory once, compute many times. Amortizes HBM access cost.</p><p><span class="badge bt">Triton language</span> makes tiling explicit: <code>tl.load(ptr, mask)</code> with automatic coalescing optimization.</p>',
+d:function(){var W=720,H=480,P=15;R(P,P,W-2*P,H-2*P,"#080a10","#40d880",8,2);
+TC(P,30,W-2*P,"Optimization Strategies for Memory-Bound Workloads",14,"#40d880",P);
+var tips=["1. Row-major iteration: inner loop varies rightmost dim","2. .contiguous() after transpose/permute before compute","3. Operator fusion: keep intermediates in registers","4. Tiling: load to SRAM once, compute many times","5. Use Triton for explicit tiling and coalescing control"];
+var bx=60,by=70,bw=600;for(var i=0;i<5;i++){R(bx,by+i*48,bw,40,"rgba(64,216,128,.06)","#40d880",4,1);TL(bx,by+i*48+28,bw,tips[i],12,"#e0e8f0",15)}
+TC(P,340,W-2*P,"Remember: memory is the bottleneck. Compute is cheap. Optimize accordingly.",13,"#60d0ff",P);
+TC(P,390,W-2*P,"Next: Parallel Execution Models — Thread Block -> Warp -> Thread hierarchy",12,"#8899aa",P);}}];
+
+var cs=0,at=null,ia=false,N=S.length;
+function init(){sv=document.getElementById("s");for(var i=0;i<N;i++){var d=document.createElement("div");d.className="dot";d.onclick=(function(j){return function(){go(j)}})(i);document.getElementById("dots").appendChild(d)}render()}
+function go(i){if(i<0||i>=N)return;cs=i;render()}
+function render(){while(sv.firstChild)sv.removeChild(sv.firstChild);var s=S[cs];document.getElementById("sn").textContent=(cs+1)+"/"+N;document.getElementById("panel").innerHTML='<div class="tag">'+s.p+'</div><h2 class="step">'+s.t+'</h2><div class="desc">'+s.b+'</div>';s.d();var dots=document.querySelectorAll(".dot");for(var i=0;i<dots.length;i++)dots[i].className="dot"+(i===cs?" on":i<cs?" ok":"");document.getElementById("bp").disabled=cs===0;document.getElementById("bn").disabled=cs===N-1}
+function next(){if(cs<N-1){cs++;render()}else sa()}function prev(){if(cs>0){cs--;render()}}function rst(){sa();cs=0;render()}function ta(){ia?sa():startA()}function startA(){ia=true;document.getElementById("ba").textContent="⏸ Pause";at=setInterval(next,2500)}function sa(){ia=false;if(at){clearInterval(at);at=null}document.getElementById("ba").textContent="▶ Auto"}
+document.addEventListener("keydown",function(e){if(e.key==="ArrowRight"){e.preventDefault();next()}else if(e.key==="ArrowLeft"){e.preventDefault();prev()}else if(e.key===" "){e.preventDefault();ta()}else if(e.key==="r"||e.key==="R"){e.preventDefault();rst()}});
+document.getElementById("bp").onclick=prev;document.getElementById("bn").onclick=next;document.getElementById("br").onclick=rst;document.getElementById("ba").onclick=ta;window.onload=init;
+</script></body></html>

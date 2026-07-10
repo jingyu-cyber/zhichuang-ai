@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>设备 I/O · 操作系统内核</title>
+<style>
+:root{--bg:#0d1117;--bg-soft:#161b22;--bg-code:#0a0c10;--fg:#e6edf3;--fg-dim:#8b949e;--line:#30363d;--accent:#58a6ff;--accent-2:#3fb950;--grad:#d29922;--success:#3fb950;--danger:#f85149;--shadow:0 10px 30px rgba(0,0,0,.35);--radius:14px;--radius-sm:8px}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}
+.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}
+.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.demo-header h1{font-size:20px;font-weight:700}
+.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}
+.demo-header .breadcrumb a{color:var(--accent);text-decoration:none}
+.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}
+.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:var(--radius);padding:20px;display:flex;flex-direction:column;gap:14px}
+.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}
+.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}
+.panel-explain .code-line{font-family:"JetBrains Mono","Fira Code",monospace;font-size:18px;color:var(--accent-2);text-align:center;padding:12px;background:var(--bg-code);border-radius:var(--radius-sm)}
+.badge-row{display:flex;gap:8px;flex-wrap:wrap}
+.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.badge--def{background:rgba(88,166,255,.18);color:var(--accent)}
+.badge--tip{background:rgba(63,185,80,.18);color:var(--success)}
+.badge--warn{background:rgba(210,153,34,.18);color:var(--grad)}
+.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:var(--radius);padding:16px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.panel-stage svg{max-width:100%;max-height:100%}
+.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}
+.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:var(--radius-sm);cursor:pointer;font-size:14px;transition:.15s}
+.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}
+.demo-controls button:disabled{opacity:.35;cursor:default}
+.step-dots{display:flex;gap:8px;align-items:center}
+.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}
+.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}
+.step-dot.done{background:var(--success)}
+@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+  <div class="demo-header">
+    <div>
+      <h1>设备 I/O</h1>
+      <div class="breadcrumb"><a href="../index.html">操作系统内核</a> / 第四章 / 12</div>
+    </div>
+    <span class="badge badge--def">分层架构 · DMA · 中断</span>
+  </div>
+
+  <div class="demo-main">
+    <div class="panel-explain" id="explain">
+      <div class="step-title" id="stepTitle">I/O 子系统分层架构</div>
+      <div class="code-line" id="codeDisplay">进程 → VFS → 文件系统 → 块层 → 驱动 → 设备</div>
+      <div class="step-desc" id="stepDesc">内核通过<b>分层架构</b>处理 I/O。应用调用 <code>read()</code> → VFS 层 → 具体文件系统 → 通用块层 → 设备驱动 → 硬盘控制器。<br><br>每层只做自己分内的事。应用不知道硬盘是 NVMe 还是 SATA，驱动不知道文件是 ext4 还是 XFS。这就是<b>设备无关性</b>。</div>
+      <div class="badge-row" id="badges">
+        <span class="badge badge--def">分层架构</span><span class="badge badge--tip">设备无关</span>
+      </div>
+    </div>
+    <div class="panel-stage" id="stage"></div>
+  </div>
+
+  <div class="demo-controls">
+    <button id="btnPrev" onclick="changeStep(-1)">← 上一步</button>
+    <div class="step-dots" id="dots"></div>
+    <button id="btnNext" onclick="changeStep(1)">下一步 →</button>
+    <button onclick="resetStep()">⟳ 重置</button>
+    <button id="btnAuto" onclick="toggleAuto()">▶ 自动</button>
+  </div>
+</div>
+
+<script>
+const steps = [
+  {
+    title: "I/O 软件分层架构",
+    code: "进程 → VFS → 文件系统 → 块层 → 驱动 → 设备",
+    desc: '内核通过<b>分层架构</b>处理 I/O。应用调用 <code>read()</code> → VFS 层 → 具体文件系统 → 通用块层 → 设备驱动 → 硬盘控制器。<br><br>每层只做自己分内的事。应用不知道硬盘是 NVMe 还是 SATA，驱动不知道文件是 ext4 还是 XFS。这就是<b>设备无关性</b>——OS 设计的核心原则。',
+    badges: [{t:'分层架构',c:'def'},{t:'设备无关',c:'tip'}],
+    render(svg){
+      let layers=[
+        {l:'进程 (read/write)',c:'accent-2'},
+        {l:'VFS 虚拟文件系统',c:'accent'},
+        {l:'ext4 / XFS 文件系统',c:'grad'},
+        {l:'通用块层 (BIO)',c:'accent'},
+        {l:'NVMe / SATA 驱动',c:'danger'},
+        {l:'硬盘控制器 (硬件)',c:'grad'}
+      ];
+      let h='';
+      layers.forEach((ly,i)=>{
+        let y=25+i*52;
+        h+=`<rect x="160" y="${y}" width="480" height="40" rx="8" fill="var(--bg-soft)" stroke="var(--${ly.c})" stroke-width="2"/>`;
+        h+=`<text x="400" y="${y+26}" text-anchor="middle" font-size="13" fill="var(--${ly.c})" font-weight="700">${ly.l}</text>`;
+        if(i<layers.length-1){
+          h+=`<line x1="400" y1="${y+40}" x2="400" y2="${y+52}" stroke="var(--line)" stroke-width="1"/>`;
+        }
+      });
+      h+=`<text x="400" y="340" text-anchor="middle" font-size="11" fill="var(--fg-dim)">↑ 用户空间（应用）→ 内核空间（OS）→ 硬件层 ↑</text>`;
+      svg.innerHTML=h;
+    }
+  },
+  {
+    title: "三种 I/O 方式对比",
+    code: "PIO: CPU搬运 → 中断: 逐字节通知 → DMA: 块传输",
+    desc: '<b>程序控制 I/O (PIO)</b>：CPU 循环查询设备状态寄存器，逐字节搬运数据。简单但 CPU 空转浪费。<br><b>中断驱动 I/O</b>：设备就绪时发中断通知 CPU。CPU 不用轮询，但每字节一次中断开销大。<br><b>DMA（直接内存访问）</b>：DMA 控制器接管总线，整块数据直接在设备和内存间传输。CPU 只需配置一次，传输完成后才发中断。现代 OS 标配。',
+    badges: [{t:'PIO=轮询',c:'def'},{t:'中断=通知',c:'tip'},{t:'DMA=块传输',c:'tip'}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="20" text-anchor="middle" font-size="13" fill="var(--fg-dim)">三种 I/O 方式：CPU 参与度递减</text>
+<rect x="10" y="40" width="250" height="260" rx="10" fill="var(--bg-soft)" stroke="var(--danger)" stroke-width="2"/>
+<text x="135" y="70" text-anchor="middle" font-size="14" fill="var(--danger)" font-weight="700">PIO (程序控制)</text>
+<text x="30" y="100" font-size="11" fill="var(--fg-dim)">CPU 逐字节搬运数据</text>
+<text x="30" y="125" font-size="11" fill="var(--fg-dim)">loop: 查状态→写数据</text>
+<text x="30" y="150" font-size="11" fill="var(--fg-dim)">→ CPU 100% 空转等待</text>
+<text x="30" y="175" font-size="11" fill="var(--fg-dim)">→ 浪费大量 CPU 周期</text>
+<text x="30" y="200" font-size="11" fill="var(--danger)">1GHz CPU 等 100ops 设备</text>
+<text x="30" y="225" font-size="11" fill="var(--danger)">= 浪费 10M 周期</text>
+<rect x="275" y="40" width="250" height="260" rx="10" fill="var(--bg-soft)" stroke="var(--grad)" stroke-width="2"/>
+<text x="400" y="70" text-anchor="middle" font-size="14" fill="var(--grad)" font-weight="700">中断驱动 I/O</text>
+<text x="295" y="100" font-size="11" fill="var(--fg-dim)">设备就绪→发中断→CPU响应</text>
+<text x="295" y="125" font-size="11" fill="var(--fg-dim)">→ CPU 空闲时可做其他事</text>
+<text x="295" y="150" font-size="11" fill="var(--fg-dim)">→ 但每字节一次中断</text>
+<text x="295" y="175" font-size="11" fill="var(--grad)">1500字节=1500次中断</text>
+<text x="295" y="200" font-size="11" fill="var(--fg-dim)">→ 中断开销不可忽略</text>
+<text x="295" y="225" font-size="11" fill="var(--fg-dim)">每次中断~微秒级</text>
+<rect x="540" y="40" width="250" height="260" rx="10" fill="var(--bg-soft)" stroke="var(--success)" stroke-width="2"/>
+<text x="665" y="70" text-anchor="middle" font-size="14" fill="var(--success)" font-weight="700">DMA 直接内存访问</text>
+<text x="560" y="100" font-size="11" fill="var(--fg-dim)">DMA控制器接管总线</text>
+<text x="560" y="125" font-size="11" fill="var(--fg-dim)">CPU只需: 配置源/目标/长度</text>
+<text x="560" y="150" font-size="11" fill="var(--fg-dim)">→ CPU完全解放</text>
+<text x="560" y="175" font-size="11" fill="var(--success)">1500字节=1次中断</text>
+<text x="560" y="200" font-size="11" fill="var(--fg-dim)">→ 现代OS标配</text>
+<text x="560" y="225" font-size="11" fill="var(--fg-dim)">内存需pin住(不可换出)</text>
+<text x="400" y="330" text-anchor="middle" font-size="12" fill="var(--accent)">DMA 控制器 = 专门的硬件芯片，可独立于 CPU 执行内存↔设备数据传输</text>`;
+    }
+  },
+  {
+    title: "一次磁盘读取的完整旅程",
+    code: "read() → 缺页 → BIO → DMA → 中断 → 唤醒",
+    desc: '用户进程调用 <code>read(fd, buf, 4096)</code> 后发生了什么？<br><br>1. 陷入内核 → VFS 定位文件<br>2. 页缓存<b>未命中</b> → 分配 BIO 请求，加入块设备队列<br>3. 进程设为 <b>TASK_UNINTERRUPTIBLE</b>（不可中断睡眠），调度器运行其他进程<br>4. 磁盘控制器通过 <b>DMA</b> 将数据直接写入内核缓冲区<br>5. DMA 完成后触发<b>中断</b> → 中断处理程序唤醒等待进程<br>6. 数据从内核缓冲区 copy_to_user() → read() 返回',
+    badges: [{t:'阻塞等待',c:'def'},{t:'DMA传输',c:'tip'},{t:'中断唤醒',c:'warn'}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="18" text-anchor="middle" font-size="13" fill="var(--fg-dim)">read(fd, buf, 4096) 的完整调用链 — 6步</text>
+<rect x="25" y="35" width="110" height="55" rx="8" fill="var(--accent-2)" opacity=".7"/>
+<text x="80" y="58" text-anchor="middle" font-size="11" fill="#0d1117" font-weight="700">1. 系统调用</text>
+<text x="80" y="78" text-anchor="middle" font-size="10" fill="#0d1117">用户→内核</text>
+<text x="150" y="62" text-anchor="middle" font-size="18" fill="var(--fg-dim)">→</text>
+<rect x="170" y="35" width="100" height="55" rx="8" fill="var(--accent)" opacity=".7"/>
+<text x="220" y="58" text-anchor="middle" font-size="11" fill="#0d1117" font-weight="700">2. 缺页</text>
+<text x="220" y="78" text-anchor="middle" font-size="10" fill="#0d1117">Cache Miss</text>
+<text x="285" y="62" text-anchor="middle" font-size="18" fill="var(--fg-dim)">→</text>
+<rect x="305" y="35" width="100" height="55" rx="8" fill="var(--grad)" opacity=".7"/>
+<text x="355" y="58" text-anchor="middle" font-size="11" fill="#0d1117" font-weight="700">3. BIO入队</text>
+<text x="355" y="78" text-anchor="middle" font-size="10" fill="#0d1117">进程阻塞</text>
+<text x="420" y="62" text-anchor="middle" font-size="18" fill="var(--fg-dim)">→</text>
+<rect x="440" y="35" width="100" height="55" rx="8" fill="var(--danger)" opacity=".7"/>
+<text x="490" y="58" text-anchor="middle" font-size="11" fill="#fff" font-weight="700">4. DMA</text>
+<text x="490" y="78" text-anchor="middle" font-size="10" fill="#fff">设备→内存</text>
+<text x="555" y="62" text-anchor="middle" font-size="18" fill="var(--fg-dim)">→</text>
+<rect x="575" y="35" width="100" height="55" rx="8" fill="var(--accent)" opacity=".7"/>
+<text x="625" y="58" text-anchor="middle" font-size="11" fill="#0d1117" font-weight="700">5. 中断</text>
+<text x="625" y="78" text-anchor="middle" font-size="10" fill="#0d1117">CPU响应</text>
+<text x="690" y="62" text-anchor="middle" font-size="18" fill="var(--fg-dim)">→</text>
+<rect x="710" y="35" width="80" height="55" rx="8" fill="var(--success)" opacity=".7"/>
+<text x="750" y="58" text-anchor="middle" font-size="11" fill="#0d1117" font-weight="700">6. 唤醒</text>
+<text x="750" y="78" text-anchor="middle" font-size="10" fill="#0d1117">read返回</text>
+<text x="400" y="130" text-anchor="middle" font-size="12" fill="var(--fg-dim)">进程在步骤3-5期间不占用CPU → 调度器运行其他进程 → CPU利用率高</text>
+<text x="400" y="155" text-anchor="middle" font-size="12" fill="var(--accent-2)">关键：DMA控制器是独立硬件 → CPU只需配置(2条store指令) → 传输完成后1次中断</text>
+<text x="400" y="180" text-anchor="middle" font-size="11" fill="var(--fg-dim)">对比PIO：同样1500字节，PIO需189次CPU store，DMA只需2次</text>`;
+    }
+  },
+  {
+    title: "中断处理流程",
+    code: "IRQ → 保存上下文 → ISR → 唤醒进程 → 调度",
+    desc: '中断是 CPU 和外部设备异步通信的核心机制：<br><br>1. 设备完成 I/O，向中断控制器发信号<br>2. 中断控制器分配优先级，向 CPU 发送 IRQ<br>3. CPU 保存当前进程上下文（PC/寄存器/PSW）<br>4. 查中断向量表 → 跳转到对应的 <b>ISR</b>（中断服务例程）<br>5. ISR 确认中断、读取设备状态、<b>唤醒等待进程</b><br>6. 调度器选择下一个进程 → 恢复上下文<br><br>ISR 必须<b>极快</b>——它在中断上下文中运行，不能睡眠、不能调可能阻塞的函数。',
+    badges: [{t:'异步通知',c:'def'},{t:'ISR必须快',c:'warn'},{t:'中断向量表',c:'tip'}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="20" text-anchor="middle" font-size="13" fill="var(--fg-dim)">中断处理标准流程</text>
+<rect x="60" y="40" width="150" height="50" rx="8" fill="var(--danger)" opacity=".7"/>
+<text x="135" y="65" text-anchor="middle" font-size="12" fill="#fff" font-weight="700">设备完成I/O</text>
+<text x="135" y="82" text-anchor="middle" font-size="10" fill="#fff">发中断信号</text>
+<text x="230" y="70" text-anchor="middle" font-size="20" fill="var(--fg-dim)">→</text>
+<rect x="260" y="40" width="150" height="50" rx="8" fill="var(--grad)" opacity=".7"/>
+<text x="335" y="65" text-anchor="middle" font-size="12" fill="#0d1117" font-weight="700">中断控制器</text>
+<text x="335" y="82" text-anchor="middle" font-size="10" fill="#0d1117">排队+优先级</text>
+<text x="430" y="70" text-anchor="middle" font-size="20" fill="var(--fg-dim)">→</text>
+<rect x="460" y="40" width="130" height="50" rx="8" fill="var(--accent)" opacity=".7"/>
+<text x="525" y="65" text-anchor="middle" font-size="12" fill="#0d1117" font-weight="700">CPU 响应</text>
+<text x="525" y="82" text-anchor="middle" font-size="10" fill="#0d1117">保存上下文</text>
+<text x="610" y="70" text-anchor="middle" font-size="20" fill="var(--fg-dim)">→</text>
+<rect x="640" y="40" width="120" height="50" rx="8" fill="var(--success)" opacity=".7"/>
+<text x="700" y="65" text-anchor="middle" font-size="12" fill="#0d1117" font-weight="700">ISR执行</text>
+<text x="700" y="82" text-anchor="middle" font-size="10" fill="#0d1117">唤醒进程</text>
+<text x="400" y="130" text-anchor="middle" font-size="12" fill="var(--fg-dim)">ISR 运行在中断上下文：不能sleep、不能调可能阻塞的函数、要尽量快</text>
+<line x1="400" y1="150" x2="400" y2="180" stroke="var(--line)" stroke-width="1"/>
+<text x="400" y="175" text-anchor="middle" font-size="12" fill="var(--grad)">Linux中: 中断处理分 Top Half(硬中断,极快) + Bottom Half(软中断/tasklet,处理耗时操作)</text>
+<text x="400" y="200" text-anchor="middle" font-size="11" fill="var(--fg-dim)">Windows中: ISR → DPC(延迟过程调用) → APC(异步过程调用), 层层降级</text>`;
+    }
+  },
+  {
+    title: "同步 vs 异步 I/O",
+    code: "阻塞 read() vs 非阻塞 + epoll",
+    desc: '<b>同步（阻塞）I/O</b>：read() 调用后进程挂起，数据到了才返回。简单直观，但进程在等待期间不能做任何事。<br><br><b>异步（非阻塞）I/O</b>：aio_read() 立即返回，进程继续执行。数据到达时通过回调/epoll/kqueue 通知。Node.js 和 Nginx 的高并发秘诀就是异步 I/O + 事件循环。<br><br><b>I/O 多路复用</b>：select/poll/epoll 让一个线程同时监听数百个文件描述符，哪个就绪处理哪个。',
+    badges: [{t:'阻塞vs非阻塞',c:'def'},{t:'epoll',c:'tip'},{t:'事件驱动',c:'tip'}],
+    render(svg){
+      svg.innerHTML = `<rect x="10" y="20" width="380" height="220" rx="10" fill="var(--bg-soft)" stroke="var(--accent)" stroke-width="2"/>
+<text x="200" y="50" text-anchor="middle" font-size="15" fill="var(--accent)" font-weight="700">同步（阻塞）I/O</text>
+<rect x="40" y="70" width="320" height="30" rx="6" fill="var(--accent)" opacity=".5"/>
+<text x="200" y="90" text-anchor="middle" font-size="12" fill="#fff">read() → 等待数据…</text>
+<rect x="40" y="110" width="320" height="30" rx="6" fill="var(--bg-code)" stroke="var(--line)"/>
+<text x="200" y="130" text-anchor="middle" font-size="12" fill="var(--fg-dim)">进程阻塞，CPU空闲</text>
+<rect x="40" y="150" width="320" height="30" rx="6" fill="var(--accent-2)" opacity=".5"/>
+<text x="200" y="170" text-anchor="middle" font-size="12" fill="#0d1117">数据到达 → read()返回</text>
+<text x="200" y="205" text-anchor="middle" font-size="12" fill="var(--fg-dim)">实现简单 · 浪费并发能力</text>
+<rect x="410" y="20" width="380" height="220" rx="10" fill="var(--bg-soft)" stroke="var(--success)" stroke-width="2"/>
+<text x="600" y="50" text-anchor="middle" font-size="15" fill="var(--success)" font-weight="700">异步（非阻塞）I/O</text>
+<rect x="440" y="70" width="320" height="30" rx="6" fill="var(--accent-2)" opacity=".5"/>
+<text x="600" y="90" text-anchor="middle" font-size="12" fill="#0d1117">aio_read() → 立即返回</text>
+<rect x="440" y="110" width="320" height="30" rx="6" fill="var(--grad)" opacity=".5"/>
+<text x="600" y="130" text-anchor="middle" font-size="12" fill="#0d1117">进程继续做其他事</text>
+<rect x="440" y="150" width="320" height="30" rx="6" fill="var(--success)" opacity=".5"/>
+<text x="600" y="170" text-anchor="middle" font-size="12" fill="#0d1117">epoll通知 → 读取数据</text>
+<text x="600" y="205" text-anchor="middle" font-size="12" fill="var(--fg-dim)">复杂 · 高并发 · Nginx/Node.js</text>
+<text x="400" y="275" text-anchor="middle" font-size="12" fill="var(--accent)">I/O 多路复用: 一个线程通过 epoll_wait() 同时监听数百个 fd → 哪个就绪处理哪个</text>`;
+    }
+  }
+];
+
+let step=0,timer=null;
+const dotsEl=document.getElementById('dots'),svgEl=document.getElementById('stage');
+svgEl.innerHTML='<svg viewBox="0 0 800 380" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%"><defs><marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="var(--fg-dim)"/></marker></defs></svg>';
+const svg=svgEl.querySelector('svg');
+
+for(let i=0;i<steps.length;i++){let d=document.createElement('div');d.className='step-dot';d.onclick=()=>gotoStep(i);dotsEl.appendChild(d);}
+
+function renderStep(){
+  const s=steps[step];
+  document.getElementById('stepTitle').textContent=s.title;
+  document.getElementById('codeDisplay').textContent=s.code;
+  document.getElementById('stepDesc').innerHTML=s.desc;
+  let bd=document.getElementById('badges');bd.innerHTML='';
+  s.badges.forEach(b=>{let sp=document.createElement('span');sp.className='badge badge--'+b.c;sp.textContent=b.t;bd.appendChild(sp);});
+  s.render(svg);
+  document.querySelectorAll('.step-dot').forEach((d,i)=>{d.className='step-dot'+(i===step?' active':i<step?' done':'');});
+  document.getElementById('btnPrev').disabled=step===0;
+  document.getElementById('btnNext').disabled=step===steps.length-1;
+}
+function gotoStep(n){step=Math.max(0,Math.min(n,steps.length-1));renderStep();}
+function changeStep(d){gotoStep(step+d);}
+function resetStep(){stopAuto();gotoStep(0);}
+function toggleAuto(){timer?stopAuto():startAuto();}
+function startAuto(){timer=setInterval(()=>{if(step<steps.length-1)gotoStep(step+1);else stopAuto();},1800);document.getElementById('btnAuto').textContent='⏸ 暂停';}
+function stopAuto(){clearInterval(timer);timer=null;document.getElementById('btnAuto').textContent='▶ 自动';}
+document.addEventListener('keydown',e=>{if(e.key==='ArrowLeft')changeStep(-1);if(e.key==='ArrowRight')changeStep(1);if(e.key===' ')e.preventDefault(),toggleAuto();if(e.key==='r'||e.key==='R')resetStep();});
+renderStep();
+</script>
+</body>
+</html>

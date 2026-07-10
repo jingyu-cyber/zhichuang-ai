@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>图重写 — AI基础设施</title>
+<style>
+:root{--bg:#0a0e14;--bg-soft:#141b22;--bg-code:#06080c;--fg:#d0e0e8;--fg-dim:#607888;--line:#1c2836;--accent:#00e5a0;--accent-2:#b050ff;--grad:#40a0ff;--success:#30d060;--danger:#ff8020}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(176,80,255,.18);color:var(--accent-2)}.badge--tip{background:rgba(0,229,160,.15);color:var(--accent)}.badge--warn{background:rgba(255,128,32,.18);color:var(--danger)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.code-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 12px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+  <div class="demo-header">
+    <div>
+      <div class="breadcrumb"><a href="../index.html">AI基础设施</a> / 第2章 /</div>
+      <h1>2.3 图重写</h1>
+    </div>
+    <div class="badge-row">
+      <span class="badge badge--def">AI编译优化</span>
+      <span class="badge badge--tip">Graph Rewrite</span>
+    </div>
+  </div>
+  <div class="demo-main">
+    <div class="panel-explain" id="explain"></div>
+    <div class="panel-stage" id="stage"></div>
+  </div>
+  <div class="demo-controls">
+    <button id="btn-prev">&larr; 上一步</button>
+    <div class="step-dots" id="dots"></div>
+    <button id="btn-next">下一步 &rarr;</button>
+  </div>
+</div>
+<script>
+const S=[{
+  t:"Round 1: 常量折叠",
+  l:"Constant Folding: a=2+3→a=5 at compile time",
+  d:"常量折叠(Constant Folding)是最基本的图优化——编译期计算常量表达式。如 Conv 的 weight 乘以常数因子 scale，如果 scale 在 compile-time 已知，则直接将其融入 weight，消除运行时乘法。",
+  b:["Constant Folding","Compile-time","Eliminate"],
+  r:function(svg){
+    function E(t,a,tx){let e=document.createElementNS("http://www.w3.org/2000/svg",t);for(let k in a)e.setAttribute(k,a[k]);if(tx)e.textContent=tx;return e;}
+    svg.setAttribute("viewBox","0 0 800 420");svg.style.background="#06080c";
+    let defs=E("defs");let a=E("marker",{id:"ar",viewBox:"0 0 10 10",refX:"9",refY:"5",markerWidth:"5",markerHeight:"5",orient:"auto"});a.append(E("path",{d:"M0,0 L10,5 L0,10 Z",fill:"#40a0ff"}));defs.append(a);svg.append(defs);
+
+    // Before
+    svg.append(E("text",{x:200,y:35,fill:"#ff8020","font-size":"15","font-weight":"700","text-anchor":"middle"},"Before"));
+    function node(x,y,w,h,label,color){
+      svg.append(E("rect",{x:x,y:y,width:w,height:h,rx:8,fill:"rgba(0,229,160,0.06)",stroke:color,"stroke-width":"2"}));
+      svg.append(E("text",{x:x+w/2,y:y+h/2+4,fill:color,"font-size":"12","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},label));
+    }
+    node(50,60,100,40,"Weight","#40a0ff");
+    node(200,60,60,40,"2.0","#b050ff");
+    node(310,60,100,40,"Mul","#00e5a0");
+    // Edges
+    svg.append(E("line",{x1:150,y1:80,x2:196,y2:80,stroke:"#40a0ff","stroke-width":"1.5","marker-end":"url(#ar)"}));
+    svg.append(E("line",{x1:260,y1:80,x2:306,y2:80,stroke:"#40a0ff","stroke-width":"1.5","marker-end":"url(#ar)"}));
+
+    // Cross out the Mul+const
+    svg.append(E("line",{x1:45,y1:45,x2:420,y2:110,stroke:"#ff8020","stroke-width":"2","stroke-dasharray":"8,4"}));
+    svg.append(E("text",{x:300,y:135,fill:"#ff8020","font-size":"11","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Remove runtime Mul!"));
+
+    // After
+    svg.append(E("text",{x:620,y:35,fill:"#00e5a0","font-size":"15","font-weight":"700","text-anchor":"middle"},"After"));
+    node(520,60,160,40,"Weight' × 2.0","#00e5a0");
+    svg.append(E("text",{x:600,y:130,fill:"#607888","font-size":"11","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Pre-computed at compile time"));
+
+    // Transformation arrow
+    svg.append(E("path",{d:"M440,80 L500,80",stroke:"#00e5a0",fill:"none","stroke-width":"2.5","marker-end":"url(#ar)"}));
+    svg.append(E("text",{x:470,y:70,fill:"#00e5a0","font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Fold"));
+
+    // More examples at bottom
+    svg.append(E("text",{x:400,y:185,fill:"#607888","font-size":"12","font-weight":"700","text-anchor":"middle"},"Other folding candidates:"));
+    let exs=["Broadcast(Const) → Const","Reshape(Const) → Const","Slice(Const) → Const","Conv weight * scale → fused weight"];
+    exs.forEach((e,i)=>{
+      svg.append(E("text",{x:60+(i%2)*350,y:210+Math.floor(i/2)*25,fill:"#607888","font-size":"11","font-family":"JetBrains Mono,monospace"},"  "+(i%2?"":"")+e));
+    });
+
+    // Code snippet
+    svg.append(E("rect",{x:100,y:270,width:600,height:70,rx:8,fill:"#06080c",stroke:"#1c2836","stroke-width":"1"}));
+    svg.append(E("text",{x:120,y:295,fill:"#00e5a0","font-size":"12","font-family":"JetBrains Mono,monospace"},"# Pattern: multiply(weight, const) → weight_folded"));
+    svg.append(E("text",{x:120,y:315,fill:"#607888","font-size":"11","font-family":"JetBrains Mono,monospace"},"if is_const(node.args[1]): weight.data *= node.args[1]; replace node with weight"));
+  }
+},{
+  t:"Round 2: 公共子表达式消除",
+  l:"CSE: Common Subexpression Elimination",
+  d:"公共子表达式消除(CSE)识别图中重复的计算并共享结果。例如两个分支都计算了相同的 MatMul(A,B)，CSE 将其合并为一个节点，结果被两个消费者复用，减少 50% 的计算量。",
+  b:["CSE","Deduplication","Share"],
+  r:function(svg){
+    function E(t,a,tx){let e=document.createElementNS("http://www.w3.org/2000/svg",t);for(let k in a)e.setAttribute(k,a[k]);if(tx)e.textContent=tx;return e;}
+    svg.setAttribute("viewBox","0 0 800 420");svg.style.background="#06080c";
+    let defs=E("defs");let a=E("marker",{id:"ar",viewBox:"0 0 10 10",refX:"9",refY:"5",markerWidth:"5",markerHeight:"5",orient:"auto"});a.append(E("path",{d:"M0,0 L10,5 L0,10 Z",fill:"#40a0ff"}));defs.append(a);svg.append(defs);
+
+    // Before: two identical MatMuls
+    svg.append(E("text",{x:200,y:30,fill:"#ff8020","font-size":"14","font-weight":"700","text-anchor":"middle"},"Before: Duplicate computation"));
+    function mm(x,y,id){
+      svg.append(E("rect",{x:x,y:y,width:100,height:36,rx:6,fill:"rgba(64,160,255,0.08)",stroke:"#40a0ff","stroke-width":"1"}));
+      svg.append(E("text",{x:x+50,y:y+22,fill:"#40a0ff","font-size":"11","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"MatMul(A,B)"));
+    }
+    mm(30,50);mm(30,120);
+    svg.append(E("rect",{x:180,y:50,width:80,height:36,rx:6,fill:"rgba(0,229,160,0.08)",stroke:"#00e5a0","stroke-width":"1"}));
+    svg.append(E("text",{x:220,y:72,fill:"#00e5a0","font-size":"11","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"+ Input"));
+    svg.append(E("rect",{x:180,y:120,width:80,height:36,rx:6,fill:"rgba(176,80,255,0.08)",stroke:"#b050ff","stroke-width":"1"}));
+    svg.append(E("text",{x:220,y:142,fill:"#b050ff","font-size":"11","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"+ Bias"));
+    svg.append(E("line",{x1:130,y1:68,x2:176,y2:68,stroke:"#40a0ff","stroke-width":"1","marker-end":"url(#ar)"}));
+    svg.append(E("line",{x1:130,y1:138,x2:176,y2:138,stroke:"#40a0ff","stroke-width":"1","marker-end":"url(#ar)"}));
+    // Red X on bottom MatMul
+    svg.append(E("line",{x1:28,y1:48,x2:132,y2:158,stroke:"#ff8020","stroke-width":"2","stroke-dasharray":"6,3"}));
+
+    // After: shared
+    svg.append(E("text",{x:600,y:30,fill:"#00e5a0","font-size":"14","font-weight":"700","text-anchor":"middle"},"After: Shared result"));
+    mm(500,85);
+    svg.append(E("rect",{x:640,y:50,width:80,height:36,rx:6,fill:"rgba(0,229,160,0.08)",stroke:"#00e5a0","stroke-width":"1"}));
+    svg.append(E("text",{x:680,y:72,fill:"#00e5a0","font-size":"11","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"+ Input"));
+    svg.append(E("rect",{x:640,y:130,width:80,height:36,rx:6,fill:"rgba(176,80,255,0.08)",stroke:"#b050ff","stroke-width":"1"}));
+    svg.append(E("text",{x:680,y:152,fill:"#b050ff","font-size":"11","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"+ Bias"));
+    svg.append(E("line",{x1:600,y1:103,x2:636,y2:103,stroke:"#40a0ff","stroke-width":"1"}));
+    svg.append(E("line",{x1:600,y1:103,x2:600,y2:148,stroke:"#40a0ff","stroke-width":"1","marker-end":"url(#ar)"}));
+    svg.append(E("line",{x1:600,y1:148,x2:636,y2:148,stroke:"#40a0ff","stroke-width":"1","marker-end":"url(#ar)"}));
+
+    svg.append(E("path",{d:"M330,80 L480,80",stroke:"#00e5a0",fill:"none","stroke-width":"2.5","marker-end":"url(#ar)"}));
+
+    // CSE stats
+    svg.append(E("rect",{x:80,y:210,width:640,height:60,rx:8,fill:"rgba(0,229,160,0.04)",stroke:"#00e5a0","stroke-width":"1"}));
+    svg.append(E("text",{x:400,y:235,fill:"#00e5a0","font-size":"13","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"CSE Result: 2x MatMul → 1x MatMul (reused)"}));
+    svg.append(E("text",{x:400,y:258,fill:"#607888","font-size":"11","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"50% reduction in compute, no accuracy change. Works across entire graph."));
+
+    // Dead code elimination
+    svg.append(E("text",{x:400,y:300,fill:"#d0e0e8","font-size":"12","font-weight":"700","text-anchor":"middle"},"Often paired with Dead Code Elimination (DCE)"));
+    svg.append(E("rect",{x:200,y:315,width:120,height:30,rx:5,fill:"rgba(255,128,32,0.1)",stroke:"#ff8020","stroke-width":"1","stroke-dasharray":"4,2"}));
+    svg.append(E("text",{x:260,y:335,fill:"#ff8020","font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Unused Op → Remove"));
+  }
+},{
+  t:"Round 3: 布局变换与代数化简",
+  l:"Layout Transform + Algebraic Simplification",
+  d:"布局变换(Layout Transform)自动插入 transpose/reshape 以匹配最优数据布局(NCHW→NHWC 利于某些 kernel)。代数化简(Algebraic Simplify)利用数学恒等式简化为更快速的形式，如 x*1→x、x*0→0、concat(slice(x),slice(x))→x。",
+  b:["Layout","Algebraic","Simplify"],
+  r:function(svg){
+    function E(t,a,tx){let e=document.createElementNS("http://www.w3.org/2000/svg",t);for(let k in a)e.setAttribute(k,a[k]);if(tx)e.textContent=tx;return e;}
+    svg.setAttribute("viewBox","0 0 800 420");svg.style.background="#06080c";
+
+    // Layout transform example
+    svg.append(E("text",{x:400,y:25,fill:"#b050ff","font-size":"14","font-weight":"700","text-anchor":"middle"},"Layout Transform: NCHW ⇄ NHWC"));
+
+    let layouts=[
+      {x:40,y:50,l:"NCHW",c:"#40a0ff",desc:"Convolution\npreferred"},
+      {x:280,y:50,l:"NHWC",c:"#00e5a0",desc:"MatMul / GEMM\npreferred"},
+      {x:520,y:50,l:"NCHW",c:"#40a0ff",desc:"Next\nconvolution"}
+    ];
+    layouts.forEach(l=>{
+      svg.append(E("rect",{x:l.x,y:l.y,width:130,height:70,rx:8,fill:"rgba(0,229,160,0.04)",stroke:l.c,"stroke-width":"2"}));
+      svg.append(E("text",{x:l.x+65,y:l.y+20,fill:l.c,"font-size":"13","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},l.l));
+      let ls=l.desc.split("\n");ls.forEach((s,i)=>{svg.append(E("text",{x:l.x+65,y:l.y+45+i*14,fill:"#607888","font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},s));});
+    });
+    svg.append(E("text",{x:215,y:88,fill:"#b050ff","font-size":"18","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"→"));
+    svg.append(E("text",{x:215,y:105,fill:"#b050ff","font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Transpose"));
+    svg.append(E("text",{x:465,y:88,fill:"#b050ff","font-size":"18","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"→"));
+    svg.append(E("text",{x:465,y:105,fill:"#b050ff","font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Transpose"));
+
+    // Layout decision logic
+    svg.append(E("text",{x:400,y:165,fill:"#607888","font-size":"11","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Compiler inserts minimal transposes — no redundant copies"));
+
+    // Algebraic simplification
+    svg.append(E("text",{x:400,y:200,fill:"#00e5a0","font-size":"14","font-weight":"700","text-anchor":"middle"},"Algebraic Simplification Rules"));
+
+    let rules=[
+      {expr:"x * 1.0 → x",s:"-1 mul op"},
+      {expr:"x * 0.0 → 0",s:"-1 mul + broadcast"},
+      {expr:"x + 0.0 → x",s:"-1 add op"},
+      {expr:"concat(slice(x,[0,Na]),slice(x,[Na,N])) → x",s:"-concat -2 slices"},
+      {expr:"transpose(transpose(x,A),A⁻¹) → x",s:"-2 transposes"},
+      {expr:"reshape(reshape(x, S1), S2) | S2==S→x",s:"-1 reshape op"},
+      {expr:"broadcast(scalar, large) → efficient fill",s:"-large compute"},
+      {expr:"div(x, const) → mul(x, 1/const)",s:"cheaper op"},
+    ];
+    rules.forEach((r,i)=>{
+      let y=218+i*22;
+      svg.append(E("text",{x:50,y:y,fill:"#00e5a0","font-size":"11","font-family":"JetBrains Mono,monospace"},r.expr));
+      svg.append(E("text",{x:600,y:y,fill:"#30d060","font-size":"10","font-family":"JetBrains Mono,monospace"},r.s));
+    });
+
+    // Summary
+    svg.append(E("text",{x:400,y:400,fill:"#607888","font-size":"11","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Total Rewrite Pipeline: Fold → CSE → DCE → Simplify → Layout → Fuse → CodeGen"));
+  }
+}];
+
+let step=0;
+function render(i){
+  step=((i%S.length)+S.length)%S.length;
+  let s=S[step];
+  document.getElementById("explain").innerHTML=`
+    <div class="step-title">${s.t}</div>
+    <div class="badge-row">${s.b.map(b=>'<span class="badge badge--tip">'+b+'</span>').join("")}</div>
+    <div class="code-line">${s.l}</div>
+    <div class="step-desc">${s.d}</div>`;
+  let svg=document.getElementById("stage").querySelector("svg");
+  if(!svg){svg=document.createElementNS("http://www.w3.org/2000/svg","svg");document.getElementById("stage").appendChild(svg);svg.setAttribute("width","100%");svg.setAttribute("height","100%");svg.style.minHeight="420px";}
+  while(svg.firstChild)svg.removeChild(svg.firstChild);
+  s.r(svg);
+  document.getElementById("dots").innerHTML=S.map((_,j)=>'<div class="step-dot'+(j===step?' active':j<step?' done':'')+'></div>').join("");
+  document.getElementById("btn-prev").disabled=step===0;
+  document.getElementById("btn-next").disabled=step===S.length-1;
+}
+render(0);
+document.getElementById("btn-prev").onclick=()=>render(step-1);
+document.getElementById("btn-next").onclick=()=>render(step+1);
+document.addEventListener("keydown",e=>{if(e.key==="ArrowLeft")render(step-1);if(e.key==="ArrowRight")render(step+1);});
+</script>
+</body>
+</html>

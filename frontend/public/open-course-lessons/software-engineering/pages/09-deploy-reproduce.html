@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>09 部署步骤链 - 软件工程互动课程</title>
+<style>
+:root{--bg:#1c2128;--bg-soft:#252c35;--bg-code:#141820;--fg:#e6edf3;--fg-dim:#8b949e;--line:#30363d;--accent:#539bf5;--accent-2:#57ab5a;--grad:#c69026;--success:#57ab5a;--danger:#e5534b;--purple:#986ee2}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(83,155,245,.18);color:var(--accent)}.badge--tip{background:rgba(87,171,90,.18);color:var(--success)}.badge--warn{background:rgba(198,144,38,.18);color:var(--grad)}.badge--danger{background:rgba(229,83,75,.18);color:var(--danger)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>部署步骤链</h1>
+<div class="breadcrumb"><a href="../index.html">软件工程</a> / 实现与测试 / <span id="step-indicator">Step 1/4</span></div>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="panel-explain">
+<div class="step-title" id="step-title"></div>
+<div class="step-desc" id="step-desc"></div>
+<div class="badge-row" id="badge-row"></div>
+<div class="info-line" id="info-line"></div>
+</div>
+<div class="panel-stage"><svg id="stage" viewBox="0 0 800 500" style="width:100%;height:100%"></svg></div>
+</div>
+<div class="demo-controls">
+<button id="btn-prev" onclick="prev()">上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btn-next" onclick="next()">下一步</button>
+<button id="btn-auto" onclick="toggleAuto()" style="min-width:80px">自动播放</button>
+</div>
+</div>
+<script>
+const svgNS="http://www.w3.org/2000/svg";
+function T(t, a) { const e = document.createElementNS(svgNS, t); for (const [k, v] of Object.entries(a || {})) e.setAttribute(k, v); return e; }
+function tx(x, y, t, c, fs, a) { const e = T("text", { x, y, fill: c || "var(--fg)", "font-size": fs || "13", "text-anchor": a || "middle", "font-family": "-apple-system,'PingFang SC','Microsoft YaHei',sans-serif" }); e.textContent = t; return e; }
+function rct(x, y, w, h, f, s, rx) { return T("rect", { x, y, width: w, height: h, fill: f || "var(--bg-soft)", stroke: s || "var(--line)", "stroke-width": "1.5", rx: rx || 6 }); }
+
+function stepBox(svg, x, y, label, detail, color, status) {
+  const g = T("g",{});
+  const w = 160, h = 72;
+  const sc = status==="done"?"var(--success)":status==="current"?"var(--accent)":status==="missing"?"var(--danger)":color||"var(--line)";
+  const fillBg = status==="done"?"rgba(87,171,90,0.08)":status==="missing"?"rgba(229,83,75,0.08)":"var(--bg)";
+  g.append(rct(x-w/2,y,w,h,fillBg,sc,10));
+  g.append(tx(x,y+20,label,"var(--fg)","13"));
+  detail.forEach((d,i)=>g.append(tx(x,y+38+i*14,d,sc,"10")));
+  if (status==="missing") g.append(tx(x,y+h+12,"缺失!","var(--danger)","10"));
+  svg.append(g);
+}
+
+function chainArrow(svg, x1, y1, x2, y2, color) {
+  svg.append(T("line",{x1,y1,x2,y2,stroke:color||"var(--accent)","stroke-width":2}));
+  svg.append(T("polygon",{points:(x2-6)+","+(y2-5)+" "+x2+","+y2+" "+(x2-6)+","+(y2+5),fill:color||"var(--accent)"}));
+}
+
+function r0(svg) {
+  // Step 1: Incomplete chain
+  svg.append(tx(400,18,"反例：不完整的部署链","var(--danger)","14"));
+  stepBox(svg, 100, 70, "1. 安装依赖","npm install","var(--success)","done");
+  stepBox(svg, 100, 180, "3. 启动服务","npm start","var(--success)","done");
+  stepBox(svg, 100, 290, "5. 测试访问","curl localhost","var(--accent)","current");
+
+  chainArrow(svg, 100, 142, 100, 158, "var(--line)");
+  chainArrow(svg, 100, 252, 100, 268, "var(--line)");
+
+  // Missing steps
+  stepBox(svg, 380, 70, "2. 环境配置",".env 文件","var(--danger)","missing");
+  stepBox(svg, 380, 180, "4. 数据库迁移","npx prisma migrate","var(--danger)","missing");
+  stepBox(svg, 380, 290, "6. 健康检查","/health endpoint","var(--danger)","missing");
+
+  svg.append(tx(400,410,"问题：缺少环境配置、数据库迁移、健康检查步骤 → 部署失败","var(--danger)","12"));
+  svg.append(tx(400,435,"部署链必须完整：依赖 → 环境 → 迁移 → 启动 → 验证","var(--fg-dim)","11"));
+}
+
+function r1(svg) {
+  // Step 2: Complete deployment pipeline
+  svg.append(tx(400,18,"完整部署流水线","var(--accent)","14"));
+
+  const steps = [
+    {x:68,label:"1. 安装依赖",detail:["npm ci","package-lock.json"],color:"var(--accent)"},
+    {x:200,label:"2. 环境变量",detail:[".env.production","密钥管理"],color:"var(--accent)"},
+    {x:332,label:"3. 构建项目",detail:["npm run build","代码混淆"],color:"var(--accent)"},
+    {x:464,label:"4. 数据库迁移",detail:["prisma migrate","备份+回滚"],color:"var(--accent)"},
+    {x:596,label:"5. 启动服务",detail:["pm2 start","进程守护"],color:"var(--accent)"},
+    {x:728,label:"6. 健康检查",detail:["curl /health","监控告警"],color:"var(--success)"}
+  ];
+
+  steps.forEach(s => stepBox(svg, s.x, 60, s.label, s.detail, s.color, "done"));
+
+  // Chain arrows connecting all
+  for (let i = 0; i < steps.length-1; i++) {
+    chainArrow(svg, steps[i].x+80, 96, steps[i+1].x-80, 96, "var(--success)");
+  }
+
+  // Bottom detail
+  svg.append(rct(20,180,760,200,"var(--bg-soft)","var(--line)"));
+  svg.append(tx(400,206,"每个步骤的详细说明","var(--fg)","13"));
+
+  const details = [
+    "1. npm ci (非 npm install): 严格按 lockfile 安装，确保环境一致",
+    "2. 环境变量: 生产密钥不放代码仓库，使用 CI/CD 变量注入",
+    "3. 构建: TypeScript编译 → Webpack打包 → 资源压缩",
+    "4. 迁移: 先备份数据库 → 执行迁移 → 失败自动回滚",
+    "5. 启动: 使用 pm2/systemd 进程守护，自动重启",
+    "6. 健康检查: 验证所有端点可达，数据库连接正常"
+  ];
+  details.forEach((d,i) => {
+    svg.append(tx(40,226+i*24,d,"var(--fg-dim)","11","start"));
+  });
+}
+
+function r2(svg) {
+  // Step 3: CI/CD pipeline diagram
+  svg.append(tx(400,18,"CI/CD 自动化流水线","var(--accent)","14"));
+
+  const stages = [
+    {x:20,y:50,w:120,h:100,label:"Push",detail:["git push","触发 pipeline"],c:"var(--accent)"},
+    {x:160,y:50,w:120,h:100,label:"Lint & Test",detail:["ESLint","单元测试"],c:"var(--purple)"},
+    {x:300,y:50,w:120,h:100,label:"Build",detail:["Docker build","镜像推送到仓库"],c:"var(--grad)"},
+    {x:440,y:50,w:120,h:100,label:"Deploy Staging",detail:["k8s deploy","冒烟测试"],c:"var(--accent)"},
+    {x:580,y:50,w:120,h:100,label:"E2E Test",detail:["Cypress","回归测试"],c:"var(--purple)"},
+    {x:720,y:50,w:70,h:100,label:"Prod",detail:["发布","生产"],c:"var(--success)"}
+  ];
+
+  stages.forEach(s => {
+    svg.append(rct(s.x,s.y,s.w,s.h,"var(--bg)","var(--line)",6));
+    svg.append(tx(s.x+s.w/2,s.y+22,s.label,"var(--fg)","13"));
+    s.detail.forEach((d,i) => svg.append(tx(s.x+s.w/2,s.y+48+i*16,d,"var(--fg-dim)","10")));
+  });
+
+  // Stage arrows
+  for (let i = 0; i < stages.length-1; i++) {
+    chainArrow(svg, stages[i].x+stages[i].w+2, 100, stages[i+1].x-2, 100, "var(--line)");
+  }
+
+  // Gate checks
+  svg.append(rct(300,170,120,30,"rgba(198,144,38,0.15)","var(--grad)",4));
+  svg.append(tx(360,190,"门禁: 测试通过","var(--grad)","10"));
+  svg.append(rct(580,170,120,30,"rgba(198,144,38,0.15)","var(--grad)",4));
+  svg.append(tx(640,190,"门禁: E2E通过","var(--grad)","10"));
+
+  // Deploy strategy
+  svg.append(rct(20,240,770,240,"var(--bg-soft)","var(--line)"));
+  svg.append(tx(400,266,"部署策略与风险控制","var(--fg)","14"));
+
+  const strategies = [
+    {t:"蓝绿部署",d:"两套完整环境，切换流量实现零停机部署",c:"var(--success)"},
+    {t:"金丝雀发布",d:"先部署到5%流量 → 监控 → 逐步放量",c:"var(--accent)"},
+    {t:"回滚预案",d:"保留上一版本镜像，一键回滚 < 30秒",c:"var(--grad)"},
+    {t:"数据库迁移锁定",d:"迁移期间禁止DDL操作，确保数据一致性",c:"var(--purple)"}
+  ];
+  strategies.forEach((s,i) => {
+    const x = 30 + i*190;
+    svg.append(rct(x,286,180,170,"var(--bg)","var(--line)",6));
+    svg.append(tx(x+90,314,s.t,s.c,"13"));
+    svg.append(tx(x+90,350,s.d,"var(--fg-dim)","11"));
+  });
+}
+
+function r3(svg) {
+  // Step 4: Missing step detection
+  svg.append(tx(400,20,"部署步骤缺失检测清单","var(--accent)","14"));
+
+  const checks = [
+    {step:"依赖版本锁定",check:"package-lock.json / yarn.lock 是否存在？",status:"pass"},
+    {step:"环境变量文档",check:".env.example 是否与代码同步？",status:"pass"},
+    {step:"构建脚本",check:"npm run build 是否能成功执行？",status:"pass"},
+    {step:"数据库迁移脚本",check:"是否有 migration up 和 down 脚本？",status:"pass"},
+    {step:"Docker 化",check:"Dockerfile + docker-compose.yml？",status:"fail"},
+    {step:"健康检查端点",check:"是否有 /health 或 /ready 端点？",status:"fail"},
+    {step:"日志收集",check:"是否有结构化日志输出到 stdout？",status:"warn"},
+    {step:"监控告警",check:"是否配置了 CPU/内存/错误率告警？",status:"warn"},
+    {step:"备份恢复",check:"数据库备份策略和恢复手册？",status:"fail"},
+    {step:"README 部署指南",check:"新成员能否按 README 完成部署？",status:"fail"}
+  ];
+
+  checks.forEach((c,i) => {
+    const y = 44+i*28;
+    color = c.status==="pass"?"var(--success)":c.status==="fail"?"var(--danger)":"var(--grad)";
+    svg.append(rct(20,y,760,24,"var(--bg)","var(--line)",4));
+    const icon = c.status==="pass"?"✓":c.status==="fail"?"✗":"⚠";
+    svg.append(tx(40,y+16,icon,color,"12"));
+    svg.append(tx(70,y+16,c.step,"var(--fg)","11","start"));
+    svg.append(tx(350,y+16,c.check,"var(--fg-dim)","11","start"));
+    svg.append(rct(700,y+3,60,18,`rgba(${color==="var(--success)"?"87,171,90":color==="var(--danger)"?"229,83,75":"198,144,38"},0.15)`,color,4));
+    svg.append(tx(730,y+15,c.status==="pass"?"通过":c.status==="fail"?"缺失":"警告",color,"10"));
+  });
+
+  svg.append(rct(20,335,760,28,"var(--bg)","var(--success)",6));
+  svg.append(tx(400,354,"检测结果: 4/10 通过 | 4/10 缺失 | 2/10 警告 — 部署就绪度 40%","var(--success)","12"));
+}
+
+const S = [
+  {t:"反例：不完整部署链",l:"问题",d:"常见的部署失败原因：缺少环境配置、忘记数据库迁移、没有健康检查。部署链必须覆盖从依赖到验证的完整流程。",b:["Anti-Pattern","Missing"],r:r0},
+  {t:"完整部署流水线",l:"流水线",d:"建立6步标准部署流水线：安装依赖（lockfile锁定）→ 环境变量注入 → 构建 → 数据库迁移（备份+回滚）→ 启动进程守护 → 健康检查。",b:["Pipeline","6 Steps"],r:r1},
+  {t:"CI/CD自动化",l:"自动化",d:"用CI/CD自动化部署流程：Push → Lint & Test → Build → Deploy Staging → E2E Test → Production。设置门禁确保质量关卡。",b:["CI/CD","Automation","Gates"],r:r2},
+  {t:"缺失检测清单",l:"检测",d:"用10项检测清单检查部署就绪度。每项标记通过/缺失/警告，计算整体就绪度百分比。低于60%不应上线。",b:["Checklist","Readiness"],r:r3}
+];
+
+let cur = 0, autoTimer = null, autoOn = false;
+
+function setStep(i) {
+  cur = Math.max(0, Math.min(S.length - 1, i));
+  const s = S[cur];
+  document.getElementById("step-title").textContent = s.t;
+  document.getElementById("step-desc").textContent = s.d;
+  document.getElementById("step-indicator").textContent = `Step ${cur+1}/${S.length}`;
+  const br = document.getElementById("badge-row"); br.innerHTML = "";
+  s.b.forEach(b => { const sp = document.createElement("span"); sp.className = "badge badge--def"; sp.textContent = b; br.append(sp); });
+  document.getElementById("info-line").textContent = s.l;
+  const svg = document.getElementById("stage"); svg.innerHTML = ""; s.r(svg);
+  document.querySelectorAll(".step-dot").forEach((d,j) => d.className = "step-dot" + (j === cur ? " active" : j < cur ? " done" : ""));
+  document.getElementById("btn-prev").disabled = cur === 0;
+  document.getElementById("btn-next").disabled = cur === S.length - 1;
+}
+
+function next() { setStep(cur + 1); }
+function prev() { setStep(cur - 1); }
+function toggleAuto() {
+  if (autoOn) { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; return; }
+  autoOn = true; document.getElementById("btn-auto").textContent = "暂停";
+  autoTimer = setInterval(() => { if (cur < S.length - 1) next(); else { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; } }, 2500); }
+
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight") next();
+  else if (e.key === "ArrowLeft") prev();
+  else if (e.key === " ") { e.preventDefault(); toggleAuto(); }
+  else if (e.key >= "1" && e.key <= String(S.length)) setStep(parseInt(e.key) - 1);
+});
+
+const dotsEl = document.getElementById("dots");
+S.forEach((s,i) => { const d = document.createElement("span"); d.className = "step-dot"; d.title = s.l; d.onclick = () => setStep(i); dotsEl.append(d); });
+setStep(0);
+</script>
+</body>
+</html>

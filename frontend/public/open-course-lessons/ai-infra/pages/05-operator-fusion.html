@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>算子融合 — AI基础设施</title>
+<style>
+:root{--bg:#0a0e14;--bg-soft:#141b22;--bg-code:#06080c;--fg:#d0e0e8;--fg-dim:#607888;--line:#1c2836;--accent:#00e5a0;--accent-2:#b050ff;--grad:#40a0ff;--success:#30d060;--danger:#ff8020}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(176,80,255,.18);color:var(--accent-2)}.badge--tip{background:rgba(0,229,160,.15);color:var(--accent)}.badge--warn{background:rgba(255,128,32,.18);color:var(--danger)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.code-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 12px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+  <div class="demo-header">
+    <div>
+      <div class="breadcrumb"><a href="../index.html">AI基础设施</a> / 第2章 /</div>
+      <h1>2.2 算子融合</h1>
+    </div>
+    <div class="badge-row">
+      <span class="badge badge--def">AI编译优化</span>
+      <span class="badge badge--warn">核心优化</span>
+    </div>
+  </div>
+  <div class="demo-main">
+    <div class="panel-explain" id="explain"></div>
+    <div class="panel-stage" id="stage"></div>
+  </div>
+  <div class="demo-controls">
+    <button id="btn-prev">&larr; 上一步</button>
+    <div class="step-dots" id="dots"></div>
+    <button id="btn-next">下一步 &rarr;</button>
+  </div>
+</div>
+<script>
+const S=[{
+  t:"融合前：3次 Kernel Launch",
+  l:"Conv → BatchNorm → ReLU (separate kernels)",
+  d:"融合前每个算子独立执行：Conv 算子从 HBM 读入输入，计算完写回 HBM；BN 算子再读入、计算、写回；ReLU 再次读入、计算、写回。每次 kernel launch 都有开销，3 次 kernel 共 3 次读写完整张量。",
+  b:["Before Fusion","Kernel Launch","HBM R/W"],
+  r:function(svg){
+    function E(t,a,tx){let e=document.createElementNS("http://www.w3.org/2000/svg",t);for(let k in a)e.setAttribute(k,a[k]);if(tx)e.textContent=tx;return e;}
+    svg.setAttribute("viewBox","0 0 800 420");svg.style.background="#06080c";
+
+    svg.append(E("text",{x:400,y:25,fill:"#ff8020","font-size":"16","font-weight":"700","text-anchor":"middle"},"BEFORE FUSION — 3 Kernels, 6 Memory Ops"));
+
+    let ks=[{x:80,l:"Conv2D",c:"#00e5a0",d:"Conv(W*x+b)"},{x:330,l:"BatchNorm",c:"#40a0ff",d:"(x-μ)/σ·γ+β"},{x:580,l:"ReLU",c:"#b050ff",d:"max(0,x)"}];
+
+    ks.forEach(k=>{
+      svg.append(E("rect",{x:k.x,y:45,width:140,height:55,rx:10,fill:"rgba(0,229,160,0.06)",stroke:k.c,"stroke-width":"2"}));
+      svg.append(E("text",{x:k.x+70,y:68,fill:k.c,"font-size":"14","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},k.l));
+      svg.append(E("text",{x:k.x+70,y:88,fill:"#607888","font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},k.d));
+    });
+
+    // Memory arrows (HBM reads and writes)
+    let hbmY=130;
+    svg.append(E("rect",{x:30,y:hbmY,width:740,height:30,rx:5,fill:"rgba(255,128,32,0.08)",stroke:"#ff8020","stroke-width":"1","stroke-dasharray":"4,3"}));
+    svg.append(E("text",{x:400,y:hbmY+20,fill:"#ff8020","font-size":"12","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"HBM (High Bandwidth Memory)"));
+
+    // Per-op memory timeline
+    let mtY=180;
+    [0,1,2].forEach(i=>{
+      let x=ks[i].x;
+      svg.append(E("rect",{x:x+5,y:mtY,width:45,height:18,rx:3,fill:"#00e5a0",opacity:"0.5"}));
+      svg.append(E("text",{x:x+27,y:mtY+13,fill:"#fff","font-size":"9","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"READ"));
+      svg.append(E("rect",{x:x+85,y:mtY,width:45,height:18,rx:3,fill:"#ff8020",opacity:"0.5"}));
+      svg.append(E("text",{x:x+107,y:mtY+13,fill:"#fff","font-size":"9","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"WRITE"));
+      svg.append(E("line",{x1:x+55,y1:mtY+9,x2:x+80,y2:mtY+9,stroke:"#607888","stroke-width":"1"}));
+    });
+
+    // Kernel launch overhead bars
+    let loY=220;
+    svg.append(E("text",{x:400,y:loY-10,fill:"#ff8020","font-size":"11","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Kernel Launch Overhead (each ~5-10μs)"));
+    ks.forEach(k=>{
+      svg.append(E("rect",{x:k.x+70-20,y:loY,width:40,height:20,rx:4,fill:"#ff8020",opacity:"0.6"}));
+      svg.append(E("text",{x:k.x+70,y:loY+14,fill:"#fff","font-size":"8","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Launch"));
+    });
+
+    // Total stats
+    svg.append(E("rect",{x:200,y:270,width:400,height:60,rx:10,fill:"rgba(255,128,32,0.08)",stroke:"#ff8020","stroke-width":"1.5"}));
+    svg.append(E("text",{x:400,y:292,fill:"#ff8020","font-size":"13","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Total: 3 Kernel Launches + 6 HBM R/W"));
+    svg.append(E("text",{x:400,y:314,fill:"#d0e0e8","font-size":"11","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"3x tensor traffic = bottleneck on memory bandwidth"));
+
+    // Down arrow to next step hint
+  }
+},{
+  t:"融合后：1次 Kernel Launch",
+  l:"FusedConvBNReLU (single kernel, registers)",
+  d:"融合后，Conv、BN、ReLU 被编译为单个 GPU kernel。中间结果（Conv 输出、BN 输出）不再写回 HBM，而是保持在寄存器中直接传递给下游算子。仅需 1 次 HBM 读入和 1 次 HBM 写出，节省 66% 的数据移动。",
+  b:["After Fusion","Single Kernel","Register"],
+  r:function(svg){
+    function E(t,a,tx){let e=document.createElementNS("http://www.w3.org/2000/svg",t);for(let k in a)e.setAttribute(k,a[k]);if(tx)e.textContent=tx;return e;}
+    svg.setAttribute("viewBox","0 0 800 420");svg.style.background="#06080c";
+
+    svg.append(E("text",{x:400,y:25,fill:"#00e5a0","font-size":"16","font-weight":"700","text-anchor":"middle"},"AFTER FUSION — 1 Kernel, 2 Memory Ops"));
+
+    // Fused kernel as one block
+    svg.append(E("rect",{x:200,y:50,width:400,height:60,rx:12,fill:"rgba(0,229,160,0.1)",stroke:"#00e5a0","stroke-width":"2.5"}));
+    svg.append(E("text",{x:400,y:75,fill:"#00e5a0","font-size":"16","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"FusedConvBNReLU"));
+    svg.append(E("text",{x:400,y:98,fill:"#d0e0e8","font-size":"11","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Conv → BatchNorm → ReLU (registers)"));
+
+    // HBM: read once
+    svg.append(E("rect",{x:30,y:140,width:740,height:24,rx:5,fill:"rgba(0,229,160,0.06)",stroke:"#00e5a0","stroke-width":"1"}));
+    svg.append(E("text",{x:400,y:156,fill:"#00e5a0","font-size":"11","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"HBM Read: 1x (input tensor)"));
+
+    // Arrow up to kernel
+    svg.append(E("line",{x1:200,y1:140,x2:200,y2:110,stroke:"#00e5a0","stroke-width":"1.5","marker-end":"url(#up)"}));
+
+    // HBM: write once
+    svg.append(E("rect",{x:30,y:180,width:740,height:24,rx:5,fill:"rgba(0,229,160,0.06)",stroke:"#00e5a0","stroke-width":"1"}));
+    svg.append(E("text",{x:400,y:196,fill:"#00e5a0","font-size":"11","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"HBM Write: 1x (output tensor)"));
+
+    // Down arrow from kernel
+    svg.append(E("line",{x1:400,y1:110,x2:400,y2:180,stroke:"#00e5a0","stroke-width":"1.5","marker-end":"url(#down)"}));
+
+    let defs=E("defs");
+    let up=E("marker",{id:"up",viewBox:"0 0 10 10",refX:"5",refY:"1",markerWidth:"5",markerHeight:"5",orient:"auto"});
+    up.append(E("path",{d:"M0,10 L5,1 L10,10 Z",fill:"#00e5a0"}));
+    let dn=E("marker",{id:"down",viewBox:"0 0 10 10",refX:"5",refY:"9",markerWidth:"5",markerHeight:"5",orient:"auto"});
+    dn.append(E("path",{d:"M0,0 L5,9 L10,0 Z",fill:"#00e5a0"}));
+    defs.append(up,dn);svg.append(defs);
+
+    // Register flow detail
+    svg.append(E("text",{x:400,y:235,fill:"#b050ff","font-size":"12","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Register-level Data Flow (no HBM)"));
+
+    let regs=["Conv\nOutput","BN\nOutput","ReLU\nOutput"];
+    regs.forEach((r,i)=>{
+      let rx=220+i*180;
+      svg.append(E("rect",{x:rx,y:248,width:100,height:36,rx:6,fill:"rgba(176,80,255,0.1)",stroke:"#b050ff","stroke-width":"1"}));
+      let ls=r.split("\n");ls.forEach((l,j)=>{svg.append(E("text",{x:rx+50,y:264+j*12,fill:"#b050ff","font-size":"9","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},l));});
+      if(i<2){svg.append(E("line",{x1:rx+100,y1:266,x2:rx+180,y2:266,stroke:"#b050ff","stroke-width":"1","marker-end":"url(#arrR)"}));}
+    });
+    let defs2=E("defs");
+    let arrR=E("marker",{id:"arrR",viewBox:"0 0 10 10",refX:"9",refY:"5",markerWidth:"5",markerHeight:"5",orient:"auto"});
+    arrR.append(E("path",{d:"M0,0 L10,5 L0,10 Z",fill:"#b050ff"}));
+    defs2.append(arrR);svg.append(defs2);
+
+    // Stats comparison
+    let stats=[{l:"Kernel Launches",b:"3",a:"1",s:"-67%"},{l:"HBM Reads",b:"3",a:"1",s:"-67%"},{l:"HBM Writes",b:"3",a:"1",s:"-67%"},{l:"Total Memory Ops",b:"6",a:"2",s:"-67%"}];
+    stats.forEach((st,i)=>{
+      let sx=80+i*170;
+      svg.append(E("rect",{x:sx,y:300,width:150,height:90,rx:8,fill:"rgba(0,229,160,0.04)",stroke:"#00e5a0","stroke-width":"1"}));
+      svg.append(E("text",{x:sx+75,y:322,fill:"#607888","font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},st.l));
+      svg.append(E("text",{x:sx+30,y:348,fill:"#ff8020","font-size":"14","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},st.b));
+      svg.append(E("text",{x:sx+75,y:365,fill:"#d0e0e8","font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"→"));
+      svg.append(E("text",{x:sx+120,y:348,fill:"#00e5a0","font-size":"14","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},st.a));
+      svg.append(E("text",{x:sx+75,y:382,fill:"#30d060","font-size":"11","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},st.s));
+    });
+  }
+},{
+  t:"融合的边界与限制",
+  l:"When fusion is NOT possible or beneficial",
+  d:"虽然融合能显著提升性能，但并非所有场景都适用：1)算子间存在数据依赖阻断(如控制流)；2)融合后的 kernel 寄存器压力过大导致 occupancy 下降；3)某些算子有副作用(如 print/assert)；4)动态形状时无法在编译期确定融合策略。",
+  b:["Limits","Register Pressure","Dynamic"],
+  r:function(svg){
+    function E(t,a,tx){let e=document.createElementNS("http://www.w3.org/2000/svg",t);for(let k in a)e.setAttribute(k,a[k]);if(tx)e.textContent=tx;return e;}
+    svg.setAttribute("viewBox","0 0 800 420");svg.style.background="#06080c";
+
+    // Fusion decision tree
+    svg.append(E("text",{x:400,y:25,fill:"#d0e0e8","font-size":"14","font-weight":"700","text-anchor":"middle"},"Fusion Decision Logic"));
+
+    // Conditions as a flow
+    let conds=[
+      {x:250,y:50,t:"Same device?",a:"No → skip fusion",c:"#607888"},
+      {x:250,y:105,t:"No control flow between?",a:"Has if/loop → split",c:"#40a0ff"},
+      {x:250,y:160,t:"Register pressure OK?",a:"Too many regs → occupancy drops",c:"#ff8020"},
+      {x:250,y:215,t:"Element-wise chain?",a:"Yes → fuse!",c:"#00e5a0"},
+    ];
+
+    conds.forEach((c,i)=>{
+      svg.append(E("rect",{x:c.x,y:c.y,width:280,height:40,rx:6,fill:"rgba(0,229,160,0.04)",stroke:c.c,"stroke-width":"1"}));
+      svg.append(E("text",{x:c.x+10,y:c.y+18,fill:c.c,"font-size":"11","font-family":"JetBrains Mono,monospace"},c.t));
+      svg.append(E("text",{x:c.x+10,y:c.y+34,fill:"#607888","font-size":"10","font-family":"JetBrains Mono,monospace"},c.a));
+      if(i<3){
+        svg.append(E("line",{x1:c.x+140,y1:c.y+40,x2:c.x+140,y2:c.y+50,stroke:"#d0e0e8","stroke-width":"1"}));
+        svg.append(E("circle",{cx:c.x+140,cy:c.y+45,r:3,fill:"#d0e0e8"}));
+      }
+    });
+
+    // Register pressure visualization
+    svg.append(E("text",{x:600,y:60,fill:"#ff8020","font-size":"12","font-weight":"700","text-anchor":"middle"},"Register Pressure"));
+    for(let i=0;i<10;i++){
+      svg.append(E("rect",{x:580+i*24,y:75,width:20,height:80,rx:2,fill:i<7?"rgba(0,229,160,0.3)":"rgba(255,128,32,0.3)",stroke:i<7?"#00e5a0":"#ff8020","stroke-width":"1"}));
+    }
+    svg.append(E("text",{x:700,y:145,fill:"#ff8020","font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"spill to HBM")); svg.append(E("text",{x:700,y:170,fill:"#607888","font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"95% used"}));
+
+    // Horizontal fusion example
+    svg.append(E("text",{x:400,y:290,fill:"#00e5a0","font-size":"13","font-weight":"700","text-anchor":"middle"},"Horizontal Fusion: fuse parallel branches"));
+    svg.append(E("rect",{x:120,y:305,width:120,height:36,rx:6,fill:"rgba(0,229,160,0.08)",stroke:"#00e5a0","stroke-width":"1"}));
+    svg.append(E("text",{x:180,y:327,fill:"#00e5a0","font-size":"11","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"MatMul A"));
+    svg.append(E("rect",{x:320,y:305,width:120,height:36,rx:6,fill:"rgba(64,160,255,0.08)",stroke:"#40a0ff","stroke-width":"1"}));
+    svg.append(E("text",{x:380,y:327,fill:"#40a0ff","font-size":"11","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"MatMul B"));
+    svg.append(E("rect",{x:520,y:305,width:120,height:36,rx:6,fill:"rgba(176,80,255,0.08)",stroke:"#b050ff","stroke-width":"1"}));
+    svg.append(E("text",{x:580,y:327,fill:"#b050ff","font-size":"11","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Add"));
+    svg.append(E("text",{x:400,y:370,fill:"#607888","font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Fuse → 3-GEMM kernel (CUBLASLT) or horizontal fusion"));
+  }
+}];
+
+let step=0;
+function render(i){
+  step=((i%S.length)+S.length)%S.length;
+  let s=S[step];
+  document.getElementById("explain").innerHTML=`
+    <div class="step-title">${s.t}</div>
+    <div class="badge-row">${s.b.map(b=>'<span class="badge badge--tip">'+b+'</span>').join("")}</div>
+    <div class="code-line">${s.l}</div>
+    <div class="step-desc">${s.d}</div>`;
+  let svg=document.getElementById("stage").querySelector("svg");
+  if(!svg){svg=document.createElementNS("http://www.w3.org/2000/svg","svg");document.getElementById("stage").appendChild(svg);svg.setAttribute("width","100%");svg.setAttribute("height","100%");svg.style.minHeight="420px";}
+  while(svg.firstChild)svg.removeChild(svg.firstChild);
+  s.r(svg);
+  document.getElementById("dots").innerHTML=S.map((_,j)=>'<div class="step-dot'+(j===step?' active':j<step?' done':'')+'></div>').join("");
+  document.getElementById("btn-prev").disabled=step===0;
+  document.getElementById("btn-next").disabled=step===S.length-1;
+}
+render(0);
+document.getElementById("btn-prev").onclick=()=>render(step-1);
+document.getElementById("btn-next").onclick=()=>render(step+1);
+document.addEventListener("keydown",e=>{if(e.key==="ArrowLeft")render(step-1);if(e.key==="ArrowRight")render(step+1);});
+</script>
+</body>
+</html>

@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>04 循环状态追踪 — 计算思维</title>
+<style>
+:root{--bg:#f5f5f8;--bg-soft:#ffffff;--bg-code:#f0f0f4;--fg:#2c2c38;--fg-dim:#6c6c80;--line:#dcdce4;--accent:#5b6abf;--accent-2:#36a2b8;--grad:#f09840;--success:#40c878;--danger:#e04860;--shadow:0 2px 12px rgba(0,0,0,.06)}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:"Noto Sans SC","PingFang SC",-apple-system,sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(91,106,191,.12);color:var(--accent)}.badge--tip{background:rgba(64,200,120,.12);color:var(--success)}.badge--warn{background:rgba(240,152,64,.15);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--accent);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px;box-shadow:var(--shadow)}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 8px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>04 循环状态追踪</h1>
+<div class="breadcrumb"><a href="../index.html">计算思维</a> / 第2章 / 循环状态追踪</div>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="explain">
+<div class="step-title" id="stepTitle"></div>
+<div class="step-desc" id="stepDesc"></div>
+<div class="badge-row" id="badges"></div>
+<div class="info-line" id="codeLine"></div>
+</div>
+<div class="panel-stage" id="stage"></div>
+</div>
+<div class="demo-controls">
+<button id="btnPrev" aria-label="上一步">&larr; 上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btnNext" aria-label="下一步">下一步 &rarr;</button>
+<button id="btnAuto" aria-label="自动播放">&#9654; 自动播放</button>
+<span style="font-size:12px;color:var(--fg-dim)">键盘 &larr; &rarr;</span>
+</div>
+</div>
+<script>
+const S=[{
+t:"初始化：进入循环之前",
+l:"i = 0; sum = 0; arr = [3, 7, 2, 9, 5]; n = 5",
+d:"在进入 for/while 循环之前，先<strong>列出所有变量</strong>及其初始值。这是理解循环行为的基础。",
+b:[{t:"初始化",c:"def"},{t:"变量清单",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// code block left
+const cr=document.createElementNS("http://www.w3.org/2000/svg","rect");
+cr.setAttribute("x","30");cr.setAttribute("y","40");cr.setAttribute("width","260");cr.setAttribute("height","180");
+cr.setAttribute("rx","8");cr.setAttribute("fill","var(--bg-soft)");cr.setAttribute("stroke","var(--accent)");cr.setAttribute("stroke-width","1.5");
+svg.appendChild(cr);
+const ct=document.createElementNS("http://www.w3.org/2000/svg","text");
+ct.setAttribute("x","160");ct.setAttribute("y","65");ct.setAttribute("text-anchor","middle");ct.setAttribute("font-size","13");ct.setAttribute("font-weight","700");ct.setAttribute("fill","var(--accent)");
+ct.textContent="伪代码";
+svg.appendChild(ct);
+["i ← 0","sum ← 0","n ← len(arr)","while i < n:","    sum ← sum + arr[i]","    i ← i + 1"].forEach((l,idx)=>{
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x","50");t.setAttribute("y",90+idx*22);t.setAttribute("font-size","11");t.setAttribute("fill",idx>=3?"var(--fg-dim)":"var(--fg)");t.setAttribute("font-family","JetBrains Mono,monospace");
+t.textContent=l;
+svg.appendChild(t);
+});
+// state table right
+const colW=80,rowH=32;
+const vars=["i","sum","i < n?"];
+const svx=380,svy=60;
+// header
+vars.forEach((v,vi)=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",svx+vi*colW);r.setAttribute("y",svy);r.setAttribute("width",colW);r.setAttribute("height","28");
+r.setAttribute("fill","var(--accent)");r.setAttribute("opacity","0.12");r.setAttribute("stroke","var(--accent)");r.setAttribute("stroke-width","1");
+svg.appendChild(r);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",svx+vi*colW+colW/2);t.setAttribute("y",svy+19);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","12");t.setAttribute("font-weight","700");t.setAttribute("fill","var(--accent)");
+t.textContent=v;
+svg.appendChild(t);
+});
+// init row
+const initVals=["0","0","true"];
+initVals.forEach((v,vi)=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",svx+vi*colW);r.setAttribute("y",svy+28);r.setAttribute("width",colW);r.setAttribute("height",rowH);
+r.setAttribute("fill","var(--bg-soft)");r.setAttribute("stroke","var(--line)");r.setAttribute("stroke-width","1");
+svg.appendChild(r);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",svx+vi*colW+colW/2);t.setAttribute("y",svy+28+20);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","13");t.setAttribute("fill","var(--fg)");
+t.textContent=v;
+svg.appendChild(t);
+});
+// row label
+const rl=document.createElementNS("http://www.w3.org/2000/svg","text");
+rl.setAttribute("x",svx-10);rl.setAttribute("y",svy+28+20);rl.setAttribute("text-anchor","end");rl.setAttribute("font-size","11");rl.setAttribute("fill","var(--fg-dim)");
+rl.textContent="初始";
+svg.appendChild(rl);
+}},
+{
+t:"迭代追踪：变量逐行更新",
+l:"i=1: sum=0+3=3 | i=2: sum=3+7=10 | i=3: sum=10+2=12 | i=4: sum=12+9=21 | i=5: sum=21+5=26",
+d:"每轮迭代记录<strong>所有变量值</strong>的变化。就像在纸上画表格：执行一行，更新一列。能追踪状态的变化是调试的基础。",
+b:[{t:"追踪表",c:"def"},{t:"逐行更新",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+const colW=85,rowH=34;
+const headers=["迭代","i","arr[i]","sum","i<n?"];
+const svx=30,svy=55;
+// draw table
+headers.forEach((h,hi)=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",svx+hi*colW);r.setAttribute("y",svy);r.setAttribute("width",colW);r.setAttribute("height","28");
+r.setAttribute("fill","var(--accent)");r.setAttribute("opacity","0.12");r.setAttribute("stroke","var(--accent)");r.setAttribute("stroke-width","1");
+svg.appendChild(r);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",svx+hi*colW+colW/2);t.setAttribute("y",svy+19);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","11");t.setAttribute("font-weight","700");t.setAttribute("fill","var(--accent)");
+t.textContent=h;
+svg.appendChild(t);
+});
+// data rows
+const data=[["初始","0","—","0","true"],["第1轮","1","3","3","true"],["第2轮","2","7","10","true"],["第3轮","3","2","12","true"],["第4轮","4","9","21","true"],["第5轮","5","5","26","false"]];
+data.forEach((row,ri)=>{
+const isLast=ri===5;
+row.forEach((cell,ci)=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",svx+ci*colW);r.setAttribute("y",svy+28+ri*rowH);r.setAttribute("width",colW);r.setAttribute("height",rowH);
+r.setAttribute("fill",isLast?"var(--success)":"var(--bg-soft)");
+r.setAttribute("fill-opacity",isLast?"0.1":"1");
+r.setAttribute("stroke",isLast?"var(--success)":"var(--line)");r.setAttribute("stroke-width","1");
+svg.appendChild(r);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",svx+ci*colW+colW/2);t.setAttribute("y",svy+28+ri*rowH+20);t.setAttribute("text-anchor","middle");
+t.setAttribute("font-size","11");t.setAttribute("fill",isLast?"var(--success)":ci===3?"var(--grad)":"var(--fg)");
+t.setAttribute("font-weight",isLast||ci===3?"700":"400");
+t.setAttribute("font-family",ci>0?"JetBrains Mono,monospace":"sans-serif");
+t.textContent=cell;
+svg.appendChild(t);
+});
+});
+// highlight the last row (termination)
+const lastBox=document.createElementNS("http://www.w3.org/2000/svg","rect");
+lastBox.setAttribute("x",svx);lastBox.setAttribute("y",svy+28+5*rowH);lastBox.setAttribute("width",colW*5);lastBox.setAttribute("height",rowH);
+lastBox.setAttribute("fill","none");lastBox.setAttribute("stroke","var(--success)");lastBox.setAttribute("stroke-width","2");lastBox.setAttribute("rx","4");
+svg.appendChild(lastBox);
+// annotation
+const an=document.createElementNS("http://www.w3.org/2000/svg","text");
+an.setAttribute("x",svx+colW*5+20);an.setAttribute("y",svy+28+5*rowH+20);an.setAttribute("font-size","11");an.setAttribute("fill","var(--success)");an.setAttribute("font-weight","600");
+an.textContent="← 终止";
+svg.appendChild(an);
+const an2=document.createElementNS("http://www.w3.org/2000/svg","text");
+an2.setAttribute("x",svx+colW*5+20);an2.setAttribute("y",svy+28+5*rowH+40);an2.setAttribute("font-size","11");an2.setAttribute("fill","var(--fg-dim)");
+an2.textContent="i=5 ≥ n=5";
+svg.appendChild(an2);
+}},
+{
+t:"终止条件检查",
+l:"while i < n:  // 当 i ≥ n 时退出循环",
+d:"每轮迭代之前检查<strong>循环条件</strong>。如果条件为假，则跳出循环。注意：条件检查在<em>每轮开始</em>（不是中间）。",
+b:[{t:"条件检查",c:"warn"},{t:"循环出口",c:"def"}],
+r(svg){
+svg.innerHTML='';
+// flow diagram
+const flow=[
+{x:280,y:40,w:140,h:40,label:"检查条件",col:"var(--grad)"},
+{x:280,y:110,w:140,h:40,label:"i < n ?",col:"var(--accent)"},
+{x:150,y:190,w:120,h:40,label:"执行循环体",col:"var(--accent-2)"},
+{x:420,y:190,w:120,h:40,label:"退出循环",col:"var(--success)"},
+];
+flow.forEach(f=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",f.x);r.setAttribute("y",f.y);r.setAttribute("width",f.w);r.setAttribute("height",f.h);
+r.setAttribute("rx","8");r.setAttribute("fill","var(--bg-soft)");r.setAttribute("stroke",f.col);r.setAttribute("stroke-width","2");
+svg.appendChild(r);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",f.x+f.w/2);t.setAttribute("y",f.y+f.h/2+5);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","13");t.setAttribute("font-weight","600");t.setAttribute("fill",f.col);
+t.textContent=f.label;
+svg.appendChild(t);
+});
+// arrows
+const arrows=[
+{x1:350,y1:80,x2:350,y2:105,label:""},
+{x1:290,y1:130,x2:210,y2:185,label:"True"},
+{x1:410,y1:130,x2:480,y2:185,label:"False"},
+{x1:210,y1:230,x2:210,y2:265,x2a:350,y2a:265,y1a:290},
+];
+arrows.forEach((a,i)=>{
+if(i<3){
+const l=document.createElementNS("http://www.w3.org/2000/svg","line");
+l.setAttribute("x1",a.x1);l.setAttribute("y1",a.y1);l.setAttribute("x2",a.x2);l.setAttribute("y2",a.y2);
+l.setAttribute("stroke","var(--fg-dim)");l.setAttribute("stroke-width","1.5");
+svg.appendChild(l);
+if(a.label){
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",(a.x1+a.x2)/2-20);t.setAttribute("y",(a.y1+a.y2)/2-4);
+t.setAttribute("font-size","10");t.setAttribute("fill","var(--fg-dim)");
+t.textContent=a.label;
+svg.appendChild(t);
+}
+}else{
+// loop-back path
+const p=document.createElementNS("http://www.w3.org/2000/svg","path");
+p.setAttribute("d",`M ${a.x1} ${a.y1} L ${a.x1} ${a.y1a} L ${a.x2a} ${a.y2a} L ${a.x2a} 85`);
+p.setAttribute("fill","none");p.setAttribute("stroke","var(--accent-2)");p.setAttribute("stroke-width","1.5");p.setAttribute("stroke-dasharray","5,3");
+svg.appendChild(p);
+const lt=document.createElementNS("http://www.w3.org/2000/svg","text");
+lt.setAttribute("x","310");lt.setAttribute("y","275");lt.setAttribute("text-anchor","middle");lt.setAttribute("font-size","10");lt.setAttribute("fill","var(--accent-2)");
+lt.textContent="i++, 回到检查";
+svg.appendChild(lt);
+}
+});
+// i values visualization
+[{label:"i=0",x:60,y:60},{label:"i=1",x:60,y:100},{label:"i=2",x:60,y:140},{label:"i=3",x:60,y:180},{label:"i=4",x:60,y:220},{label:"i=5 → 退出",x:60,y:260,highlight:true}].forEach(vi=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",vi.x);r.setAttribute("y",vi.y);r.setAttribute("width","100");r.setAttribute("height","30");
+r.setAttribute("rx","6");r.setAttribute("fill",vi.highlight?"var(--success)":"var(--bg-soft)");
+r.setAttribute("fill-opacity",vi.highlight?"0.15":"1");
+r.setAttribute("stroke",vi.highlight?"var(--success)":"var(--line)");r.setAttribute("stroke-width","1");
+svg.appendChild(r);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",vi.x+50);t.setAttribute("y",vi.y+20);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","11");t.setAttribute("fill",vi.highlight?"var(--success)":"var(--fg)");
+t.textContent=vi.label;
+svg.appendChild(t);
+});
+}},
+{
+t:"常见陷阱与总结",
+l:"# 陷阱1: 忘记更新计数器 (无限循环)\n# 陷阱2: 条件写反 (一次都不执行)\n# 陷阱3: 循环内修改被迭代的集合",
+d:"三个最常见的循环 Bug：<strong>忘记 i++</strong>（死循环）、<strong>条件写反</strong>（跳过所有迭代）、<strong>遍历时修改</strong>（跳过元素或越界）。",
+b:[{t:"常见Bug",c:"warn"},{t:"最佳实践",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+const traps=[
+{y:50,icon:"⚠",title:"忘记更新计数器",desc:"i 始终为 0 → 死循环",col:"var(--danger)"},
+{y:125,icon:"⚠",title:"条件写反 (i>n)",desc:"初始 i=0,n=5 → 一次不执行",col:"var(--grad)"},
+{y:200,icon:"⚠",title:"遍历时修改集合",desc:"for x in lst: lst.remove(x)",col:"var(--danger)"},
+];
+traps.forEach(tp=>{
+const g=document.createElementNS("http://www.w3.org/2000/svg","g");
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x","30");r.setAttribute("y",tp.y);r.setAttribute("width","580");r.setAttribute("height","60");
+r.setAttribute("rx","8");r.setAttribute("fill","var(--bg-soft)");r.setAttribute("stroke","var(--line)");r.setAttribute("stroke-width","1");
+g.appendChild(r);
+const ic=document.createElementNS("http://www.w3.org/2000/svg","text");
+ic.setAttribute("x","60");ic.setAttribute("y",tp.y+38);ic.setAttribute("text-anchor","middle");ic.setAttribute("font-size","20");
+ic.textContent=tp.icon;
+g.appendChild(ic);
+const tt=document.createElementNS("http://www.w3.org/2000/svg","text");
+tt.setAttribute("x","95");tt.setAttribute("y",tp.y+28);tt.setAttribute("font-size","14");tt.setAttribute("font-weight","700");tt.setAttribute("fill",tp.col);
+tt.textContent=tp.title;
+g.appendChild(tt);
+const td=document.createElementNS("http://www.w3.org/2000/svg","text");
+td.setAttribute("x","95");td.setAttribute("y",tp.y+48);td.setAttribute("font-size","12");td.setAttribute("fill","var(--fg-dim)");
+td.textContent=tp.desc;
+g.appendChild(td);
+svg.appendChild(g);
+});
+// solution box
+const sb=document.createElementNS("http://www.w3.org/2000/svg","rect");
+sb.setAttribute("x","30");sb.setAttribute("y","285");sb.setAttribute("width","640");sb.setAttribute("height","45");
+sb.setAttribute("rx","8");sb.setAttribute("fill","var(--success)");sb.setAttribute("opacity","0.08");sb.setAttribute("stroke","var(--success)");sb.setAttribute("stroke-width","1.5");
+svg.appendChild(sb);
+const st=document.createElementNS("http://www.w3.org/2000/svg","text");
+st.setAttribute("x","350");st.setAttribute("y","312");st.setAttribute("text-anchor","middle");st.setAttribute("font-size","13");st.setAttribute("fill","var(--success)");st.setAttribute("font-weight","600");
+st.textContent="对策：使用 for i in range(n) 代替手动 while，避免修改正在迭代的容器";
+svg.appendChild(st);
+}}
+];
+
+let step=0,autoTimer=null,autoOn=false;
+const stepTitle=document.getElementById("stepTitle");
+const stepDesc=document.getElementById("stepDesc");
+const badges=document.getElementById("badges");
+const codeLine=document.getElementById("codeLine");
+const stage=document.getElementById("stage");
+const dots=document.getElementById("dots");
+const btnPrev=document.getElementById("btnPrev");
+const btnNext=document.getElementById("btnNext");
+const btnAuto=document.getElementById("btnAuto");
+
+function renderDots(){
+dots.innerHTML='';
+S.forEach((_,i)=>{
+const d=document.createElement("span");
+d.className="step-dot"+(i===step?" active":i<step?" done":"");
+d.onclick=()=>goTo(i);
+dots.appendChild(d);
+});
+}
+function goTo(i){
+step=Math.max(0,Math.min(S.length-1,i));
+const s=S[step];
+stepTitle.textContent=s.t;
+stepDesc.innerHTML=s.d;
+badges.innerHTML=s.b.map(b=>`<span class="badge badge--${b.c}">${b.t}</span>`).join('');
+codeLine.textContent=s.l;
+const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+svg.setAttribute("viewBox","0 0 700 340");
+svg.setAttribute("preserveAspectRatio","xMidYMid meet");
+stage.innerHTML='';
+stage.appendChild(svg);
+s.r(svg);
+btnPrev.disabled=step===0;
+btnNext.disabled=step===S.length-1;
+renderDots();
+}
+btnPrev.onclick=()=>goTo(step-1);
+btnNext.onclick=()=>{if(step<S.length-1)goTo(step+1);else{autoOn=false;btnAuto.innerHTML="&#9654; 自动播放";clearInterval(autoTimer);}};
+btnAuto.onclick=()=>{autoOn=!autoOn;btnAuto.innerHTML=autoOn?"&#9632; 停止":"&#9654; 自动播放";if(autoOn){autoTimer=setInterval(()=>{if(step<S.length-1)goTo(step+1);else goTo(0);},3500);}else clearInterval(autoTimer);};
+document.addEventListener("keydown",e=>{if(e.key==="ArrowLeft")goTo(step-1);if(e.key==="ArrowRight"){if(step<S.length-1)goTo(step+1);}});
+goTo(0);
+</script>
+</body>
+</html>

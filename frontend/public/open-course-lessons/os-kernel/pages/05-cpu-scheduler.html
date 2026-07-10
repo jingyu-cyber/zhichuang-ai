@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>CPU 调度器 — 操作系统内核构建</title>
+<style>:root{--bg:#0d1117;--bg-soft:#161b22;--bg-code:#0a0c10;--fg:#e6edf3;--fg-dim:#8b949e;--line:#30363d;--accent:#58a6ff;--accent-2:#3fb950;--grad:#d29922;--success:#3fb950;--danger:#f85149}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(88,166,255,.18);color:var(--accent)}.badge--tip{background:rgba(63,185,80,.18);color:var(--success)}.badge--warn{background:rgba(210,153,34,.18);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.code-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>第 5 节 &middot; CPU 调度器</h1>
+<span class="breadcrumb"><a href="../index.html">课程首页</a> / 进程管理</span>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="explain"></div>
+<div class="panel-stage" id="stage"></div>
+</div>
+<div class="demo-controls">
+<button id="prevBtn">&larr; 上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="nextBtn">下一步 &rarr;</button>
+<button id="autoBtn">&#9654; 自动播放</button>
+</div>
+</div>
+<script>
+const S=[
+  {
+    t:"调度器循环 — scheduler()",
+    l:"for(;;){ p = pick(); swtch(&cpu->sched, p->ctx); }",
+    d:"内核调度器 <code>scheduler()</code> 是一个无限循环：<br>1) 从 RUNNABLE 队列中挑选一个进程<br>2) <code>swtch()</code> 切换到该进程的上下文<br>3) 进程主动 <code>yield</code> 或时间片耗尽时返回调度器<br>4) 再次循环挑选下一个进程",
+    b:[{t:"循环",c:"badge--def"},{t:"swtch",c:"badge--warn"},{t:"就绪队列",c:"badge--tip"}],
+    r(svg){
+      svg.innerHTML='';svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <text x="400" y="30" text-anchor="middle" fill="var(--fg)" font-size="16" font-weight="700">调度器工作流程</text>
+        <!-- Scheduler loop -->
+        <rect x="250" y="55" width="300" height="140" rx="10" fill="rgba(88,166,255,.08)" stroke="var(--accent)" stroke-width="2"/>
+        <text x="400" y="85" text-anchor="middle" fill="var(--accent)" font-size="14" font-weight="700">scheduler() loop</text>
+        <rect x="270" y="100" width="260" height="26" rx="5" fill="rgba(63,185,80,.12)"/>
+        <text x="400" y="118" text-anchor="middle" fill="var(--accent-2)" font-size="12">1. p = pick_next() — 选进程</text>
+        <rect x="270" y="132" width="260" height="26" rx="5" fill="rgba(88,166,255,.12)"/>
+        <text x="400" y="150" text-anchor="middle" fill="var(--accent)" font-size="12">2. swtch(sched_ctx, p->ctx) — 切换</text>
+        <rect x="270" y="164" width="260" height="26" rx="5" fill="var(--fg-dim)" opacity="0.3"/>
+        <text x="400" y="182" text-anchor="middle" fill="var(--fg-dim)" font-size="12">3. ... p runs ... → yields → back here</text>
+        <!-- Ready queue -->
+        <rect x="30" y="230" width="360" height="70" rx="10" fill="rgba(63,185,80,.06)" stroke="var(--accent-2)" stroke-width="1.5"/>
+        <text x="210" y="258" text-anchor="middle" fill="var(--accent-2)" font-size="13" font-weight="600">Ready Queue (ptable.proc[])</text>
+        <rect x="50" y="270" width="55" height="22" rx="4" fill="rgba(63,185,80,.15)"/><text x="77" y="286" text-anchor="middle" fill="var(--accent-2)" font-size="11">P3</text>
+        <rect x="115" y="270" width="55" height="22" rx="4" fill="rgba(63,185,80,.15)"/><text x="142" y="286" text-anchor="middle" fill="var(--accent-2)" font-size="11">P5</text>
+        <rect x="180" y="270" width="55" height="22" rx="4" fill="rgba(63,185,80,.15)"/><text x="207" y="286" text-anchor="middle" fill="var(--accent-2)" font-size="11">P1</text>
+        <rect x="245" y="270" width="55" height="22" rx="4" fill="rgba(63,185,80,.15)"/><text x="272" y="286" text-anchor="middle" fill="var(--accent-2)" font-size="11">P8</text>
+        <rect x="310" y="270" width="55" height="22" rx="4" fill="rgba(63,185,80,.15)"/><text x="337" y="286" text-anchor="middle" fill="var(--accent-2)" font-size="11">P2</text>
+        <!-- Arrow queue to scheduler -->
+        <line x1="400" y1="195" x2="400" y2="230" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <!-- CPU -->
+        <rect x="440" y="230" width="180" height="70" rx="10" fill="rgba(88,166,255,.10)" stroke="var(--accent)" stroke-width="2"/>
+        <text x="530" y="258" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="600">CPU Core</text>
+        <rect x="465" y="270" width="130" height="22" rx="4" fill="rgba(88,166,255,.18)"/>
+        <text x="530" y="286" text-anchor="middle" fill="var(--accent)" font-size="12" font-weight="600">RUNNING: P3</text>
+        <!-- Arrow to CPU -->
+        <line x1="390" y1="265" x2="440" y2="265" stroke="var(--accent)" stroke-width="2" marker-end="url(#aB)"/>
+        <!-- Bottom code -->
+        <rect x="30" y="330" width="740" height="130" rx="8" fill="var(--bg)"/>
+        <text x="50" y="355" fill="var(--accent)" font-family="monospace" font-size="12">void scheduler(void) {</text>
+        <text x="70" y="378" fill="var(--fg-dim)" font-family="monospace" font-size="11">struct proc *p;</text>
+        <text x="70" y="400" fill="var(--fg-dim)" font-family="monospace" font-size="11">for(;;){</text>
+        <text x="90" y="422" fill="var(--accent-2)" font-family="monospace" font-size="11">for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){</text>
+        <text x="110" y="444" fill="var(--accent-2)" font-family="monospace" font-size="11">if(p->state != RUNNABLE) continue;  // 跳过非就绪进程</text>
+        <text x="110" y="450" fill="var(--fg-dim)" font-family="monospace" font-size="11">// ... set running, swtch ...</text>
+        <defs><marker id="aB" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--accent)"/></marker></defs>`;
+      svg.appendChild(g);
+    }
+  },
+  {
+    t:"FCFS（先来先服务）调度",
+    l:"// FCFS: pick first RUNNABLE, no preemption",
+    d:"<b>FCFS</b>：按到达顺序调度，非抢占式。<br>优点：简单公平。缺点：短作业排在长作业后面会饿死（护航效应）。<br>Gantt 图展示 P1(24ms) → P2(3ms) → P3(3ms) 的调度顺序。",
+    b:[{t:"FCFS",c:"badge--def"},{t:"非抢占",c:"badge--warn"},{t:"护航效应",c:"badge--tip"}],
+    r(svg){
+      svg.innerHTML='';svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <text x="400" y="28" text-anchor="middle" fill="var(--fg)" font-size="15" font-weight="700">FCFS 调度 — Gantt 图</text>
+        <text x="400" y="52" text-anchor="middle" fill="var(--fg-dim)" font-size="12">到达顺序: P1(24ms), P2(3ms), P3(3ms) — 非抢占</text>
+        <!-- Gantt chart -->
+        <rect x="50" y="75" width="700" height="50" rx="6" fill="var(--line)" opacity="0.3"/>
+        <rect x="50" y="75" width="560" height="50" rx="6" fill="rgba(88,166,255,.25)"/><text x="330" y="105" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="600">P1 (24ms)</text>
+        <rect x="610" y="75" width="70" height="50" rx="0" fill="rgba(63,185,80,.2)"/><text x="645" y="105" text-anchor="middle" fill="var(--accent-2)" font-size="12">P2(3)</text>
+        <rect x="680" y="75" width="70" height="50" rx="6" fill="rgba(210,153,34,.2)"/><text x="715" y="105" text-anchor="middle" fill="var(--grad)" font-size="12">P3(3)</text>
+        <text x="50" y="145" fill="var(--fg-dim)" font-size="11">0</text>
+        <text x="610" y="145" fill="var(--fg-dim)" font-size="11">24</text>
+        <text x="680" y="145" fill="var(--fg-dim)" font-size="11">27</text>
+        <text x="750" y="145" fill="var(--fg-dim)" font-size="11">30</text>
+        <!-- Wait time calculation -->
+        <rect x="50" y="175" width="700" height="130" rx="8" fill="var(--bg)"/>
+        <text x="70" y="200" fill="var(--fg)" font-size="13" font-weight="600">等待时间分析</text>
+        <text x="70" y="225" fill="var(--fg-dim)" font-size="12">P1: 等待 0ms,   周转 = 24ms</text>
+        <text x="70" y="250" fill="var(--fg-dim)" font-size="12">P2: 等待 24ms,  周转 = 27ms   ← 短作业被护航！</text>
+        <text x="70" y="275" fill="var(--fg-dim)" font-size="12">P3: 等待 27ms,  周转 = 30ms</text>
+        <text x="70" y="298" fill="var(--grad)" font-size="12">平均等待 = (0+24+27)/3 = 17ms  (护航效应明显)</text>
+        <!-- Convoy effect illustration -->
+        <rect x="50" y="330" width="700" height="120" rx="8" fill="rgba(210,153,34,.06)" stroke="var(--grad)" stroke-width="1" stroke-dasharray="4,2"/>
+        <text x="400" y="355" text-anchor="middle" fill="var(--grad)" font-size="13" font-weight="700">护航效应 (Convoy Effect)</text>
+        <text x="70" y="380" fill="var(--fg-dim)" font-size="12">多个 I/O-bound 短进程排在一个 CPU-bound 长进程后面，</text>
+        <text x="70" y="405" fill="var(--fg-dim)" font-size="12">就像车队跟在慢速卡车后面 — 所有短作业被严重延迟。</text>
+        <text x="70" y="435" fill="var(--fg-dim)" font-size="12">解决方案：引入抢占式调度（SJF/时间片轮转）</text>`;
+      svg.appendChild(g);
+    }
+  },
+  {
+    t:"SJF / SRTF（短作业优先）",
+    l:"// SJF: pick process with shortest CPU burst next",
+    d:"<b>SJF</b>（非抢占）：到达时选预计 CPU 时间最短的。<br><b>SRTF</b>（抢占）：新来更短进程可抢占当前进程。<br>最优平均等待时间，但需要预知 CPU burst 长度（难）。",
+    b:[{t:"SJF",c:"badge--def"},{t:"SRTF",c:"badge--tip"},{t:"最优",c:"badge--warn"}],
+    r(svg){
+      svg.innerHTML='';svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <text x="400" y="28" text-anchor="middle" fill="var(--fg)" font-size="15" font-weight="700">SJF 调度 — Gantt 图</text>
+        <text x="400" y="52" text-anchor="middle" fill="var(--fg-dim)" font-size="12">P1(6ms) P2(8ms) P3(7ms) P4(3ms) — 短作业优先</text>
+        <!-- Sorted by burst time: P4(3) → P1(6) → P3(7) → P2(8) -->
+        <rect x="50" y="75" width="700" height="50" rx="6" fill="var(--line)" opacity="0.3"/>
+        <rect x="50" y="75" width="120" height="50" rx="6" fill="rgba(63,185,80,.25)"/><text x="110" y="105" text-anchor="middle" fill="var(--accent-2)" font-size="13" font-weight="600">P4 (3ms)</text>
+        <rect x="170" y="75" width="240" height="50" rx="0" fill="rgba(88,166,255,.25)"/><text x="290" y="105" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="600">P1 (6ms)</text>
+        <rect x="410" y="75" width="280" height="50" rx="0" fill="rgba(210,153,34,.2)"/><text x="550" y="105" text-anchor="middle" fill="var(--grad)" font-size="13" font-weight="600">P3 (7ms)</text>
+        <rect x="690" y="75" width="60" height="50" rx="6" fill="rgba(88,166,255,.15)"/><text x="720" y="105" text-anchor="middle" fill="var(--fg-dim)" font-size="12">P2(8)</text>
+        <text x="50" y="145" fill="var(--fg-dim)" font-size="11">0</text>
+        <text x="170" y="145" fill="var(--fg-dim)" font-size="11">3</text>
+        <text x="410" y="145" fill="var(--fg-dim)" font-size="11">9</text>
+        <text x="690" y="145" fill="var(--fg-dim)" font-size="11">16</text>
+        <text x="750" y="145" fill="var(--fg-dim)" font-size="11">24</text>
+        <!-- Comparison table -->
+        <rect x="50" y="175" width="700" height="140" rx="8" fill="var(--bg)"/>
+        <text x="70" y="200" fill="var(--fg)" font-size="13" font-weight="600">FCFS vs SJF 对比 (相同作业集)</text>
+        <line x1="70" y1="210" x2="730" y2="210" stroke="var(--line)"/>
+        <text x="70" y="235" fill="var(--fg-dim)" font-size="12">指标</text><text x="250" y="235" text-anchor="middle" fill="var(--fg-dim)" font-size="12">FCFS</text><text x="500" y="235" text-anchor="middle" fill="var(--accent-2)" font-size="12">SJF</text>
+        <text x="70" y="262" fill="var(--fg-dim)" font-size="12">平均等待</text><text x="250" y="262" text-anchor="middle" fill="var(--fg-dim)" font-size="12">(0+6+14+21)/4=10.25ms</text><text x="500" y="262" text-anchor="middle" fill="var(--accent-2)" font-size="12">(3+16+9+0)/4=7ms</text>
+        <text x="70" y="289" fill="var(--fg-dim)" font-size="12">平均周转</text><text x="250" y="289" text-anchor="middle" fill="var(--fg-dim)" font-size="12">16.25ms</text><text x="500" y="289" text-anchor="middle" fill="var(--accent-2)" font-size="12">13ms</text>
+        <text x="70" y="320" fill="var(--grad)" font-size="12">SJF 在平均等待时间上是最优的（数学可证明）</text>
+        <text x="70" y="345" fill="var(--fg-dim)" font-size="11">但需要预知 CPU burst，实际中用指数平均来估计 next_burst = α * t_n + (1-α) * T_n</text>
+        <!-- SRTF preemption example -->
+        <text x="400" y="380" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="600">SRTF 抢占示例</text>
+        <rect x="50" y="395" width="700" height="55" rx="6" fill="var(--line)" opacity="0.3"/>
+        <rect x="50" y="395" width="100" height="25" rx="6" fill="rgba(88,166,255,.25)"/><text x="100" y="413" text-anchor="middle" fill="var(--accent)" font-size="10">P1(2/8)</text>
+        <rect x="150" y="395" width="80" height="25" fill="rgba(63,185,80,.25)"/><text x="190" y="413" text-anchor="middle" fill="var(--accent-2)" font-size="10">P4(4)</text>
+        <rect x="230" y="395" width="240" height="25" fill="rgba(88,166,255,.25)"/><text x="350" y="413" text-anchor="middle" fill="var(--accent)" font-size="10">P1(6/8) resumed</text>
+        <text x="550" y="420" fill="var(--fg-dim)" font-size="11">P4 到达更短(4 < P1剩余6)，抢占 P1！</text>`;
+      svg.appendChild(g);
+    }
+  },
+  {
+    t:"Round Robin（时间片轮转）",
+    l:"p->state=RUNNABLE; yield();  // 时间片(T=10ms)耗尽",
+    d:"<b>RR</b>：每个进程分配固定时间片（如 10ms），时间片用完则回到队尾。<br>公平性最好，适合交互式系统。时间片太小→切换开销大，太大→退化 FCFS。<br>xv6 等教学内核常用简单的 RR 调度。",
+    b:[{t:"RR",c:"badge--def"},{t:"抢占",c:"badge--tip"},{t:"时间片",c:"badge--warn"}],
+    r(svg){
+      svg.innerHTML='';svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <text x="400" y="28" text-anchor="middle" fill="var(--fg)" font-size="15" font-weight="700">Round Robin — 时间片 T=10ms</text>
+        <text x="400" y="52" text-anchor="middle" fill="var(--fg-dim)" font-size="12">P1(24ms) P2(3ms) P3(3ms) — 轮转调度</text>
+        <!-- Gantt chart for RR -->
+        <rect x="50" y="75" width="700" height="50" rx="6" fill="var(--line)" opacity="0.3"/>
+        <rect x="50" y="75" width="100" height="50" rx="6" fill="rgba(88,166,255,.25)"/><text x="100" y="105" text-anchor="middle" fill="var(--accent)" font-size="11">P1(10)</text>
+        <rect x="150" y="75" width="30" height="50" fill="rgba(63,185,80,.2)"/><text x="165" y="105" text-anchor="middle" fill="var(--accent-2)" font-size="10">P2</text>
+        <rect x="180" y="75" width="30" height="50" fill="rgba(210,153,34,.2)"/><text x="195" y="105" text-anchor="middle" fill="var(--grad)" font-size="10">P3</text>
+        <rect x="210" y="75" width="100" height="50" fill="rgba(88,166,255,.25)"/><text x="260" y="105" text-anchor="middle" fill="var(--accent)" font-size="11">P1(10)</text>
+        <rect x="310" y="75" width="40" height="50" rx="6" fill="rgba(88,166,255,.25)"/><text x="330" y="105" text-anchor="middle" fill="var(--accent)" font-size="11">P1(4)</text>
+        <text x="50" y="145" fill="var(--fg-dim)" font-size="10">0</text>
+        <text x="150" y="145" fill="var(--fg-dim)" font-size="10">10</text>
+        <text x="180" y="145" fill="var(--fg-dim)" font-size="10">13</text>
+        <text x="210" y="145" fill="var(--fg-dim)" font-size="10">16</text>
+        <text x="310" y="145" fill="var(--fg-dim)" font-size="10">26</text>
+        <text x="350" y="145" fill="var(--fg-dim)" font-size="10">30</text>
+        <!-- Circular queue diagram -->
+        <text x="400" y="205" text-anchor="middle" fill="var(--fg)" font-size="14" font-weight="700">就绪环形队列</text>
+        <circle cx="400" cy="280" r="70" fill="none" stroke="var(--accent-2)" stroke-width="2" stroke-dasharray="6,3"/>
+        <rect x="345" y="220" width="50" height="28" rx="5" fill="rgba(88,166,255,.15)" stroke="var(--accent)" stroke-width="1"/>
+        <text x="370" y="239" text-anchor="middle" fill="var(--accent)" font-size="12">P1</text>
+        <rect x="420" y="260" width="50" height="28" rx="5" fill="rgba(63,185,80,.15)" stroke="var(--accent-2)" stroke-width="1"/>
+        <text x="445" y="279" text-anchor="middle" fill="var(--accent-2)" font-size="12">P2</text>
+        <rect x="395" y="310" width="50" height="28" rx="5" fill="rgba(210,153,34,.15)" stroke="var(--grad)" stroke-width="1"/>
+        <text x="420" y="329" text-anchor="middle" fill="var(--grad)" font-size="12">P3</text>
+        <rect x="325" y="290" width="50" height="28" rx="5" fill="rgba(88,166,255,.10)" stroke="var(--fg-dim)" stroke-width="1"/>
+        <text x="350" y="309" text-anchor="middle" fill="var(--fg-dim)" font-size="12">P5</text>
+        <!-- Rotation arrows -->
+        <path d="M 370 235 A 50 50 0 0 0 400 320" fill="none" stroke="var(--accent-2)" stroke-width="1.5" marker-end="url(#aG)" opacity="0.5"/>
+        <!-- Timer preemption diagram -->
+        <text x="630" y="205" text-anchor="middle" fill="var(--grad)" font-size="13" font-weight="600">时间片耗尽流程</text>
+        <rect x="540" y="225" width="180" height="140" rx="8" fill="var(--bg)" stroke="var(--line)"/>
+        <text x="630" y="250" text-anchor="middle" fill="var(--fg-dim)" font-family="monospace" font-size="11">Timer IRQ (10ms)</text>
+        <line x1="630" y1="258" x2="630" y2="272" stroke="var(--grad)"/>
+        <text x="630" y="285" text-anchor="middle" fill="var(--fg-dim)" font-family="monospace" font-size="11">trap() → yield()</text>
+        <line x1="630" y1="293" x2="630" y2="307" stroke="var(--grad)"/>
+        <text x="630" y="320" text-anchor="middle" fill="var(--fg-dim)" font-family="monospace" font-size="11">p→state=RUNNABLE</text>
+        <line x1="630" y1="328" x2="630" y2="342" stroke="var(--grad)"/>
+        <text x="630" y="355" text-anchor="middle" fill="var(--accent-2)" font-family="monospace" font-size="11">enqueue(p)</text>
+        <!-- Legend -->
+        <text x="400" y="440" text-anchor="middle" fill="var(--fg-dim)" font-size="12">时间片权衡：T 小 → 响应快但上下文切换开销大 | T 大 → 开销小但响应慢</text>
+        <defs><marker id="aG" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="var(--accent-2)"/></marker></defs>`;
+      svg.appendChild(g);
+    }
+  }
+];
+
+let step=0,autoTimer=null,autoOn=false;
+const explain=document.getElementById('explain'),stage=document.getElementById('stage'),dots=document.getElementById('dots');
+const prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn'),autoBtn=document.getElementById('autoBtn');
+function render(){
+  const s=S[step];
+  explain.innerHTML=`<div class="step-title">${s.t}</div>${s.l?`<div class="code-line">${s.l}</div>`:''}<div class="badge-row">${s.b.map(b=>`<span class="badge ${b.c||'badge--def'}">${b.t}</span>`).join('')}</div><div class="step-desc">${s.d}</div>`;
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('viewBox','0 0 800 480');svg.style.width='100%';svg.style.height='100%';
+  stage.innerHTML='';stage.appendChild(svg);s.r(svg);
+  dots.innerHTML=S.map((_,i)=>{let cls=i===step?'active':i<step?'done':'';return `<span class="step-dot ${cls}"></span>`;}).join('');
+  prevBtn.disabled=step===0;nextBtn.disabled=step===S.length-1;
+}
+function next(){if(step<S.length-1){step++;render();}}
+function prev(){if(step>0){step--;render();}}
+function restart(){step=0;render();}
+function toggleAuto(){
+  if(autoTimer){clearInterval(autoTimer);autoTimer=null;autoOn=false;autoBtn.innerHTML='&#9654; 自动播放';}
+  else{autoOn=true;autoBtn.innerHTML='&#9646;&#9646; 停止';autoTimer=setInterval(()=>{if(step<S.length-1){step++;render();}else{clearInterval(autoTimer);autoTimer=null;autoOn=false;autoBtn.innerHTML='&#9654; 自动播放';}},3000);}
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();next();}
+  else if(e.key==='ArrowLeft'){e.preventDefault();prev();}
+  else if(e.key==='r'||e.key==='R'){e.preventDefault();restart();}
+  else if(e.key==='a'||e.key==='A'){e.preventDefault();toggleAuto();}
+});
+prevBtn.onclick=prev;nextBtn.onclick=next;autoBtn.onclick=toggleAuto;render();
+</script>
+</body>
+</html>

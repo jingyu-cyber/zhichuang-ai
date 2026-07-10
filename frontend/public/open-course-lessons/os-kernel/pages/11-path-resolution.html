@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>路径解析 — 操作系统内核构建</title>
+<style>:root{--bg:#0d1117;--bg-soft:#161b22;--bg-code:#0a0c10;--fg:#e6edf3;--fg-dim:#8b949e;--line:#30363d;--accent:#58a6ff;--accent-2:#3fb950;--grad:#d29922;--success:#3fb950;--danger:#f85149}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(88,166,255,.18);color:var(--accent)}.badge--tip{background:rgba(63,185,80,.18);color:var(--success)}.badge--warn{background:rgba(210,153,34,.18);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.code-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>第 11 节 &middot; 路径解析</h1>
+<span class="breadcrumb"><a href="../index.html">课程首页</a> / 文件系统与 I/O</span>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="explain"></div>
+<div class="panel-stage" id="stage"></div>
+</div>
+<div class="demo-controls">
+<button id="prevBtn">&larr; 上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="nextBtn">下一步 &rarr;</button>
+<button id="autoBtn">&#9654; 自动播放</button>
+</div>
+</div>
+<script>
+const S=[
+  {
+    t:"namei() — 逐级路径解析",
+    l:"inode* ip = namei(\"/home/user/file.txt\");  // path → inode",
+    d:"内核 <code>namei()</code> 函数将路径字符串转换为 inode：<br>1) 从根目录 (/) 或当前目录开始<br>2) 逐级扫描目录中的 <code>struct dirent</code> 条目<br>3) 匹配文件名 → 获取 inode 号 → 读取下一级 inode<br>4) 直到到达最终文件",
+    b:[{t:"namei",c:"badge--def"},{t:"dirent",c:"badge--tip"},{t:"逐级",c:"badge--warn"}],
+    r(svg){
+      svg.innerHTML='';svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <text x="400" y="25" text-anchor="middle" fill="var(--fg)" font-size="15" font-weight="700">路径解析: /home/user/file.txt</text>
+        <!-- Root dir -->
+        <rect x="30" y="50" width="120" height="70" rx="8" fill="rgba(88,166,255,.10)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="90" y="78" text-anchor="middle" fill="var(--accent)" font-size="12" font-weight="600">/ (root)</text>
+        <text x="90" y="98" text-anchor="middle" fill="var(--fg-dim)" font-size="10">inode #1</text>
+        <text x="90" y="114" text-anchor="middle" fill="var(--fg-dim)" font-size="9">type=DIR</text>
+        <!-- Arrow -->
+        <line x1="150" y1="85" x2="180" y2="85" stroke="var(--line)" stroke-width="1.5" marker-end="url(#aD)"/>
+        <text x="165" y="75" text-anchor="middle" fill="var(--fg-dim)" font-size="9">home</text>
+        <!-- home dir -->
+        <rect x="180" y="50" width="120" height="70" rx="8" fill="rgba(63,185,80,.10)" stroke="var(--accent-2)" stroke-width="1.5"/>
+        <text x="240" y="78" text-anchor="middle" fill="var(--accent-2)" font-size="12" font-weight="600">home</text>
+        <text x="240" y="98" text-anchor="middle" fill="var(--fg-dim)" font-size="10">inode #42</text>
+        <text x="240" y="114" text-anchor="middle" fill="var(--fg-dim)" font-size="9">type=DIR</text>
+        <!-- Arrow -->
+        <line x1="300" y1="85" x2="330" y2="85" stroke="var(--line)" stroke-width="1.5" marker-end="url(#aD)"/>
+        <text x="315" y="75" text-anchor="middle" fill="var(--fg-dim)" font-size="9">user</text>
+        <!-- user dir -->
+        <rect x="330" y="50" width="120" height="70" rx="8" fill="rgba(210,153,34,.10)" stroke="var(--grad)" stroke-width="1.5"/>
+        <text x="390" y="78" text-anchor="middle" fill="var(--grad)" font-size="12" font-weight="600">user</text>
+        <text x="390" y="98" text-anchor="middle" fill="var(--fg-dim)" font-size="10">inode #100</text>
+        <text x="390" y="114" text-anchor="middle" fill="var(--fg-dim)" font-size="9">type=DIR</text>
+        <!-- Arrow -->
+        <line x1="450" y1="85" x2="480" y2="85" stroke="var(--line)" stroke-width="1.5" marker-end="url(#aD)"/>
+        <text x="465" y="75" text-anchor="middle" fill="var(--fg-dim)" font-size="9">file.txt</text>
+        <!-- file.txt -->
+        <rect x="480" y="50" width="120" height="70" rx="8" fill="rgba(88,166,255,.15)" stroke="var(--accent)" stroke-width="2"/>
+        <text x="540" y="78" text-anchor="middle" fill="var(--accent)" font-size="12" font-weight="600">file.txt</text>
+        <text x="540" y="98" text-anchor="middle" fill="var(--fg-dim)" font-size="10">inode #256</text>
+        <text x="540" y="114" text-anchor="middle" fill="var(--fg-dim)" font-size="9">type=FILE</text>
+        <!-- Directory entry detail -->
+        <text x="400" y="160" text-anchor="middle" fill="var(--fg)" font-size="14" font-weight="700">Directory Entry 结构</text>
+        <rect x="30" y="180" width="740" height="100" rx="8" fill="var(--bg)"/>
+        <text x="50" y="208" fill="var(--accent)" font-family="monospace" font-size="12">struct dirent {</text>
+        <text x="70" y="232" fill="var(--fg-dim)" font-family="monospace" font-size="11">ushort inum;       // inode number</text>
+        <text x="70" y="256" fill="var(--fg-dim)" font-family="monospace" font-size="11">char   name[DIRSIZ]; // file name (max 14 bytes)</text>
+        <text x="50" y="273" fill="var(--fg-dim)" font-family="monospace" font-size="12">};</text>
+        <!-- Example of / home dir contents -->
+        <rect x="30" y="300" width="740" height="165" rx="8" fill="var(--bg)"/>
+        <text x="50" y="330" fill="var(--accent-2)" font-family="monospace" font-size="12">Contents of / (root) directory:</text>
+        <line x1="50" y1="340" x2="750" y2="340" stroke="var(--line)"/>
+        <text x="50" y="362" fill="var(--fg-dim)" font-family="monospace" font-size="11">inum=1   name="."</text><text x="280" y="362" fill="var(--fg-dim)" font-size="9">// current dir</text>
+        <text x="50" y="384" fill="var(--fg-dim)" font-family="monospace" font-size="11">inum=1   name=".."</text><text x="280" y="384" fill="var(--fg-dim)" font-size="9">// parent dir (root's parent = root)</text>
+        <text x="50" y="406" fill="var(--accent)" font-family="monospace" font-size="11">inum=42  name="home"</text><text x="280" y="406" fill="var(--fg-dim)" font-size="9">// matches "<b>home</b>/user/file.txt"</text>
+        <text x="50" y="428" fill="var(--fg-dim)" font-family="monospace" font-size="11">inum=10  name="bin"</text>
+        <text x="50" y="452" fill="var(--fg-dim)" font-family="monospace" font-size="11">inum=15  name="etc"</text>
+        <defs><marker id="aD" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="var(--line)"/></marker></defs>`;
+      svg.appendChild(g);
+    }
+  },
+  {
+    t:"namex() — 带起点的路径解析",
+    l:"namex(\"/../home/./user//file.txt\", 0) → inode",
+    d:"<code>namex()</code> 处理相对路径与符号链接：<br>1) 路径以 '/' 开头 → 从根目录开始<br>2) 路径不以 '/' 开头 → 从当前目录开始<br>3) 处理 <code>.</code>（当前目录）和 <code>..</code>（父目录）<br>4) 跳过连续的 '/'<br>5) 最终组件如果不带 '/' 结尾，不检查是否为目录",
+    b:[{t:"相对路径",c:"badge--def"},{t:"..",c:"badge--tip"},{t:"符号链接",c:"badge--warn"}],
+    r(svg){
+      svg.innerHTML='';svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <text x="400" y="25" text-anchor="middle" fill="var(--fg)" font-size="15" font-weight="700">namex() — 路径解析的完整实现</text>
+        <rect x="20" y="45" width="760" height="200" rx="8" fill="var(--bg)"/>
+        <text x="40" y="72" fill="var(--accent)" font-family="monospace" font-size="12">static struct inode* namex(char *path, int nameiparent, char *name) {</text>
+        <text x="60" y="96" fill="var(--fg-dim)" font-family="monospace" font-size="11">struct inode *ip;</text>
+        <text x="60" y="120" fill="var(--fg-dim)" font-family="monospace" font-size="11">if (*path == '/')</text>
+        <text x="80" y="144" fill="var(--accent-2)" font-family="monospace" font-size="11">ip = iget(ROOTDEV, ROOTINO);      // 从根目录开始</text>
+        <text x="60" y="168" fill="var(--fg-dim)" font-family="monospace" font-size="11">else</text>
+        <text x="80" y="192" fill="var(--accent-2)" font-family="monospace" font-size="11">ip = idup(myproc()->cwd);         // 从当前目录开始</text>
+        <text x="60" y="216" fill="var(--fg-dim)" font-family="monospace" font-size="11">while ((path = skipelem(path, name)) != 0) {</text>
+        <text x="80" y="232" fill="var(--grad)" font-family="monospace" font-size="11">// 逐级解析每个路径组件</text>
+        <text x="40" y="248" fill="var(--fg-dim)" font-family="monospace" font-size="12">}</text>
+        <!-- Skipelem diagram -->
+        <text x="400" y="290" text-anchor="middle" fill="var(--fg)" font-size="14" font-weight="700">skipelem() — 提取下一个路径组件</text>
+        <rect x="20" y="310" width="760" height="65" rx="8" fill="var(--bg)"/>
+        <text x="40" y="338" fill="var(--accent-2)" font-family="monospace" font-size="12">skipelem("/home/user/file.txt", name) → name="home", return="/user/file.txt"</text>
+        <text x="40" y="362" fill="var(--accent-2)" font-family="monospace" font-size="12">skipelem("/user/file.txt", name)       → name="user", return="/file.txt"</text>
+        <text x="40" y="378" fill="var(--accent-2)" font-family="monospace" font-size="12">skipelem("/file.txt", name)             → name="file.txt", return=""</text>
+        <!-- Symlink handling -->
+        <text x="400" y="415" text-anchor="middle" fill="var(--grad)" font-size="13" font-weight="600">符号链接 (Symlink) 处理流程</text>
+        <rect x="80" y="430" width="200" height="40" rx="6" fill="rgba(88,166,255,.10)" stroke="var(--accent)"/>
+        <text x="180" y="448" text-anchor="middle" fill="var(--accent)" font-size="11">link → T_SYMLINK</text><text x="180" y="462" text-anchor="middle" fill="var(--fg-dim)" font-size="9">inode type</text>
+        <line x1="280" y1="450" x2="340" y2="450" stroke="var(--line)" stroke-width="1.5" marker-end="url(#aD)"/>
+        <rect x="340" y="430" width="200" height="40" rx="6" fill="rgba(63,185,80,.10)" stroke="var(--accent-2)"/>
+        <text x="440" y="448" text-anchor="middle" fill="var(--accent-2)" font-size="11">read target path</text><text x="440" y="462" text-anchor="middle" fill="var(--fg-dim)" font-size="9">from inode data</text>
+        <line x1="540" y1="450" x2="600" y2="450" stroke="var(--line)" stroke-width="1.5" marker-end="url(#aD)"/>
+        <rect x="600" y="430" width="180" height="40" rx="6" fill="rgba(210,153,34,.10)" stroke="var(--grad)"/>
+        <text x="690" y="448" text-anchor="middle" fill="var(--grad)" font-size="11">restart namex()</text><text x="690" y="462" text-anchor="middle" fill="var(--fg-dim)" font-size="9">loop limit = 10</text>`;
+      svg.appendChild(g);
+    }
+  },
+  {
+    t:"dirlookup() — 在目录中查找文件名",
+    l:"for(de in dir){ if(namecmp(de.name, target)==0) return de.inum; }",
+    d:"<code>dirlookup()</code> 在一个目录 inode 的数据块中线性扫描：<br>1) 读取目录的数据块（inode 的 addrs[] 指向磁盘块）<br>2) 逐个检查 <code>struct dirent</code> 的 name 是否匹配<br>3) 成功 → 返回 inode 号；失败 → 返回 0（ENOENT）<br>目录本质上是一个特殊文件，内容是 dirent 数组。",
+    b:[{t:"线性扫描",c:"badge--def"},{t:"dirent",c:"badge--tip"},{t:"ENOENT",c:"badge--warn"}],
+    r(svg){
+      svg.innerHTML='';svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <text x="400" y="25" text-anchor="middle" fill="var(--fg)" font-size="15" font-weight="700">dirlookup() — 在目录中查找文件名</text>
+        <!-- Directory inode on disk -->
+        <rect x="30" y="50" width="240" height="140" rx="10" fill="rgba(210,153,34,.08)" stroke="var(--grad)" stroke-width="1.5"/>
+        <text x="150" y="78" text-anchor="middle" fill="var(--grad)" font-size="13" font-weight="600">Directory inode #100</text>
+        <text x="150" y="96" text-anchor="middle" fill="var(--fg-dim)" font-size="10">type=DIR, size=512B</text>
+        <text x="150" y="116" text-anchor="middle" fill="var(--fg-dim)" font-size="10">addrs[0] → block 0x50</text>
+        <rect x="50" y="128" width="200" height="20" rx="4" fill="var(--bg)"/><text x="150" y="143" text-anchor="middle" fill="var(--fg-dim)" font-family="monospace" font-size="10">addrs[1..12] = 0 (empty)</text>
+        <!-- Disk block -->
+        <rect x="310" y="50" width="460" height="140" rx="10" fill="var(--bg)" stroke="var(--line)" stroke-width="1"/>
+        <text x="540" y="78" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="600">Disk Block 0x50 (directory data)</text>
+        <line x1="330" y1="90" x2="750" y2="90" stroke="var(--line)"/>
+        <rect x="330" y="98" width="100" height="22" rx="3" fill="var(--bg-soft)"/><text x="380" y="114" text-anchor="middle" fill="var(--fg-dim)" font-size="10">inum=100 "."</text>
+        <rect x="440" y="98" width="100" height="22" rx="3" fill="var(--bg-soft)"/><text x="490" y="114" text-anchor="middle" fill="var(--fg-dim)" font-size="10">inum=42 ".."</text>
+        <rect x="550" y="98" width="100" height="22" rx="3" fill="var(--bg-soft)"/><text x="600" y="114" text-anchor="middle" fill="var(--fg-dim)" font-size="10">inum=200 "A"</text>
+        <rect x="660" y="98" width="100" height="22" rx="3" fill="var(--bg-soft)"/><text x="710" y="114" text-anchor="middle" fill="var(--fg-dim)" font-size="10">inum=300 "B"</text>
+        <!-- Target found -->
+        <rect x="330" y="128" width="200" height="28" rx="4" fill="rgba(63,185,80,.18)"/>
+        <text x="430" y="147" text-anchor="middle" fill="var(--accent-2)" font-family="monospace" font-size="11" font-weight="600">inum=256 "file.txt" ← FOUND!</text>
+        <rect x="540" y="128" width="220" height="28" rx="3" fill="var(--bg-soft)"/><text x="650" y="147" text-anchor="middle" fill="var(--fg-dim)" font-size="10">inum=400 "other"</text>
+        <!-- Algorithm -->
+        <rect x="30" y="215" width="740" height="80" rx="8" fill="var(--bg)"/>
+        <text x="50" y="243" fill="var(--accent)" font-family="monospace" font-size="12">struct inode* dirlookup(struct inode *dp, char *name, uint *poff) {</text>
+        <text x="70" y="268" fill="var(--fg-dim)" font-family="monospace" font-size="11">for (off = 0; off < dp->size; off += sizeof(dirent)) {</text>
+        <text x="90" y="290" fill="var(--accent-2)" font-family="monospace" font-size="11">if (readi(dp, &de, off, sizeof(de)) != sizeof(de)) break;</text>
+        <text x="90" y="300" fill="var(--accent-2)" font-family="monospace" font-size="11">if (de.inum != 0 && namecmp(de.name, name) == 0) return iget(... de.inum);</text>
+        <text x="50" y="300" fill="var(--fg-dim)" font-family="monospace" font-size="12">}</text>
+        <!-- Full flow summary -->
+        <text x="400" y="330" text-anchor="middle" fill="var(--fg)" font-size="14" font-weight="700">完整解析流程总结</text>
+        <rect x="30" y="350" width="740" height="115" rx="8" fill="var(--bg)"/>
+        <text x="50" y="378" fill="var(--accent)" font-family="monospace" font-size="12">open("/home/user/file.txt", O_RDONLY) 完整流程:</text>
+        <text x="70" y="402" fill="var(--fg)" font-size="11">Step 1 — namei("/home/user/file.txt"):</text>
+        <text x="90" y="422" fill="var(--fg-dim)" font-size="11">/ → dirlookup("home") → inum=42   → iget(42)</text>
+        <text x="90" y="442" fill="var(--fg-dim)" font-size="11">home/ → dirlookup("user") → inum=100  → iget(100)</text>
+        <text x="90" y="455" fill="var(--fg-dim)" font-size="11">user/ → dirlookup("file.txt") → inum=256 → iget(256) ✓</text>`;
+      svg.appendChild(g);
+    }
+  }
+];
+
+let step=0,autoTimer=null,autoOn=false;
+const explain=document.getElementById('explain'),stage=document.getElementById('stage'),dots=document.getElementById('dots');
+const prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn'),autoBtn=document.getElementById('autoBtn');
+function render(){
+  const s=S[step];
+  explain.innerHTML=`<div class="step-title">${s.t}</div>${s.l?`<div class="code-line">${s.l}</div>`:''}<div class="badge-row">${s.b.map(b=>`<span class="badge ${b.c||'badge--def'}">${b.t}</span>`).join('')}</div><div class="step-desc">${s.d}</div>`;
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('viewBox','0 0 800 480');svg.style.width='100%';svg.style.height='100%';
+  stage.innerHTML='';stage.appendChild(svg);s.r(svg);
+  dots.innerHTML=S.map((_,i)=>{let cls=i===step?'active':i<step?'done':'';return `<span class="step-dot ${cls}"></span>`;}).join('');
+  prevBtn.disabled=step===0;nextBtn.disabled=step===S.length-1;
+}
+function next(){if(step<S.length-1){step++;render();}}
+function prev(){if(step>0){step--;render();}}
+function restart(){step=0;render();}
+function toggleAuto(){
+  if(autoTimer){clearInterval(autoTimer);autoTimer=null;autoOn=false;autoBtn.innerHTML='&#9654; 自动播放';}
+  else{autoOn=true;autoBtn.innerHTML='&#9646;&#9646; 停止';autoTimer=setInterval(()=>{if(step<S.length-1){step++;render();}else{clearInterval(autoTimer);autoTimer=null;autoOn=false;autoBtn.innerHTML='&#9654; 自动播放';}},3000);}
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();next();}
+  else if(e.key==='ArrowLeft'){e.preventDefault();prev();}
+  else if(e.key==='r'||e.key==='R'){e.preventDefault();restart();}
+  else if(e.key==='a'||e.key==='A'){e.preventDefault();toggleAuto();}
+});
+prevBtn.onclick=prev;nextBtn.onclick=next;autoBtn.onclick=toggleAuto;render();
+</script>
+</body>
+</html>

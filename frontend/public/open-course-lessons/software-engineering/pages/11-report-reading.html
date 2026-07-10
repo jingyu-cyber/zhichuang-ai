@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>11 报告阅读与评审 - 软件工程互动课程</title>
+<style>
+:root{--bg:#1c2128;--bg-soft:#252c35;--bg-code:#141820;--fg:#e6edf3;--fg-dim:#8b949e;--line:#30363d;--accent:#539bf5;--accent-2:#57ab5a;--grad:#c69026;--success:#57ab5a;--danger:#e5534b;--purple:#986ee2}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(83,155,245,.18);color:var(--accent)}.badge--tip{background:rgba(87,171,90,.18);color:var(--success)}.badge--warn{background:rgba(198,144,38,.18);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>报告阅读与评审</h1>
+<div class="breadcrumb"><a href="../index.html">软件工程</a> / 项目管理 / <span id="step-indicator">Step 1/4</span></div>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="panel-explain">
+<div class="step-title" id="step-title"></div>
+<div class="step-desc" id="step-desc"></div>
+<div class="badge-row" id="badge-row"></div>
+<div class="info-line" id="info-line"></div>
+</div>
+<div class="panel-stage"><svg id="stage" viewBox="0 0 800 500" style="width:100%;height:100%"></svg></div>
+</div>
+<div class="demo-controls">
+<button id="btn-prev" onclick="prev()">上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btn-next" onclick="next()">下一步</button>
+<button id="btn-auto" onclick="toggleAuto()" style="min-width:80px">自动播放</button>
+</div>
+</div>
+<script>
+const svgNS="http://www.w3.org/2000/svg";
+function T(t, a) { const e = document.createElementNS(svgNS, t); for (const [k, v] of Object.entries(a || {})) e.setAttribute(k, v); return e; }
+function tx(x, y, t, c, fs, a) { const e = T("text", { x, y, fill: c || "var(--fg)", "font-size": fs || "13", "text-anchor": a || "middle", "font-family": "-apple-system,'PingFang SC','Microsoft YaHei',sans-serif" }); e.textContent = t; return e; }
+function rct(x, y, w, h, f, s, rx) { return T("rect", { x, y, width: w, height: h, fill: f || "var(--bg-soft)", stroke: s || "var(--line)", "stroke-width": "1.5", rx: rx || 4 }); }
+
+function r0(svg) {
+  // Step 1: Project report document
+  svg.append(tx(400,20,"项目报告结构","var(--accent)","14"));
+  svg.append(rct(30,44,350,420,"var(--bg)","var(--line)",8));
+  svg.append(tx(205,68,"报告章节","var(--fg)"));
+
+  const chapters = [
+    "1. 项目概述","2. 需求分析","3. 系统设计","4. 实现细节","5. 测试报告",
+    "6. 部署文档","7. 团队分工","8. 项目总结","附录A: 代码仓库","附录B: 会议记录"
+  ];
+  chapters.forEach((c,i) => {
+    svg.append(rct(42,80+i*36,326,30,"var(--bg)","var(--line)",4));
+    svg.append(tx(80,80+i*36+20,c,"var(--fg-dim)","12","start"));
+  });
+
+  // Right: reading guide
+  svg.append(rct(420,44,350,180,"var(--bg)","var(--line)",8));
+  svg.append(tx(595,68,"如何阅读项目报告？","var(--fg)"));
+  const tips = [
+    "先看架构图 → 再看数据流 → 再看代码",
+    "对照需求文档，检查功能是否完整覆盖",
+    "关注测试覆盖率报告和已知问题清单",
+    "检查部署文档是否可复现"
+  ];
+  tips.forEach((t,i) => svg.append(tx(440,88+i*26,t,"var(--fg-dim)","11","start")));
+
+  svg.append(rct(420,244,350,220,"var(--bg-soft)","var(--success)",8));
+  svg.append(tx(595,268,"评审关注重点","var(--success)"));
+  const focuses = [
+    "需求是否完整被实现？",
+    "架构设计是否合理？",
+    "代码质量如何（可读性/注释/测试）？",
+    "是否有安全漏洞风险？",
+    "部署步骤是否可复现？",
+    "团队成员贡献是否均衡？"
+  ];
+  focuses.forEach((f,i) => svg.append(tx(440,288+i*24,f,"var(--fg-dim)","11","start")));
+}
+
+function r1(svg) {
+  // Step 2: Radar chart
+  const cx = 280, cy = 260, R = 160;
+  const dims = ["需求覆盖","代码质量","测试覆盖","架构设计","文档完整","部署可复现","安全合规","团队协作"];
+  const values = [85,72,68,80,55,60,45,70];
+  const target = [90,80,75,85,80,80,75,80];
+
+  // Radar grid
+  for (let r = 1; r <= 4; r++) {
+    const radius = R*r/4;
+    const pts = [];
+    for (let i = 0; i < dims.length; i++) {
+      const angle = -Math.PI/2 + (2*Math.PI*i/dims.length);
+      pts.push(`${cx+radius*Math.cos(angle)},${cy+radius*Math.sin(angle)}`);
+    }
+    svg.append(T("polygon",{points:pts.join(" "),fill:"none",stroke:"var(--line)","stroke-width":1}));
+  }
+
+  // Axis lines
+  for (let i = 0; i < dims.length; i++) {
+    const angle = -Math.PI/2 + (2*Math.PI*i/dims.length);
+    svg.append(T("line",{x1:cx,y1:cy,x2:cx+R*Math.cos(angle),y2:cy+R*Math.sin(angle),stroke:"var(--line)","stroke-width":0.8}));
+  }
+
+  // Current values polygon
+  const currPts = [];
+  for (let i = 0; i < dims.length; i++) {
+    const angle = -Math.PI/2 + (2*Math.PI*i/dims.length);
+    const r = R*values[i]/100;
+    currPts.push(`${cx+r*Math.cos(angle)},${cy+r*Math.sin(angle)}`);
+  }
+  svg.append(T("polygon",{points:currPts.join(" "),fill:"rgba(83,155,245,0.15)",stroke:"var(--accent)","stroke-width":2}));
+
+  // Target polygon (dashed)
+  const tgtPts = [];
+  for (let i = 0; i < dims.length; i++) {
+    const angle = -Math.PI/2 + (2*Math.PI*i/dims.length);
+    const r = R*target[i]/100;
+    tgtPts.push(`${cx+r*Math.cos(angle)},${cy+r*Math.sin(angle)}`);
+  }
+  svg.append(T("polygon",{points:tgtPts.join(" "),fill:"none",stroke:"var(--success)","stroke-width":1.5,"stroke-dasharray":"6,3"}));
+
+  // Data points
+  for (let i = 0; i < dims.length; i++) {
+    const angle = -Math.PI/2 + (2*Math.PI*i/dims.length);
+    const r = R*values[i]/100;
+    svg.append(T("circle",{cx:cx+r*Math.cos(angle),cy:cy+r*Math.sin(angle),r:4,fill:"var(--accent)"}));
+  }
+
+  // Labels
+  for (let i = 0; i < dims.length; i++) {
+    const angle = -Math.PI/2 + (2*Math.PI*i/dims.length);
+    const lr = R + 30;
+    const lx = cx + lr*Math.cos(angle), ly = cy + lr*Math.sin(angle);
+    svg.append(tx(lx,ly,dims[i]+" ("+values[i]+"%)","var(--fg-dim)","10"));
+  }
+
+  // Legend
+  svg.append(tx(280,440,"项目雷达图 (蓝色=实际  绿色虚线=目标)","var(--fg-dim)","11"));
+
+  // Right: dimension details
+  svg.append(rct(540,40,240,420,"var(--bg)","var(--line)",8));
+  svg.append(tx(660,64,"维度详情","var(--fg)"));
+  dims.forEach((d,i) => {
+    const y = 80+i*44;
+    const c = values[i]>=80?"var(--success)":values[i]>=60?"var(--grad)":"var(--danger)";
+    svg.append(tx(560,y+12,d,"var(--fg)","11","start"));
+    svg.append(rct(560,y+20,200,10,"var(--bg)","var(--line)",5));
+    svg.append(rct(560,y+20,200*values[i]/100,10,c,c,5));
+    svg.append(tx(660,y+36,values[i]+"%",c,"10"));
+  });
+}
+
+function r2(svg) {
+  // Step 3: Code evidence
+  svg.append(tx(400,18,"代码证据与改进建议联动","var(--accent)","14"));
+
+  // Evidence cards
+  const findings = [
+    {find:"缺少单元测试",evid:"src/services/ 目录下12个文件无对应 .test.ts",seve:"高",color:"var(--danger)",sugg:"为每个 service 添加单元测试，目标覆盖率 80%"},
+    {find:"硬编码配置",evid:"config.ts:23 → API_KEY = 'sk-abc123'",seve:"高",color:"var(--danger)",sugg:"迁移到 .env 文件，使用环境变量管理密钥"},
+    {find:"SQL注入风险",evid:"userRepo.ts:45 → query('SELECT * FROM users WHERE id=' + userId)",seve:"高",color:"var(--danger)",sugg:"使用参数化查询或ORM的safe方法"},
+    {find:"API文档不完整",evid:"仅5/12个端点有 Swagger 注解",seve:"中",color:"var(--grad)",sugg:"补充剩余7个端点的 OpenAPI 注解"}
+  ];
+
+  findings.forEach((f,i) => {
+    const y = 42+i*62;
+    svg.append(rct(10,y,780,56,"var(--bg)","var(--line)",6));
+    svg.append(T("circle",{cx:30,cy:y+28,r:10,fill:f.color}));
+    svg.append(tx(30,y+32,String(i+1),"#fff","11"));
+    svg.append(tx(120,y+16,f.find,"var(--fg)","13","start"));
+    svg.append(tx(120,y+36,f.evid,"var(--fg-dim)","11","start"));
+    svg.append(tx(480,y+16,f.seve,"var(--fg-dim)","11"));
+    svg.append(tx(540,y+16,"→ "+f.sugg,"var(--fg-dim)","10","start"));
+  });
+
+  svg.append(tx(400,310,"每个问题都附带代码证据（文件路径+行号），建议具体可执行","var(--fg-dim)","11"));
+}
+
+function r3(svg) {
+  // Step 4: Improvement roadmap
+  svg.append(tx(400,18,"改进路线图","var(--accent)","14"));
+
+  const phases = [
+    {phase:"P0 紧急",time:"本周",color:"var(--danger)",items:["移除硬编码密钥","修复SQL注入风险"]},
+    {phase:"P1 高优",time:"2周内",color:"var(--grad)",items:["补充单元测试 (80%)","完善API文档","添加错误处理"]},
+    {phase:"P2 改善",time:"1个月",color:"var(--accent)",items:["安全扫描集成","部署文档复现","团队知识分享"]},
+    {phase:"P3 增强",time:"持续",color:"var(--success)",items:["性能优化","监控体系","自动化运维"]}
+  ];
+
+  phases.forEach((p,i) => {
+    const x = 20 + i*195, y = 42;
+    svg.append(rct(x,y,180,200,"var(--bg)","var(--line)",8));
+    svg.append(T("rect",{x:x,y:y,width:180,height:32,fill:p.color,rx:8}));
+    svg.append(T("rect",{x:x,y:y+20,width:180,height:12,fill:p.color}));
+    svg.append(tx(x+90,y+22,p.phase,"#fff","14"));
+    svg.append(tx(x+90,y+46,p.time,p.color,"11"));
+    p.items.forEach((item,j) => {
+      svg.append(rct(x+8,y+62+j*36,164,30,"var(--bg)","var(--line)",4));
+      svg.append(tx(x+90,y+62+j*36+20,item,"var(--fg-dim)","10"));
+    });
+  });
+
+  // Success criteria
+  svg.append(rct(20,265,760,210,"var(--bg-soft)","var(--line)",8));
+  svg.append(tx(400,291,"改进效果评估","var(--fg)","14"));
+
+  const criteria = [
+    {label:"需求覆盖率",before:"85%",after:"95%",delta:"+10%"},
+    {label:"测试覆盖率",before:"68%",after:"80%",delta:"+12%"},
+    {label:"安全漏洞",before:"5个",after:"0个",delta:"-5"},
+    {label:"文档完整度",before:"55%",after:"85%",delta:"+30%"},
+    {label:"部署可复现",before:"60%",after:"95%",delta:"+35%"}
+  ];
+
+  // Headers
+  ["指标","改进前","目标","提升"].forEach((h,j) => {
+    svg.append(tx(120+j*150,315,h,"var(--accent)","11"));
+    svg.append(T("line",{x1:70+j*150,y1:322,x2:170+j*150,y2:322,stroke:"var(--line)","stroke-width":1}));
+  });
+
+  criteria.forEach((c,i) => {
+    const y = 332+i*26;
+    svg.append(tx(120,y+10,c.label,"var(--fg)","11"));
+    svg.append(tx(270,y+10,c.before,"var(--fg-dim)","11"));
+    svg.append(T("text",{x:420,y:y+10,fill:"var(--success)","font-size":"11","text-anchor":"middle"}));
+    svg.append(tx(420,y+10,c.after,"var(--success)","11"));
+    svg.append(tx(570,y+10,c.delta,"var(--success)","11"));
+  });
+}
+
+const S = [
+  {t:"报告结构阅读",l:"导读",d:"先了解项目报告的章节结构。评审关注的重点：需求覆盖是否完整、架构是否合理、代码质量、安全性、部署可复现性。",b:["Report","Structure"],r:r0},
+  {t:"雷达图评估",l:"Radar",d:"用8维度雷达图可视化评估项目质量：需求覆盖、代码质量、测试覆盖、架构设计、文档完整、部署可复现、安全合规、团队协作。",b:["Radar","8 Dimensions"],r:r1},
+  {t:"代码证据+建议",l:"证据",d:"每个问题必须附带代码证据（文件路径+行号），并提供具体可执行的改进建议。不空谈问题，要落地到代码。",b:["Evidence","Suggestion"],r:r2},
+  {t:"改进路线图",l:"Roadmap",d:"按优先级制定改进路线图：P0紧急→P1高优→P2改善→P3增强。设定可量化的改进目标和评估指标。",b:["Roadmap","Milestones"],r:r3}
+];
+
+let cur = 0, autoTimer = null, autoOn = false;
+
+function setStep(i) {
+  cur = Math.max(0, Math.min(S.length - 1, i));
+  const s = S[cur];
+  document.getElementById("step-title").textContent = s.t;
+  document.getElementById("step-desc").textContent = s.d;
+  document.getElementById("step-indicator").textContent = `Step ${cur+1}/${S.length}`;
+  const br = document.getElementById("badge-row"); br.innerHTML = "";
+  s.b.forEach(b => { const sp = document.createElement("span"); sp.className = "badge badge--def"; sp.textContent = b; br.append(sp); });
+  document.getElementById("info-line").textContent = s.l;
+  const svg = document.getElementById("stage"); svg.innerHTML = ""; s.r(svg);
+  document.querySelectorAll(".step-dot").forEach((d,j) => d.className = "step-dot" + (j === cur ? " active" : j < cur ? " done" : ""));
+  document.getElementById("btn-prev").disabled = cur === 0;
+  document.getElementById("btn-next").disabled = cur === S.length - 1;
+}
+
+function next() { setStep(cur + 1); }
+function prev() { setStep(cur - 1); }
+function toggleAuto() {
+  if (autoOn) { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; return; }
+  autoOn = true; document.getElementById("btn-auto").textContent = "暂停";
+  autoTimer = setInterval(() => { if (cur < S.length - 1) next(); else { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; } }, 2500); }
+
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight") next();
+  else if (e.key === "ArrowLeft") prev();
+  else if (e.key === " ") { e.preventDefault(); toggleAuto(); }
+  else if (e.key >= "1" && e.key <= String(S.length)) setStep(parseInt(e.key) - 1);
+});
+
+const dotsEl = document.getElementById("dots");
+S.forEach((s,i) => { const d = document.createElement("span"); d.className = "step-dot"; d.title = s.l; d.onclick = () => setStep(i); dotsEl.append(d); });
+setStep(0);
+</script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>01 用户场景提取 - 软件工程互动课程</title>
+<style>
+:root{--bg:#1c2128;--bg-soft:#252c35;--bg-code:#141820;--fg:#e6edf3;--fg-dim:#8b949e;--line:#30363d;--accent:#539bf5;--accent-2:#57ab5a;--grad:#c69026;--success:#57ab5a;--danger:#e5534b;--purple:#986ee2}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(83,155,245,.18);color:var(--accent)}.badge--tip{background:rgba(87,171,90,.18);color:var(--success)}.badge--warn{background:rgba(198,144,38,.18);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>用户场景提取</h1>
+<div class="breadcrumb"><a href="../index.html">软件工程</a> / 需求工程 / <span id="step-indicator">Step 1/4</span></div>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="panel-explain">
+<div class="step-title" id="step-title"></div>
+<div class="step-desc" id="step-desc"></div>
+<div class="badge-row" id="badge-row"></div>
+<div class="info-line" id="info-line"></div>
+</div>
+<div class="panel-stage"><svg id="stage" viewBox="0 0 800 500" style="width:100%;height:100%"></svg></div>
+</div>
+<div class="demo-controls">
+<button id="btn-prev" onclick="prev()">上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btn-next" onclick="next()">下一步</button>
+<button id="btn-auto" onclick="toggleAuto()" style="min-width:80px">自动播放</button>
+</div>
+</div>
+<script>
+const svgNS = "http://www.w3.org/2000/svg";
+function T(tag, attrs) { const e = document.createElementNS(svgNS, tag); for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v); return e; }
+function tx(x, y, text, cls) { const e = T("text", { x, y, fill: cls || "var(--fg)", "font-size": "13", "text-anchor": "middle", "font-family": "-apple-system,'PingFang SC','Microsoft YaHei',sans-serif" }); e.textContent = text; return e; }
+function rct(x, y, w, h, fill, stroke, rx) { return T("rect", { x, y, width: w, height: h, fill: fill || "var(--bg-soft)", stroke: stroke || "var(--line)", "stroke-width": "1.5", rx: rx || 6 }); }
+
+function r0(svg) {
+  // Step 1: Raw project text
+  const p = [T("g",{})];
+  p.push(rct(40,20,720,120,"var(--bg)","var(--line)",8));
+  p.push(tx(400,38,"项目原始描述", "var(--fg-dim)"));
+  const lines = [
+    "我们想做一个在线教育平台，用户可以浏览课程、购买课程、观看视频、做测验。",
+    "教师可以上传课程内容，管理员审核课程。还需要支持直播功能。",
+    "移动端和PC端都要能用。"
+  ];
+  lines.forEach((l,i) => {
+    const el = T("text",{x:60,y:65+i*24,fill:"#e6edf3","font-size":"13","font-family":"-apple-system,'PingFang SC','Microsoft YaHei',sans-serif"});
+    el.textContent = l; p.push(el);
+  });
+  p.push(tx(400,460,"从一段自然语言描述中，我们需要提取出结构化的用户场景", "var(--fg-dim)"));
+  svg.append(...p);
+}
+
+function r1(svg) {
+  // Step 2: Highlight roles & scenes
+  const roles = [{x:40,y:60,w:220,h:80,c:"var(--accent)",t:"学生",sub:"浏览课程、购买课程\n观看视频、做测验"},{x:290,y:60,w:220,h:80,c:"var(--success)",t:"教师",sub:"上传课程内容\n管理自己的课程"},{x:540,y:60,w:220,h:80,c:"var(--purple)",t:"管理员",sub:"审核课程\n平台管理"}];
+  const g = T("g",{});
+  roles.forEach(r=>{
+    g.append(rct(r.x,r.y,r.w,r.h,"var(--bg)","var(--line)",8));
+    g.append(tx(r.x+r.w/2,r.y+22,r.t,r.c));
+    r.sub.split("\n").forEach((s,i)=>g.append(tx(r.x+r.w/2,r.y+46+i*16,s,"var(--fg-dim)")));
+  });
+  // Scenes
+  const scenes = [{x:40,y:180,w:145,h:70,t:"课程发现",d:"搜索+推荐"},{x:205,y:180,w:145,h:70,t:"购买流程",d:"下单+支付"},{x:370,y:180,w:145,h:70,t:"学习体验",d:"视频+测验"},{x:535,y:180,w:145,h:70,t:"内容创作",d:"上传+编辑"}];
+  scenes.forEach(s=>{
+    g.append(rct(s.x,s.y,s.w,s.h,"var(--bg)","var(--accent)",8));
+    g.append(tx(s.x+s.w/2,s.y+24,s.t,"var(--accent)"));
+    g.append(tx(s.x+s.w/2,s.y+48,s.d,"var(--fg-dim)"));
+  });
+  // Pain points
+  ["需要支持直播","移动端+PC端","审核流程"].forEach((p,i)=>{
+    g.append(rct(40+i*250,280,220,36,"rgba(229,83,75,.1)","var(--danger)",6));
+    g.append(tx(150+i*250,303,"⚠ "+p,"var(--danger)"));
+  });
+  g.append(tx(400,360,"提取三类用户角色、四个核心场景、三个关键痛点","var(--fg-dim)"));
+  svg.append(g);
+}
+
+function r2(svg) {
+  // Step 3: User Journey Map
+  const g = T("g",{});
+  const stages = ["发现","评估","购买","学习","反馈"];
+  const sW = 130, sH = 70, gap = 12, sX = 40, sY = 40;
+  stages.forEach((s,i)=>{
+    const x = sX + i*(sW+gap);
+    g.append(rct(x,sY,sW,sH,"var(--bg)","var(--line)",8));
+    g.append(tx(x+sW/2,sY+24,"阶段"+(i+1),"var(--fg-dim)"));
+    g.append(tx(x+sW/2,sY+48,s,"var(--accent)"));
+  });
+  // Journey line
+  const jY = sY + sH + 20;
+  g.append(T("line",{x1:sX,y1:jY,x2:sX+stages.length*(sW+gap)-gap,y2:jY,stroke:"var(--line)","stroke-width":3}));
+  // Emotion curve
+  const emotions = [{x:105,y:160,emo:"😐"},{x:275,y:120,emo:"😟"},{x:445,y:90,emo:"😰"},{x:615,y:130,emo:"😊"},{x:785,y:100,emo:"😄"}];
+  g.append(T("path",{d:"M105,160 Q190,100 275,120 Q360,80 445,90 Q530,170 615,130 Q700,110 785,100",fill:"none",stroke:"var(--accent)","stroke-width":2,"stroke-dasharray":"5,3"}));
+  emotions.forEach(e=>{
+    const el = tx(e.x,e.y,e.emo,"var(--fg)");
+    el.setAttribute("font-size","24"); g.append(el);
+  });
+  // Touchpoints
+  ["搜索/推荐","课程详情页","购物车/支付","播放器/测验","评价/评分"].forEach((t,i)=>{
+    g.append(rct(sX+i*(sW+gap),300,sW,32,"var(--bg)","var(--success)",4));
+    g.append(tx(sX+i*(sW+gap)+sW/2,321,t,"var(--success)"));
+  });
+  g.append(tx(400,370,"用户旅程地图：5个阶段 + 情绪曲线 + 触点分析","var(--fg-dim)"));
+  svg.append(g);
+}
+
+function r3(svg) {
+  // Step 4: Structured output
+  const g = T("g",{});
+  g.append(rct(20,20,760,430,"var(--bg)","var(--success)",10));
+  g.append(tx(400,44,"结构化用户场景文档","var(--success)"));
+  const sections = [
+    {t:"参与者 (Actors)",items:"• 学生：课程消费者\n• 教师：内容创作者\n• 管理员：平台运营者"},
+    {t:"用例 (Use Cases)",items:"• UC-01: 浏览和搜索课程\n• UC-02: 购买课程\n• UC-03: 观看视频课程\n• UC-04: 完成在线测验\n• UC-05: 教师上传课程\n• UC-06: 管理员审核课程"},
+    {t:"非功能需求",items:"• 支持直播功能\n• 响应式设计（PC+移动端）\n• 并发用户 >= 1000"}
+  ];
+  let sy = 58;
+  sections.forEach(sec=>{
+    g.append(tx(60,sy+16,sec.t,"var(--accent)"));
+    const items = sec.items.split("\n");
+    items.forEach((item,i)=>{
+      const el = tx(60,sy+38+i*18,item,"var(--fg-dim)");
+      el.setAttribute("text-anchor","start");
+      el.setAttribute("font-size","12");
+      g.append(el);
+    });
+    sy += 38 + items.length*18 + 8;
+  });
+  svg.append(g);
+}
+
+const S = [
+  {t:"原始需求文本",l:"输入",d:"从自然语言的项目描述开始。需求通常以非结构化文本形式存在，包含角色、功能、约束等信息。",b:["Raw Text","非结构化"],r:r0},
+  {t:"角色与场景识别",l:"提取",d:"标注出关键角色（Actor）、核心使用场景（Scene）和潜在痛点（Pain Point）。这是需求分析的第一步结构化。",b:["Actor","Scene","Pain Point"],r:r1},
+  {t:"用户旅程地图",l:"旅程",d:"构建用户旅程地图：划分阶段、绘制情绪曲线、标注每个阶段的触点和用户目标。",b:["Journey Map","Emotion Curve"],r:r2},
+  {t:"结构化输出",l:"输出",d:"生成包含参与者、用例列表和非功能需求的结构化场景文档，作为后续设计的输入。",b:["Structured","Deliverable"],r:r3}
+];
+
+let cur = 0, autoTimer = null, autoOn = false;
+
+function setStep(i) {
+  cur = Math.max(0, Math.min(S.length - 1, i));
+  const s = S[cur];
+  document.getElementById("step-title").textContent = s.t;
+  document.getElementById("step-desc").textContent = s.d;
+  document.getElementById("step-indicator").textContent = `Step ${cur+1}/${S.length}`;
+  const br = document.getElementById("badge-row"); br.innerHTML = "";
+  s.b.forEach(b => { const sp = document.createElement("span"); sp.className = "badge badge--def"; sp.textContent = b; br.append(sp); });
+  document.getElementById("info-line").textContent = s.l;
+  const svg = document.getElementById("stage"); svg.innerHTML = ""; s.r(svg);
+  document.querySelectorAll(".step-dot").forEach((d,j) => d.className = "step-dot" + (j === cur ? " active" : j < cur ? " done" : ""));
+  document.getElementById("btn-prev").disabled = cur === 0;
+  document.getElementById("btn-next").disabled = cur === S.length - 1;
+}
+
+function next() { setStep(cur + 1); }
+function prev() { setStep(cur - 1); }
+function toggleAuto() {
+  if (autoOn) { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; return; }
+  autoOn = true; document.getElementById("btn-auto").textContent = "暂停";
+  autoTimer = setInterval(() => { if (cur < S.length - 1) next(); else { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; } }, 2500);
+}
+
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight") next();
+  else if (e.key === "ArrowLeft") prev();
+  else if (e.key === " ") { e.preventDefault(); toggleAuto(); }
+  else if (e.key >= "1" && e.key <= String(S.length)) setStep(parseInt(e.key) - 1);
+});
+
+// Init dots
+const dotsEl = document.getElementById("dots");
+S.forEach((s,i) => { const d = document.createElement("span"); d.className = "step-dot"; d.title = s.l; d.onclick = () => setStep(i); dotsEl.append(d); });
+setStep(0);
+</script>
+</body>
+</html>

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>02 抽象建模 — 计算思维</title>
+<style>
+:root{--bg:#f5f5f8;--bg-soft:#ffffff;--bg-code:#f0f0f4;--fg:#2c2c38;--fg-dim:#6c6c80;--line:#dcdce4;--accent:#5b6abf;--accent-2:#36a2b8;--grad:#f09840;--success:#40c878;--danger:#e04860;--shadow:0 2px 12px rgba(0,0,0,.06)}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:"Noto Sans SC","PingFang SC",-apple-system,sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(91,106,191,.12);color:var(--accent)}.badge--tip{background:rgba(64,200,120,.12);color:var(--success)}.badge--warn{background:rgba(240,152,64,.15);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--accent);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px;box-shadow:var(--shadow)}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 8px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>02 抽象建模</h1>
+<div class="breadcrumb"><a href="../index.html">计算思维</a> / 第1章 / 抽象建模</div>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="explain">
+<div class="step-title" id="stepTitle"></div>
+<div class="step-desc" id="stepDesc"></div>
+<div class="badge-row" id="badges"></div>
+<div class="info-line" id="codeLine"></div>
+</div>
+<div class="panel-stage" id="stage"></div>
+</div>
+<div class="demo-controls">
+<button id="btnPrev" aria-label="上一步">&larr; 上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btnNext" aria-label="下一步">下一步 &rarr;</button>
+<button id="btnAuto" aria-label="自动播放">&#9654; 自动播放</button>
+<span style="font-size:12px;color:var(--fg-dim)">键盘 &larr; &rarr;</span>
+</div>
+</div>
+<script>
+const S=[{
+t:"现实世界的对象",
+l:"地图导航 → 图(Graph)  排队系统 → 队列(Queue)  成绩表 → 二维数组",
+d:"观察问题中的<strong>实体</strong>和<strong>关系</strong>。地图中的路口是点、道路是边；排队的人是先进先出；Excel 表格是行列索引。",
+b:[{t:"观察",c:"def"},{t:"实体与关系",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// three real-world items on left
+const items=[{y:60,icon:"🗺",txt:"地图导航",hint:"路口 → 节点\n道路 → 边"}, {y:160,icon:"👥",txt:"排队系统",hint:"先进先出\nFIFO"}, {y:260,icon:"📊",txt:"成绩表",hint:"行 → 学生\n列 → 科目"}];
+items.forEach(it=>{
+const g=document.createElementNS("http://www.w3.org/2000/svg","g");
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x","30");r.setAttribute("y",it.y-20);r.setAttribute("width","180");r.setAttribute("height","70");
+r.setAttribute("rx","10");r.setAttribute("fill","var(--bg-soft)");r.setAttribute("stroke","var(--fg-dim)");r.setAttribute("stroke-width","1.5");
+g.appendChild(r);
+const tt=document.createElementNS("http://www.w3.org/2000/svg","text");
+tt.setAttribute("x","120");tt.setAttribute("y",it.y+5);tt.setAttribute("text-anchor","middle");tt.setAttribute("font-size","20");tt.setAttribute("fill","var(--fg)");
+tt.textContent=it.icon+" "+it.txt;
+g.appendChild(tt);
+const ht=document.createElementNS("http://www.w3.org/2000/svg","text");
+ht.setAttribute("x","120");ht.setAttribute("y",it.y+28);ht.setAttribute("text-anchor","middle");ht.setAttribute("font-size","10");ht.setAttribute("fill","var(--fg-dim)");
+ht.textContent=it.hint;
+g.appendChild(ht);
+svg.appendChild(g);
+});
+// right side: data structures
+const ds=[{y:60,icon:"⚪➖⚪",txt:"Graph",hint:"节点 + 边"}, {y:160,icon:"⬜⬜⬜",txt:"Queue",hint:"enqueue / dequeue"}, {y:260,icon:"▦",txt:"Array2D",hint:"arr[row][col]"}];
+ds.forEach(d=>{
+const g=document.createElementNS("http://www.w3.org/2000/svg","g");
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x","490");r.setAttribute("y",d.y-20);r.setAttribute("width","180");r.setAttribute("height","70");
+r.setAttribute("rx","10");r.setAttribute("fill","var(--accent)");r.setAttribute("opacity","0.08");r.setAttribute("stroke","var(--accent)");r.setAttribute("stroke-width","1.5");
+g.appendChild(r);
+const tt=document.createElementNS("http://www.w3.org/2000/svg","text");
+tt.setAttribute("x","580");tt.setAttribute("y",d.y+5);tt.setAttribute("text-anchor","middle");tt.setAttribute("font-size","18");tt.setAttribute("fill","var(--accent)");tt.setAttribute("font-weight","700");
+tt.textContent=d.txt;
+g.appendChild(tt);
+const ht=document.createElementNS("http://www.w3.org/2000/svg","text");
+ht.setAttribute("x","580");ht.setAttribute("y",d.y+28);ht.setAttribute("text-anchor","middle");ht.setAttribute("font-size","10");ht.setAttribute("fill","var(--fg-dim)");
+ht.textContent=d.hint;
+g.appendChild(ht);
+svg.appendChild(g);
+});
+// arrows
+for(let i=0;i<3;i++){
+const a=document.createElementNS("http://www.w3.org/2000/svg","line");
+a.setAttribute("x1","220");a.setAttribute("y1",items[i].y+15);a.setAttribute("x2","480");a.setAttribute("y2",ds[i].y+15);
+a.setAttribute("stroke","var(--accent-2)");a.setAttribute("stroke-width","2");a.setAttribute("stroke-dasharray","5,3");
+svg.appendChild(a);
+const at=document.createElementNS("http://www.w3.org/2000/svg","text");
+at.setAttribute("x","350");at.setAttribute("y",items[i].y+10);at.setAttribute("text-anchor","middle");at.setAttribute("font-size","11");at.setAttribute("fill","var(--accent-2)");at.setAttribute("font-weight","600");
+at.textContent="→ 建模 →";
+svg.appendChild(at);
+}
+}},
+{
+t:"图 (Graph) 建模详解",
+l:"Graph: nodes = [交叉路口], edges = [(u,v,距离)], adj[y][x] = 距离",
+d:"以地图导航为例：<strong>路口</strong>就是节点（Node），<strong>道路</strong>就是边（Edge）。用邻接矩阵存储，最短路径用 Dijkstra。",
+b:[{t:"图论",c:"def"},{t:"最短路径",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+// Nodes
+[{cx:150,cy:120,id:"A"},{cx:300,cy:60,id:"B"},{cx:450,cy:120,id:"C"},{cx:150,cy:260,id:"D"},{cx:300,cy:200,id:"E"},{cx:450,cy:260,id:"F"}].forEach(n=>{
+const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+c.setAttribute("cx",n.cx);c.setAttribute("cy",n.cy);c.setAttribute("r","22");
+c.setAttribute("fill","var(--bg-soft)");c.setAttribute("stroke","var(--accent)");c.setAttribute("stroke-width","2");
+svg.appendChild(c);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",n.cx);t.setAttribute("y",n.cy+6);t.setAttribute("text-anchor","middle");t.setAttribute("font-size","14");t.setAttribute("font-weight","700");t.setAttribute("fill","var(--accent)");
+t.textContent=n.id;
+svg.appendChild(t);
+});
+// edges with weights
+[{x1:172,y1:120,x2:278,y2:60,w:"5"},{x1:322,y1:60,x2:428,y2:120,w:"3"},{x1:172,y1:260,x2:278,y2:200,w:"4"},{x1:322,y1:200,x2:428,y2:260,w:"6"},{x1:172,y1:140,x2:172,y2:238,w:"7"},{x1:450,y1:140,x2:450,y2:238,w:"2"},{x1:180,y1:135,x2:270,y2:185,w:"1"}].forEach(e=>{
+const l=document.createElementNS("http://www.w3.org/2000/svg","line");
+l.setAttribute("x1",e.x1);l.setAttribute("y1",e.y1);l.setAttribute("x2",e.x2);l.setAttribute("y2",e.y2);
+l.setAttribute("stroke","var(--fg-dim)");l.setAttribute("stroke-width","1.5");
+svg.appendChild(l);
+const wt=document.createElementNS("http://www.w3.org/2000/svg","text");
+wt.setAttribute("x",(e.x1+e.x2)/2-10);wt.setAttribute("y",(e.y1+e.y2)/2-6);
+wt.setAttribute("font-size","11");wt.setAttribute("fill","var(--grad)");wt.setAttribute("font-weight","600");
+wt.textContent=e.w;
+svg.appendChild(wt);
+});
+// legend
+const leg=document.createElementNS("http://www.w3.org/2000/svg","text");
+leg.setAttribute("x","520");leg.setAttribute("y","100");leg.setAttribute("font-size","12");leg.setAttribute("fill","var(--fg-dim)");
+leg.textContent="节点 = 路口";
+svg.appendChild(leg);
+const leg2=document.createElementNS("http://www.w3.org/2000/svg","text");
+leg2.setAttribute("x","520");leg2.setAttribute("y","125");leg2.setAttribute("font-size","12");leg2.setAttribute("fill","var(--fg-dim)");
+leg2.textContent="边 = 道路";
+svg.appendChild(leg2);
+const leg3=document.createElementNS("http://www.w3.org/2000/svg","text");
+leg3.setAttribute("x","520");leg3.setAttribute("y","150");leg3.setAttribute("font-size","12");leg3.setAttribute("fill","var(--fg-dim)");
+leg3.textContent="权重 = 距离";
+svg.appendChild(leg3);
+// adjacency matrix
+const mx=440,my=180;
+const m=document.createElementNS("http://www.w3.org/2000/svg","rect");
+m.setAttribute("x",mx);m.setAttribute("y",my);m.setAttribute("width","200");m.setAttribute("height","140");
+m.setAttribute("rx","6");m.setAttribute("fill","var(--bg-soft)");m.setAttribute("stroke","var(--line)");m.setAttribute("stroke-width","1");
+svg.appendChild(m);
+const mt=document.createElementNS("http://www.w3.org/2000/svg","text");
+mt.setAttribute("x",mx+100);mt.setAttribute("y",my+20);mt.setAttribute("text-anchor","middle");mt.setAttribute("font-size","11");mt.setAttribute("fill","var(--accent)");mt.setAttribute("font-weight","700");
+mt.textContent="邻接矩阵";
+svg.appendChild(mt);
+}}]},
+
+{"t":"队列 (Queue) 建模详解",
+"l":"queue = deque(); queue.append(x); x = queue.popleft();  // FIFO",
+"d":"排队系统是典型的<strong>FIFO</strong>（先进先出）。用队列数据结构：队尾入队（enqueue），队头出队（dequeue）。",
+"b":[{"t":"FIFO","c":"def"},{"t":"BFS基础","c":"tip"}],
+"r":function(svg){
+svg.innerHTML='';
+// queue visualization
+const qy=140,qx=50,qw=60,qh=50;
+for(let i=0;i<6;i++){
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",qx+i*(qw+6));r.setAttribute("y",qy);r.setAttribute("width",qw);r.setAttribute("height",qh);
+r.setAttribute("rx","6");r.setAttribute("fill",i<4?"var(--accent)":"var(--bg-soft)");
+r.setAttribute("opacity",i<4?"0.15":"1");r.setAttribute("stroke",i<4?"var(--accent)":"var(--line)");r.setAttribute("stroke-width","1.5");
+svg.appendChild(r);
+if(i<4){
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",qx+i*(qw+6)+qw/2);t.setAttribute("y",qy+qh/2+5);t.setAttribute("text-anchor","middle");
+t.setAttribute("font-size","14");t.setAttribute("font-weight","700");t.setAttribute("fill","var(--accent)");
+t.textContent=String.fromCharCode(65+i);
+svg.appendChild(t);
+}
+}
+// labels
+const fl=document.createElementNS("http://www.w3.org/2000/svg","text");
+fl.setAttribute("x","45");fl.setAttribute("y",qy-10);fl.setAttribute("font-size","12");fl.setAttribute("fill","var(--success)");fl.setAttribute("font-weight","600");
+fl.textContent="队头 ← dequeue";
+svg.appendChild(fl);
+const rl=document.createElementNS("http://www.w3.org/2000/svg","text");
+rl.setAttribute("x","310");rl.setAttribute("y",qy-10);rl.setAttribute("font-size","12");rl.setAttribute("fill","var(--grad)");rl.setAttribute("font-weight","600");
+rl.textContent="enqueue → 队尾";
+svg.appendChild(rl);
+// arrows
+const al=document.createElementNS("http://www.w3.org/2000/svg","path");
+al.setAttribute("d","M 70 190 L 70 220 L 300 220 L 300 190");
+al.setAttribute("fill","none");al.setAttribute("stroke","var(--fg-dim)");al.setAttribute("stroke-width","1.5");
+al.setAttribute("stroke-dasharray","4,3");
+svg.appendChild(al);
+const alt=document.createElementNS("http://www.w3.org/2000/svg","text");
+alt.setAttribute("x","185");alt.setAttribute("y","240");alt.setAttribute("text-anchor","middle");alt.setAttribute("font-size","12");alt.setAttribute("fill","var(--fg-dim)");
+alt.textContent="数据流向：从队头到队尾";
+svg.appendChild(alt);
+// operation sequence
+const seq=[{t:"操作序列:",y:280},{t:"enqueue(A)→enqueue(B)→enqueue(C)→enqueue(D)",y:300},{t:"dequeue()→A  // B C D 变为队头",y:320}];
+seq.forEach(s=>{
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x","350");t.setAttribute("y",s.y);t.setAttribute("font-size","12");t.setAttribute("fill",s.t.startsWith("操作")?"var(--fg-dim)":"var(--fg)");
+t.setAttribute("font-family",s.t.startsWith("操作")?"sans-serif":"JetBrains Mono,monospace");
+t.textContent=s.t;
+svg.appendChild(t);
+});
+}},
+
+{"t":"二维数组与现实表格",
+"l":"scores[i][j]  → 第 i 个学生的第 j 门课成绩",
+"d":"Excel 表格天然对应<strong>二维数组</strong>。行索引是学生，列索引是科目。这是一个最常见的建模模式。",
+"b":[{"t":"索引","c":"def"},{"t":"表格","c":"tip"}],
+"r":function(svg){
+svg.innerHTML='';
+// table
+const ox=80,oy=60,cw=90,ch=36;
+const cols=["姓名","语文","数学","英语"];
+const data=[["张三","89","93","78"],["李四","76","88","91"],["王五","95","82","87"],["赵六","68","79","73"]];
+// header
+cols.forEach((c,i)=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",ox+i*cw);r.setAttribute("y",oy);r.setAttribute("width",cw);r.setAttribute("height",ch);
+r.setAttribute("fill","var(--accent)");r.setAttribute("opacity","0.15");r.setAttribute("stroke","var(--accent)");r.setAttribute("stroke-width","1");
+svg.appendChild(r);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",ox+i*cw+cw/2);t.setAttribute("y",oy+23);t.setAttribute("text-anchor","middle");
+t.setAttribute("font-size","13");t.setAttribute("font-weight","700");t.setAttribute("fill","var(--accent)");
+t.textContent=c;
+svg.appendChild(t);
+});
+// data rows
+data.forEach((row,ri)=>{
+row.forEach((cell,ci)=>{
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",ox+ci*cw);r.setAttribute("y",oy+(ri+1)*ch);r.setAttribute("width",cw);r.setAttribute("height",ch);
+r.setAttribute("fill",ri===0&&ci===3?"var(--success)":"var(--bg-soft)");
+r.setAttribute("fill-opacity",ri===0&&ci===3?"0.15":"1");
+r.setAttribute("stroke","var(--line)");r.setAttribute("stroke-width","1");
+svg.appendChild(r);
+const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+t.setAttribute("x",ox+ci*cw+cw/2);t.setAttribute("y",oy+(ri+1)*ch+23);t.setAttribute("text-anchor","middle");
+t.setAttribute("font-size","13");t.setAttribute("fill",ri===0&&ci===3?"var(--success)":"var(--fg)");
+t.textContent=cell;
+svg.appendChild(t);
+});
+});
+// highlight annotation
+const an=document.createElementNS("http://www.w3.org/2000/svg","text");
+an.setAttribute("x","470");an.setAttribute("y","120");an.setAttribute("font-size","13");an.setAttribute("fill","var(--success)");an.setAttribute("font-weight","600");
+an.textContent="scores[0][3] = 78";
+svg.appendChild(an);
+const an2=document.createElementNS("http://www.w3.org/2000/svg","text");
+an2.setAttribute("x","470");an2.setAttribute("y","142");an2.setAttribute("font-size","12");an2.setAttribute("fill","var(--fg-dim)");
+an2.textContent="第 0 行（张三）";
+svg.appendChild(an2);
+const an3=document.createElementNS("http://www.w3.org/2000/svg","text");
+an3.setAttribute("x","470");an3.setAttribute("y","162");an3.setAttribute("font-size","12");an3.setAttribute("fill","var(--fg-dim)");
+an3.textContent="第 3 列（英语）";
+svg.appendChild(an3);
+// mapping label
+const ml=document.createElementNS("http://www.w3.org/2000/svg","text");
+ml.setAttribute("x","470");ml.setAttribute("y","200");ml.setAttribute("font-size","13");ml.setAttribute("fill","var(--accent)");ml.setAttribute("font-weight","700");
+ml.textContent="现实 → 模型";
+svg.appendChild(ml);
+const ml2=document.createElementNS("http://www.w3.org/2000/svg","text");
+ml2.setAttribute("x","470");ml2.setAttribute("y","220");ml2.setAttribute("font-size","12");ml2.setAttribute("fill","var(--fg-dim)");
+ml2.textContent="姓名列 → 行索引";
+svg.appendChild(ml2);
+const ml3=document.createElementNS("http://www.w3.org/2000/svg","text");
+ml3.setAttribute("x","470");ml3.setAttribute("y","240");ml2.setAttribute("x",470);ml2.setAttribute("y",220);ml3.setAttribute("fill","var(--fg-dim)");
+ml3.textContent="科目行 → 列索引";
+svg.appendChild(ml3);
+const ml4=document.createElementNS("http://www.w3.org/2000/svg","text");
+ml4.setAttribute("x","470");ml4.setAttribute("y","260");ml4.setAttribute("font-size","12");ml4.setAttribute("fill","var(--fg-dim)");
+ml4.textContent="单元格值 → 元素";
+svg.appendChild(ml4);
+}}
+];
+
+let step=0,autoTimer=null,autoOn=false;
+const stepTitle=document.getElementById("stepTitle");
+const stepDesc=document.getElementById("stepDesc");
+const badges=document.getElementById("badges");
+const codeLine=document.getElementById("codeLine");
+const stage=document.getElementById("stage");
+const dots=document.getElementById("dots");
+const btnPrev=document.getElementById("btnPrev");
+const btnNext=document.getElementById("btnNext");
+const btnAuto=document.getElementById("btnAuto");
+
+function renderDots(){
+dots.innerHTML='';
+S.forEach((_,i)=>{
+const d=document.createElement("span");
+d.className="step-dot"+(i===step?" active":i<step?" done":"");
+d.onclick=()=>goTo(i);
+dots.appendChild(d);
+});
+}
+function goTo(i){
+step=Math.max(0,Math.min(S.length-1,i));
+const s=S[step];
+stepTitle.textContent=s.t;
+stepDesc.innerHTML=s.d;
+badges.innerHTML=s.b.map(b=>`<span class="badge badge--${b.c}">${b.t}</span>`).join('');
+codeLine.textContent=s.l;
+const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+svg.setAttribute("viewBox","0 0 700 340");
+svg.setAttribute("preserveAspectRatio","xMidYMid meet");
+stage.innerHTML='';
+stage.appendChild(svg);
+s.r(svg);
+btnPrev.disabled=step===0;
+btnNext.disabled=step===S.length-1;
+renderDots();
+}
+btnPrev.onclick=()=>goTo(step-1);
+btnNext.onclick=()=>{if(step<S.length-1)goTo(step+1);else{autoOn=false;btnAuto.innerHTML="&#9654; 自动播放";clearInterval(autoTimer);}};
+btnAuto.onclick=()=>{autoOn=!autoOn;btnAuto.innerHTML=autoOn?"&#9632; 停止":"&#9654; 自动播放";if(autoOn){autoTimer=setInterval(()=>{if(step<S.length-1)goTo(step+1);else goTo(0);},3500);}else clearInterval(autoTimer);};
+document.addEventListener("keydown",e=>{if(e.key==="ArrowLeft")goTo(step-1);if(e.key==="ArrowRight"){if(step<S.length-1)goTo(step+1);}});
+goTo(0);
+</script>
+</body>
+</html>

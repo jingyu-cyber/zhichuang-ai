@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>通信瓶颈分析 — AI基础设施</title>
+<style>
+:root{--bg:#0a0e14;--bg-soft:#141b22;--bg-code:#06080c;--fg:#d0e0e8;--fg-dim:#607888;--line:#1c2836;--accent:#00e5a0;--accent-2:#b050ff;--grad:#40a0ff;--success:#30d060;--danger:#ff8020}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(176,80,255,.18);color:var(--accent-2)}.badge--tip{background:rgba(0,229,160,.15);color:var(--accent)}.badge--warn{background:rgba(255,128,32,.18);color:var(--danger)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.code-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 12px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+  <div class="demo-header">
+    <div>
+      <div class="breadcrumb"><a href="../index.html">AI基础设施</a> / 第3章 /</div>
+      <h1>3.3 通信瓶颈分析</h1>
+    </div>
+    <div class="badge-row">
+      <span class="badge badge--def">分布式通信</span>
+      <span class="badge badge--warn">瓶颈分析</span>
+    </div>
+  </div>
+  <div class="demo-main">
+    <div class="panel-explain" id="explain"></div>
+    <div class="panel-stage" id="stage"></div>
+  </div>
+  <div class="demo-controls">
+    <button id="btn-prev">&larr; 上一步</button>
+    <div class="step-dots" id="dots"></div>
+    <button id="btn-next">下一步 &rarr;</button>
+  </div>
+</div>
+<script>
+const S=[{
+  t:"训练时间线：计算与通信",
+  l:"Compute (blue) vs Communication (orange) bars",
+  d:"分布式训练的训练步骤时间线由计算(蓝色)和通信(橙色)交替组成。理想情况是通信与计算完全重叠，但实际中常出现 GPU 等待通信完成导致的空闲时间(气泡/idle bubble)，这是分布式训练的主要效率损失来源。",
+  b:["Timeline","Idle Bubble","Overlap"],
+  r:function(svg){
+    function E(t,a,tx){let e=document.createElementNS("http://www.w3.org/2000/svg",t);for(let k in a)e.setAttribute(k,a[k]);if(tx)e.textContent=tx;return e;}
+    svg.setAttribute("viewBox","0 0 800 420");svg.style.background="#06080c";
+
+    svg.append(E("text",{x:400,y:20,fill:"#d0e0e8","font-size":"15","font-weight":"700","text-anchor":"middle"},"Training Step Timeline — 4 GPUs"));
+
+    let gpuLabels=["GPU 0","GPU 1","GPU 2","GPU 3"];
+    let gpuColors=["#00e5a0","#b050ff","#40a0ff","#ff8020"];
+
+    // Timeline for each GPU
+    let startX=100,barY=45,barH=28,gap=38;
+
+    // For each GPU, draw compute + communication bars across 3 steps
+    for(let g=0;g<4;g++){
+      svg.append(E("text",{x:startX-90,y:barY+g*gap+barH/2+4,fill:gpuColors[g],"font-size":"11","text-anchor":"end","font-family":"JetBrains Mono,monospace"},gpuLabels[g]));
+
+      for(let step=0;step<3;step++){
+        let sx=startX+step*210;
+        // Compute bar (blue)
+        svg.append(E("rect",{x:sx,y:barY+g*gap,width:120,height:barH,rx:4,fill:"#40a0ff",opacity:"0.7",stroke:"#40a0ff","stroke-width":"1"}));
+        svg.append(E("text",{x:sx+60,y:barY+g*gap+barH/2+4,fill:"#fff","font-size":"9","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Fwd+Bwd");
+
+        // Communication bar (orange)
+        svg.append(E("rect",{x:sx+125,y:barY+g*gap,width:60,height:barH,rx:4,fill:"#ff8020",opacity:"0.7",stroke:"#ff8020","stroke-width":"1"}));
+        svg.append(E("text",{x:sx+155,y:barY+g*gap+barH/2+4,fill:"#fff","font-size":"9","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Comm");
+      }
+    }
+
+    // Idle bubble - GPU 0 step 1 comm is longer
+    // Highlight a bubble
+    svg.append(E("rect",{x:startX+125+210,y:barY+0*gap-2,width:60,height:barH+4,rx:4,fill:"none",stroke:"#ff8020","stroke-width":"2.5","stroke-dasharray":"4,2"}));
+    svg.append(E("text",{x:startX+155+210,y:barY+0*gap+barH/2+4+18,fill:"#ff8020","font-size":"9","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"longer comm");
+
+    // Legend
+    svg.append(E("rect",{x:startX,y:215,width:16,height:12,rx:2,fill:"#40a0ff",opacity:"0.7"}));
+    svg.append(E("text",{x:startX+22,y:225,fill:"#40a0ff","font-size":"11","font-family":"JetBrains Mono,monospace"},"Compute"));
+    svg.append(E("rect",{x:startX+120,y:215,width:16,height:12,rx:2,fill:"#ff8020",opacity:"0.7"}));
+    svg.append(E("text",{x:startX+142,y:225,fill:"#ff8020","font-size":"11","font-family":"JetBrains Mono,monospace"},"Communication"));
+
+    // Scale
+    svg.append(E("text",{x:400,y:250,fill:"#607888","font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Time →"));
+    svg.append(E("line",{x1:startX,y1:245,x2:startX+600,y2:245,stroke:"#607888","stroke-width":"1","marker-end":"url(#ar)"}));
+    let d=E("defs");let a=E("marker",{id:"ar",viewBox:"0 0 10 10",refX:"9",refY:"5",markerWidth:"4",markerHeight:"4",orient:"auto"});a.append(E("path",{d:"M0,0 L10,5 L0,10 Z",fill:"#607888"}));d.append(a);svg.append(d);
+  }
+},{
+  t:"气泡分析：Compute/Comm 不平衡",
+  l:"Bubble = idle time waiting for slowest GPU or comm",
+  d:"气泡(Bubble)指 GPU 等待其他 GPU 完成计算或通信时的空闲时间。来源：1)计算负载不均(straggler GPU)；2)通信延迟(AllReduce 等待最慢链路)；3)计算与通信无法重叠(同步 barrier)。气泡率 = 空闲时间 / 总时间。",
+  b:["Bubble","Straggler","Load Imbalance"],
+  r:function(svg){
+    function E(t,a,tx){let e=document.createElementNS("http://www.w3.org/2000/svg",t);for(let k in a)e.setAttribute(k,a[k]);if(tx)e.textContent=tx;return e;}
+    svg.setAttribute("viewBox","0 0 800 420");svg.style.background="#06080c";
+
+    svg.append(E("text",{x:400,y:22,fill:"#ff8020","font-size":"15","font-weight":"700","text-anchor":"middle"},"Bubble Analysis — GPU Utilization Breakdown"));
+
+    // Pie-style breakdown
+    let cx=250,cy=150,r=120;
+    // Draw donut chart
+    let segs=[
+      {pct:55,c:"#40a0ff",l:"Compute\n55%",start:0},
+      {pct:25,c:"#ff8020",l:"Comm\n25%",start:198},
+      {pct:20,c:"#1c2836",l:"Idle\n20%",start:288}
+    ];
+
+    segs.forEach(s=>{
+      let a1=(s.start)*Math.PI/180,a2=(s.start+s.pct*3.6)*Math.PI/180;
+      let x1=cx+r*Math.cos(a1),y1=cy-r*Math.sin(a1);
+      let x2=cx+r*Math.cos(a2),y2=cy-r*Math.sin(a2);
+      let la=s.pct*3.6>180?1:0;
+      svg.append(E("path",{d:`M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${la} 1 ${x2},${y2} Z`,fill:s.c,stroke:"#06080c","stroke-width":"2"}));
+    });
+    // Inner circle (donut)
+    svg.append(E("circle",{cx:cx,cy:cy,r:r*0.5,fill:"#06080c"}));
+    svg.append(E("text",{x:cx,y:cy-5,fill:"#d0e0e8","font-size":"13","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Step Time"));
+    svg.append(E("text",{x:cx,y:cy+15,fill:"#607888","font-size":"11","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"100% Breakdown"));
+
+    // Legend
+    segs.forEach((s,i)=>{
+      svg.append(E("rect",{x:400,y:80+i*35,width:14,height:14,rx:3,fill:s.c,stroke:s.c,"stroke-width":"1"}));
+      svg.append(E("text",{x:422,y:92+i*35,fill:s.c,"font-size":"12","font-family":"JetBrains Mono,monospace"},s.l));
+    });
+
+    // Causes of bubbles
+    svg.append(E("text",{x:400,y:220,fill:"#d0e0e8","font-size":"13","font-weight":"700","text-anchor":"start"},"Causes of Bubbles:"));
+
+    let causes=[
+      {b:"Straggler GPU",d:"One GPU slower than others → all wait",c:"#ff8020"},
+      {b:"Communication not overlapped",d:"Compute blocked by AllReduce barrier",c:"#ff8020"},
+      {b:"Network contention",d:"NCCL ring delayed by link bandwidth",c:"#ff8020"},
+      {b:"Gradient sync too frequent",d:"sync every step vs gradient accumulation",c:"#607888"},
+    ];
+    causes.forEach((ca,i)=>{
+      svg.append(E("text",{x:410,y:245+i*35,fill:ca.c,"font-size":"11","font-family":"JetBrains Mono,monospace"},ca.b));
+      svg.append(E("text",{x:570,y:245+i*35,fill:"#607888","font-size":"10","font-family":"JetBrains Mono,monospace"},"— "+ca.d));
+    });
+  }
+},{
+  t:"优化策略：计算/通信重叠",
+  l:"Overlap compute & comm → zero bubble (ideal)",
+  d:"减少通信瓶颈的核心策略包括：1)梯度累积(gradient accumulation)：每 K 步同步一次，减少通信频率；2)异步通信：启动 AllReduce 后立即执行下一步计算；3)梯度压缩(1-bit SGD)、Top-K 稀疏化减少通信量；4)融合通信(fused AllReduce + Optimizer step)。",
+  b:["Overlap","Gradient Accum","Compression"],
+  r:function(svg){
+    function E(t,a,tx){let e=document.createElementNS("http://www.w3.org/2000/svg",t);for(let k in a)e.setAttribute(k,a[k]);if(tx)e.textContent=tx;return e;}
+    svg.setAttribute("viewBox","0 0 800 420");svg.style.background="#06080c";
+
+    // Comparison: No overlap vs Overlap
+    svg.append(E("text",{x:200,y:25,fill:"#ff8020","font-size":"13","font-weight":"700","text-anchor":"middle"},"No Overlap (Bubble)"));
+    // Sequential bars
+    ["Compute","Idle\n(Bubble)","Comm","Compute","Idle","Comm"].forEach((l,i)=>{
+      let c=l.includes("Idle")?"#1c2836":l.includes("Comm")?"#ff8020":"#40a0ff";
+      svg.append(E("rect",{x:40+i*50,y:40,width:45,height:28,rx:3,fill:c,opacity:"0.7"}));
+      svg.append(E("text",{x:40+i*50+22,y:63,fill:"#607888","font-size":"7","text-anchor":"middle"},l.split("\n")[0]));
+    });
+
+    svg.append(E("text",{x:600,y:25,fill:"#00e5a0","font-size":"13","font-weight":"700","text-anchor":"middle"},"With Overlap (Faster)"));
+
+    // Overlap pattern: compute runs while comm in background
+    let steps=[{c:"#40a0ff",w:120,l:"Compute (Fwd)"},{c:"#40a0ff",w:80,l:"Compute (Bwd)"},{c:"#40a0ff",w:100,l:"Compute (Step+Optim)"}];
+    let sx=360,stepYes=0;
+    steps.forEach(s=>{
+      svg.append(E("rect",{x:sx,y:80,width:s.w,height:28,rx:3,fill:s.c,opacity:"0.7",stroke:s.c,"stroke-width":"1"}));
+      svg.append(E("text",{x:sx+s.w/2,y:99,fill:"#fff","font-size":"8","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},s.l));
+      sx+=s.w+5;
+    });
+
+    // Communication running parallel with Bwd
+    svg.append(E("rect",{x:360+120,y:70,width:80,height:20,rx:3,fill:"#ff8020",opacity:"0.5"}));
+    svg.append(E("text",{x:360+160,y:85,fill:"#fff","font-size":"8","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"AllReduce (async)"));
+    svg.append(E("text",{x:500,y:165,fill:"#00e5a0","font-size":"11","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Comm runs in background while next compute runs"));
+
+    // Optimization strategies table
+    svg.append(E("text",{x:400,y:200,fill:"#d0e0e8","font-size":"14","font-weight":"700","text-anchor":"middle"},"Communication Optimization Strategies"));
+
+    let strats=[
+      {method:"Gradient Accumulation","gain":"Reduce comm freq Kx","cost":"Stale gradients, lower convergence rate","c":"#00e5a0"},
+      {method:"Async AllReduce","gain":"Full overlap","cost":"Bounded staleness, harder to tune","c":"#40a0ff"},
+      {method:"Gradient Compression","gain":"Reduce data size 100-1000x","cost":"Accuracy loss (top-k, 1-bit SGD)","c":"#b050ff"},
+      {method:"Fused Optimizer Step","gain":"Eliminate extra kernel launches","cost":"Complex implementation","c":"#ff8020"},
+    ];
+
+    strats.forEach((st,i)=>{
+      let y=220+i*i*1.5+Math.floor(i)*32 + (i%2)*30;
+      // Actually let me just use fixed y values
+    });
+
+    let sY=220;
+    strats.forEach((st,i)=>{
+      let y=sY+i*42;
+      svg.append(E("rect",{x:12,y:y,width:776,height:36,rx:6,fill:"rgba(0,229,160,0.03)",stroke:st.c,"stroke-width":"1"}));
+      svg.append(E("text",{x:22,y:y+16,fill:st.c,"font-size":"12","font-weight":"700","font-family":"JetBrains Mono,monospace"},st.method));
+      svg.append(E("text",{x:240,y:y+16,fill:"#30d060","font-size":"10","font-family":"JetBrains Mono,monospace"},"Gain: "+st.gain));
+      svg.append(E("text",{x:500,y:y+16,fill:"#ff8020","font-size":"10","font-family":"JetBrains Mono,monospace"},"Cost: "+st.cost));
+    });
+
+    // Formula
+    svg.append(E("text",{x:400,y:395,fill:"#607888","font-size":"11","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Efficiency = T_compute / (T_compute + T_comm + T_bubble) → target > 90%"));
+  }
+}];
+
+let step=0;
+function render(i){
+  step=((i%S.length)+S.length)%S.length;
+  let s=S[step];
+  document.getElementById("explain").innerHTML=`
+    <div class="step-title">${s.t}</div>
+    <div class="badge-row">${s.b.map(b=>'<span class="badge badge--tip">'+b+'</span>').join("")}</div>
+    <div class="code-line">${s.l}</div>
+    <div class="step-desc">${s.d}</div>`;
+  let svg=document.getElementById("stage").querySelector("svg");
+  if(!svg){svg=document.createElementNS("http://www.w3.org/2000/svg","svg");document.getElementById("stage").appendChild(svg);svg.setAttribute("width","100%");svg.setAttribute("height","100%");svg.style.minHeight="420px";}
+  while(svg.firstChild)svg.removeChild(svg.firstChild);
+  s.r(svg);
+  document.getElementById("dots").innerHTML=S.map((_,j)=>'<div class="step-dot'+(j===step?' active':j<step?' done':'')+'></div>').join("");
+  document.getElementById("btn-prev").disabled=step===0;
+  document.getElementById("btn-next").disabled=step===S.length-1;
+}
+render(0);
+document.getElementById("btn-prev").onclick=()=>render(step-1);
+document.getElementById("btn-next").onclick=()=>render(step+1);
+document.addEventListener("keydown",e=>{if(e.key==="ArrowLeft")render(step-1);if(e.key==="ArrowRight")render(step+1);});
+</script>
+</body>
+</html>

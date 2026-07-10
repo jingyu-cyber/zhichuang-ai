@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>计算思维 — 交互课程</title>
+<style>
+:root{--bg:#f5f5f8;--bg-soft:#ffffff;--bg-code:#f0f0f4;--fg:#2c2c38;--fg-dim:#6c6c80;--line:#dcdce4;--accent:#5b6abf;--accent-2:#36a2b8;--grad:#f09840;--success:#40c878;--danger:#e04860;--shadow:0 2px 12px rgba(0,0,0,.06)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--fg);font-family:"Noto Sans SC","PingFang SC",-apple-system,sans-serif;min-height:100vh;line-height:1.6}
+.wrap{max-width:1100px;margin:0 auto;padding:40px 24px}
+.hero{text-align:center;padding:48px 0 32px}
+.hero h1{font-size:36px;color:var(--accent);margin-bottom:8px}
+.hero .sub{font-size:16px;color:var(--fg-dim)}
+.chapters{display:flex;flex-direction:column;gap:32px;margin-top:24px}
+.chapter-title{font-size:22px;font-weight:700;color:var(--fg);border-bottom:2px solid var(--line);padding-bottom:8px;margin-bottom:4px}
+.chapter-title span{color:var(--accent);margin-right:8px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px}
+.card{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow);text-decoration:none;color:var(--fg);transition:transform .15s,border-color .15s;display:flex;flex-direction:column;gap:8px}
+.card:hover{transform:translateY(-2px);border-color:var(--accent)}
+.card .num{font-size:13px;color:var(--fg-dim);font-family:"JetBrains Mono",monospace}
+.card h3{font-size:17px;font-weight:700}
+.card p{font-size:13px;color:var(--fg-dim);line-height:1.6}
+.card .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.tag{padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600}
+.tag--ch1{background:rgba(91,106,191,.12);color:var(--accent)}
+.tag--ch2{background:rgba(54,162,184,.12);color:var(--accent-2)}
+.tag--ch3{background:rgba(240,152,64,.15);color:var(--grad)}
+.tag--ch4{background:rgba(64,200,120,.12);color:var(--success)}
+.footer{text-align:center;color:var(--fg-dim);font-size:13px;padding:32px 0 16px}
+@media(max-width:700px){.hero h1{font-size:26px}.cards{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="hero">
+<h1>计算思维</h1>
+<p class="sub">Computational Thinking — 12 节交互式课程 · 浅色主题 · 面向低年级</p>
+</div>
+
+<div class="chapters">
+
+<div class="chapter">
+<h2 class="chapter-title"><span>第1章</span>问题分解与抽象</h2>
+<div class="cards">
+<a class="card" href="pages/01-problem-boundary.html">
+<div class="num">01</div>
+<h3>问题边界</h3>
+<p>从自然语言描述中提取输入、输出、约束与评判标准，明确问题范围</p>
+<div class="tags"><span class="tag tag--ch1">分解</span><span class="tag tag--ch1">抽象</span></div>
+</a>
+<a class="card" href="pages/02-abstract-model.html">
+<div class="num">02</div>
+<h3>抽象建模</h3>
+<p>将现实世界对象映射为数据结构：地图→图、队伍→队列、表格→数组</p>
+<div class="tags"><span class="tag tag--ch1">建模</span><span class="tag tag--ch1">映射</span></div>
+</a>
+<a class="card" href="pages/03-subtask-breakdown.html">
+<div class="num">03</div>
+<h3>子任务拆分</h3>
+<p>将大问题切分为输入处理、核心计算、输出格式化三个子任务</p>
+<div class="tags"><span class="tag tag--ch1">拆分</span><span class="tag tag--ch1">模块化</span></div>
+</a>
+</div>
+</div>
+
+<div class="chapter">
+<h2 class="chapter-title"><span>第2章</span>算法状态与控制</h2>
+<div class="cards">
+<a class="card" href="pages/04-loop-state.html">
+<div class="num">04</div>
+<h3>循环状态追踪</h3>
+<p>逐轮展示循环变量变化表，检查终止条件，理解迭代推进过程</p>
+<div class="tags"><span class="tag tag--ch2">循环</span><span class="tag tag--ch2">状态</span></div>
+</a>
+<a class="card" href="pages/05-branch-decision.html">
+<div class="num">05</div>
+<h3>分支决策树</h3>
+<p>输入沿决策树节点流动，覆盖的路径高亮显示条件判断逻辑</p>
+<div class="tags"><span class="tag tag--ch2">分支</span><span class="tag tag--ch2">决策</span></div>
+</a>
+<a class="card" href="pages/06-state-machine.html">
+<div class="num">06</div>
+<h3>状态机构建</h3>
+<p>订单/游戏/任务的状态节点，事件驱动的状态迁移箭头</p>
+<div class="tags"><span class="tag tag--ch2">状态机</span><span class="tag tag--ch2">迁移</span></div>
+</a>
+</div>
+</div>
+
+<div class="chapter">
+<h2 class="chapter-title"><span>第3章</span>递归与搜索</h2>
+<div class="cards">
+<a class="card" href="pages/07-recursion-stack.html">
+<div class="num">07</div>
+<h3>递归调用栈</h3>
+<p>斐波那契/汉诺塔帧的压栈弹栈过程，栈高度随调用深度变化</p>
+<div class="tags"><span class="tag tag--ch3">递归</span><span class="tag tag--ch3">栈帧</span></div>
+</a>
+<a class="card" href="pages/08-bfs-vs-dfs.html">
+<div class="num">08</div>
+<h3>BFS vs DFS 对比</h3>
+<p>同一张图上队列与栈的遍历差异，节点按访问顺序着色</p>
+<div class="tags"><span class="tag tag--ch3">搜索</span><span class="tag tag--ch3">对比</span></div>
+</a>
+<a class="card" href="pages/09-pruning.html">
+<div class="num">09</div>
+<h3>剪枝策略</h3>
+<p>搜索树中违反约束的分支变灰，剪枝前后节点数量对比</p>
+<div class="tags"><span class="tag tag--ch3">剪枝</span><span class="tag tag--ch3">优化</span></div>
+</a>
+</div>
+</div>
+
+<div class="chapter">
+<h2 class="chapter-title"><span>第4章</span>调试与迁移</h2>
+<div class="cards">
+<a class="card" href="pages/10-debug-trace.html">
+<div class="num">10</div>
+<h3>调试追踪</h3>
+<p>断点快照时间线：变量值、条件判定结果、错误传播路径</p>
+<div class="tags"><span class="tag tag--ch4">调试</span><span class="tag tag--ch4">追踪</span></div>
+</a>
+<a class="card" href="pages/11-error-classify.html">
+<div class="num">11</div>
+<h3>错误分类</h3>
+<p>将 Bug 归入四类桶：边界遗漏、状态遗漏、条件翻转、类型错误</p>
+<div class="tags"><span class="tag tag--ch4">分类</span><span class="tag tag--ch4">诊断</span></div>
+</a>
+<a class="card" href="pages/12-analogy-transfer.html">
+<div class="num">12</div>
+<h3>类比迁移</h3>
+<p>两相似问题左右对齐，共同结构高亮，触类旁通</p>
+<div class="tags"><span class="tag tag--ch4">迁移</span><span class="tag tag--ch4">类比</span></div>
+</a>
+</div>
+</div>
+
+</div>
+<div class="footer">计算思维 · Computational Thinking &copy; 2026</div>
+</div>
+</body>
+</html>

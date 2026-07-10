@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>10 团队贡献分析 - 软件工程互动课程</title>
+<style>
+:root{--bg:#1c2128;--bg-soft:#252c35;--bg-code:#141820;--fg:#e6edf3;--fg-dim:#8b949e;--line:#30363d;--accent:#539bf5;--accent-2:#57ab5a;--grad:#c69026;--success:#57ab5a;--danger:#e5534b;--purple:#986ee2}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(83,155,245,.18);color:var(--accent)}.badge--tip{background:rgba(87,171,90,.18);color:var(--success)}.badge--warn{background:rgba(198,144,38,.18);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>团队贡献分析</h1>
+<div class="breadcrumb"><a href="../index.html">软件工程</a> / 项目管理 / <span id="step-indicator">Step 1/4</span></div>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="panel-explain">
+<div class="step-title" id="step-title"></div>
+<div class="step-desc" id="step-desc"></div>
+<div class="badge-row" id="badge-row"></div>
+<div class="info-line" id="info-line"></div>
+</div>
+<div class="panel-stage"><svg id="stage" viewBox="0 0 800 500" style="width:100%;height:100%"></svg></div>
+</div>
+<div class="demo-controls">
+<button id="btn-prev" onclick="prev()">上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btn-next" onclick="next()">下一步</button>
+<button id="btn-auto" onclick="toggleAuto()" style="min-width:80px">自动播放</button>
+</div>
+</div>
+<script>
+const svgNS="http://www.w3.org/2000/svg";
+function T(t, a) { const e = document.createElementNS(svgNS, t); for (const [k, v] of Object.entries(a || {})) e.setAttribute(k, v); return e; }
+function tx(x, y, t, c, fs, a) { const e = T("text", { x, y, fill: c || "var(--fg)", "font-size": fs || "13", "text-anchor": a || "middle", "font-family": "-apple-system,'PingFang SC','Microsoft YaHei',sans-serif" }); e.textContent = t; return e; }
+function rct(x, y, w, h, f, s, rx) { return T("rect", { x, y, width: w, height: h, fill: f || "var(--bg-soft)", stroke: s || "var(--line)", "stroke-width": "1.5", rx: rx || 4 }); }
+
+function r0(svg) {
+  // Step 1: Team member overview
+  svg.append(tx(400,20,"团队成员画像","var(--accent)","14"));
+  const members = [
+    {name:"张三",role:"前端开发",color:"var(--accent)","模块":["课程浏览","视频播放","UI组件"]},
+    {name:"李四",role:"后端开发",color:"var(--success)","模块":["用户认证","支付接口","API设计"]},
+    {name:"王五",role:"全栈开发",color:"var(--purple)","模块":["数据库","部署","文档"]},
+    {name:"赵六",role:"AI算法",color:"var(--grad)","模块":["推荐系统","内容审核"]}
+  ];
+  members.forEach((m,i) => {
+    const x = 20+i*195, y = 44;
+    svg.append(rct(x,y,180,170,"var(--bg)","var(--line)",8));
+    svg.append(T("circle",{cx:x+90,cy:y+35,r:22,fill:m.color}));
+    svg.append(tx(x+90,y+43,m.name.charAt(0),"#fff","16"));
+    svg.append(tx(x+90,y+76,m.name,"var(--fg)","14"));
+    svg.append(tx(x+90,y+94,m.role,m.color,"11"));
+    m["模块"].forEach((mod,j) => svg.append(tx(x+90,y+116+j*18,mod,"var(--fg-dim)","11")));
+  });
+  svg.append(tx(400,230,"4人团队，职责覆盖前端、后端、全栈、AI","var(--fg-dim)"));
+}
+
+function r1(svg) {
+  // Step 2: Contribution matrix
+  svg.append(tx(400,18,"贡献矩阵: 成员 × 模块 × 产出","var(--accent)","14"));
+
+  const modules = ["课程浏览","用户认证","视频播放","支付接口","推荐系统","数据库","文档","部署"];
+  const mNames = ["张三","李四","王五","赵六"];
+  const data = [
+    [15,0,20,0,0,0,3,0],
+    [0,12,0,18,0,5,2,3],
+    [5,3,0,5,3,15,8,12],
+    [0,0,0,0,22,0,5,0]
+  ];
+
+  // Headers
+  svg.append(rct(20,38,70,28,"var(--bg)","var(--line)",4));
+  svg.append(tx(55,57,"成员","var(--accent)","11"));
+  modules.forEach((m,i) => {
+    svg.append(rct(94+i*80,38,76,28,"var(--bg)","var(--line)",4));
+    svg.append(tx(94+i*80+38,57,m,"var(--fg)","10"));
+  });
+
+  mNames.forEach((name,ri) => {
+    const y = 70+ri*44;
+    svg.append(rct(20,y,70,40,"var(--bg)","var(--line)",4));
+    svg.append(tx(55,y+24,name,"var(--fg)","12"));
+    data[ri].forEach((v,ci) => {
+      svg.append(rct(94+ci*80,y,76,40,"var(--bg)","var(--line)",4));
+      const alpha = Math.min(v/25, 1);
+      const c = v>15?"var(--success)":v>5?"var(--accent)":v>0?"var(--grad)":"var(--bg)";
+      const bg = v>0?`rgba(${c==="var(--success)"?"87,171,90":c==="var(--accent)"?"83,155,245":"198,144,38"},${alpha*0.3})`:"var(--bg)";
+      svg.append(rct(94+ci*80+1,y+1,74,38,bg,"transparent",2));
+      svg.append(tx(94+ci*80+38,y+24,v>0?String(v):"-",v>0?c:"var(--fg-dim)","13"));
+    });
+  });
+
+  // Bus factor highlight
+  svg.append(rct(20,260,760,22,"rgba(229,83,75,0.1)","var(--danger)",4));
+  svg.append(tx(400,275,"风险: 推荐系统只有赵六一人贡献 (Bus Factor = 1) → 单点风险!","var(--danger)","11"));
+}
+
+function r2(svg) {
+  // Step 3: Output alignment
+  svg.append(tx(400,18,"产出对齐分析","var(--accent)","14"));
+
+  const outputs = [
+    {member:"张三",type:"代码",count:150,color:"var(--accent)","模块":"课程浏览+视频播放+组件库"},
+    {member:"李四",type:"代码",count:120,color:"var(--success)","模块":"认证+支付+API文档"},
+    {member:"王五",type:"全栈",count:100,color:"var(--purple)","模块":"DB+部署+文档+前后端"},
+    {member:"赵六",type:"AI",count:80,color:"var(--grad)","模块":"推荐+审核模型"}
+  ];
+
+  outputs.forEach((o,i) => {
+    const y = 44+i*52;
+    svg.append(rct(20,y,760,46,"var(--bg)","var(--line)",6));
+    svg.append(T("circle",{cx:44,cy:y+23,r:14,fill:o.color}));
+    svg.append(tx(44,y+27,o.member.charAt(0),"#fff","12"));
+    svg.append(tx(80,y+23,o.member,"var(--fg)","13","start"));
+
+    // Bar
+    const barW = o.count*3;
+    svg.append(rct(180,y+10,barW,26,o.color,o.color,4));
+    svg.append(tx(180+barW/2,y+27,o.count+" commits","#fff","10"));
+
+    svg.append(tx(400,y+14,o.type,"var(--fg-dim)","11","start"));
+    svg.append(tx(400,y+30,o["模块"],"var(--fg-dim)","10","start"));
+  });
+
+  // Summary stats
+  svg.append(rct(20,260,240,80,"var(--bg)","var(--success)",8));
+  svg.append(tx(140,290,"总提交","var(--fg-dim)","11"));
+  svg.append(tx(140,320,"450 commits","var(--success)","18"));
+
+  svg.append(rct(280,260,240,80,"var(--bg)","var(--accent)",8));
+  svg.append(tx(400,290,"覆盖模块","var(--fg-dim)","11"));
+  svg.append(tx(400,320,"8 modules","var(--accent)","18"));
+
+  svg.append(rct(540,260,240,80,"var(--bg)","var(--grad)",8));
+  svg.append(tx(660,290,"Bus Factor","var(--fg-dim)","11"));
+  svg.append(tx(660,320,"1 (高风险)","var(--grad)","18"));
+}
+
+function r3(svg) {
+  // Step 4: Bus factor analysis
+  svg.append(tx(400,18,"总线因子 (Bus Factor) 风险评估","var(--accent)","14"));
+
+  // Visual bus factor
+  const modules = [
+    {name:"推荐系统",bus:1,risk:"高",color:"var(--danger)"},
+    {name:"支付接口",bus:2,risk:"中",color:"var(--grad)"},
+    {name:"数据库",bus:2,risk:"中",color:"var(--grad)"},
+    {name:"课程浏览",bus:2,risk:"中",color:"var(--grad)"},
+    {name:"视频播放",bus:2,risk:"中",color:"var(--grad)"},
+    {name:"用户认证",bus:3,risk:"低",color:"var(--success)"},
+    {name:"文档",bus:4,risk:"低",color:"var(--success)"},
+    {name:"部署",bus:3,risk:"低",color:"var(--success)"}
+  ];
+
+  modules.forEach((m,i) => {
+    const y = 44+i*32;
+    svg.append(rct(20,y,250,26,"var(--bg)","var(--line)",4));
+    svg.append(tx(145,y+17,m.name,"var(--fg)","11"));
+
+    svg.append(rct(280,y,300,26,"var(--bg)","var(--line)",4));
+    const bw = m.bus*80;
+    svg.append(rct(280,y,bw,26,m.color,m.color,4));
+    svg.append(tx(280+bw/2,y+17,"Bus="+m.bus,"#fff","10"));
+
+    svg.append(rct(590,y,80,26,"var(--bg)","var(--line)",4));
+    svg.append(rct(590,y,80,26,`rgba(${m.color==="var(--danger)"?"229,83,75":m.color==="var(--grad)"?"198,144,38":"87,171,90"},0.15)`,m.color,4));
+    svg.append(tx(630,y+17,m.risk,m.color,"11"));
+
+    svg.append(rct(680,y,100,26,"var(--bg)","var(--line)",4));
+    svg.append(tx(730,y+17,m.bus===1?"需知识转移":"","var(--fg-dim)","9"));
+  });
+
+  // Mitigation suggestions
+  svg.append(rct(20,320,760,160,"var(--bg-soft)","var(--line)",8));
+  svg.append(tx(400,346,"降低 Bus Factor 的措施","var(--fg)","14"));
+  const measures = [
+    "1. Code Review: 每个PR必须由非作者review，强制知识扩散",
+    "2. Pair Programming: 高风险模块实施结对编程",
+    "3. 文档先行: 关键模块必须有设计文档和交接文档",
+    "4. 轮岗制度: 定期轮换模块负责人，每人至少了解2个模块",
+    "5. 应急预案: 为 Bus Factor=1 的模块制定应急预案"
+  ];
+  measures.forEach((m,i) => {
+    svg.append(tx(40,370+i*22,m,"var(--fg-dim)","12","start"));
+  });
+}
+
+const S = [
+  {t:"团队成员画像",l:"角色",d:"梳理团队成员的角色分工和负责模块。了解每个人的技术栈和覆盖领域，是贡献分析的基础。",b:["Team","Roles"],r:r0},
+  {t:"贡献矩阵",l:"矩阵",d:"构建成员×模块的贡献矩阵，标注每人在各模块的提交数/工作量。识别贡献不均和覆盖盲区。",b:["Matrix","Commits"],r:r1},
+  {t:"产出对齐",l:"对齐",d:"将每个成员的产出（代码、文档、测试等）与计划目标对齐。检查是否有重叠或遗漏，确保团队产出覆盖所有需求。",b:["Output","Alignment"],r:r2},
+  {t:"总线因子评估",l:"风险",d:"计算每个模块的Bus Factor（最少需要多少人离开才会导致项目无法继续）。Bus Factor < 2 的模块标记高风险并制定缓解措施。",b:["Bus Factor","Risk"],r:r3}
+];
+
+let cur = 0, autoTimer = null, autoOn = false;
+
+function setStep(i) {
+  cur = Math.max(0, Math.min(S.length - 1, i));
+  const s = S[cur];
+  document.getElementById("step-title").textContent = s.t;
+  document.getElementById("step-desc").textContent = s.d;
+  document.getElementById("step-indicator").textContent = `Step ${cur+1}/${S.length}`;
+  const br = document.getElementById("badge-row"); br.innerHTML = "";
+  s.b.forEach(b => { const sp = document.createElement("span"); sp.className = "badge badge--def"; sp.textContent = b; br.append(sp); });
+  document.getElementById("info-line").textContent = s.l;
+  const svg = document.getElementById("stage"); svg.innerHTML = ""; s.r(svg);
+  document.querySelectorAll(".step-dot").forEach((d,j) => d.className = "step-dot" + (j === cur ? " active" : j < cur ? " done" : ""));
+  document.getElementById("btn-prev").disabled = cur === 0;
+  document.getElementById("btn-next").disabled = cur === S.length - 1;
+}
+
+function next() { setStep(cur + 1); }
+function prev() { setStep(cur - 1); }
+function toggleAuto() {
+  if (autoOn) { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; return; }
+  autoOn = true; document.getElementById("btn-auto").textContent = "暂停";
+  autoTimer = setInterval(() => { if (cur < S.length - 1) next(); else { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; } }, 2500); }
+
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight") next();
+  else if (e.key === "ArrowLeft") prev();
+  else if (e.key === " ") { e.preventDefault(); toggleAuto(); }
+  else if (e.key >= "1" && e.key <= String(S.length)) setStep(parseInt(e.key) - 1);
+});
+
+const dotsEl = document.getElementById("dots");
+S.forEach((s,i) => { const d = document.createElement("span"); d.className = "step-dot"; d.title = s.l; d.onclick = () => setStep(i); dotsEl.append(d); });
+setStep(0);
+</script>
+</body>
+</html>

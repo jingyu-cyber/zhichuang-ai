@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>01 问题边界 — 计算思维</title>
+<style>
+:root{--bg:#f5f5f8;--bg-soft:#ffffff;--bg-code:#f0f0f4;--fg:#2c2c38;--fg-dim:#6c6c80;--line:#dcdce4;--accent:#5b6abf;--accent-2:#36a2b8;--grad:#f09840;--success:#40c878;--danger:#e04860;--shadow:0 2px 12px rgba(0,0,0,.06)}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:"Noto Sans SC","PingFang SC",-apple-system,sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(91,106,191,.12);color:var(--accent)}.badge--tip{background:rgba(64,200,120,.12);color:var(--success)}.badge--warn{background:rgba(240,152,64,.15);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--accent);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px;box-shadow:var(--shadow)}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 8px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>01 问题边界</h1>
+<div class="breadcrumb"><a href="../index.html">计算思维</a> / 第1章 / 问题边界</div>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="explain">
+<div class="step-title" id="stepTitle"></div>
+<div class="step-desc" id="stepDesc"></div>
+<div class="badge-row" id="badges"></div>
+<div class="info-line" id="codeLine"></div>
+</div>
+<div class="panel-stage" id="stage"></div>
+</div>
+<div class="demo-controls">
+<button id="btnPrev" aria-label="上一步">&larr; 上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btnNext" aria-label="下一步">下一步 &rarr;</button>
+<button id="btnAuto" aria-label="自动播放">&#9654; 自动播放</button>
+<span style="font-size:12px;color:var(--fg-dim)">键盘 &larr; &rarr;</span>
+</div>
+</div>
+<script>
+const S=[{
+t:"阅读问题描述",
+l:"给定 N 个整数，找出其中最大的 K 个数",
+d:"首先拿到一段<strong>自然语言</strong>描述的问题。我们的第一步是仔细阅读，标记关键词：<em>\"给定\"</em>（输入）、<em>\"找出\"</em>（输出）、<em>\"最大的\"</em>（约束条件）。",
+b:[{t:"理解",c:"def"},{t:"自然语言",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+const g=document.createElementNS("http://www.w3.org/2000/svg","g");
+const rx=140,ry=40,rw=420,rh=60;
+// problem text box
+const r1=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r1.setAttribute("x",rx);r1.setAttribute("y",ry);r1.setAttribute("width",rw);r1.setAttribute("height",rh);
+r1.setAttribute("rx","10");r1.setAttribute("fill","var(--bg-soft)");r1.setAttribute("stroke","var(--accent)");r1.setAttribute("stroke-width","2");
+g.appendChild(r1);
+const t1=document.createElementNS("http://www.w3.org/2000/svg","text");
+t1.setAttribute("x",350);t1.setAttribute("y",ry+36);t1.setAttribute("text-anchor","middle");
+t1.setAttribute("font-size","18");t1.setAttribute("font-family","Noto Sans SC,sans-serif");t1.setAttribute("fill","var(--fg)");
+t1.textContent="给定 N 个整数，找出其中最大的 K 个数";
+g.appendChild(t1);
+// highlight markers
+[{x:145,w:36,c:"var(--accent)",lbl:"输入→"},{x:270,w:32,c:"var(--grad)",lbl:"输出→"},{x:375,w:38,c:"var(--fg-dim)",lbl:"约束→"}].forEach(m=>{
+const mk=document.createElementNS("http://www.w3.org/2000/svg","rect");
+mk.setAttribute("x",m.x);mk.setAttribute("y",ry-24);mk.setAttribute("width",m.w);mk.setAttribute("height","16");
+mk.setAttribute("rx","4");mk.setAttribute("fill",m.c);mk.setAttribute("opacity","0.18");
+g.appendChild(mk);
+const ml=document.createElementNS("http://www.w3.org/2000/svg","text");
+ml.setAttribute("x",m.x+m.w/2);ml.setAttribute("y",ry-12);ml.setAttribute("text-anchor","middle");
+ml.setAttribute("font-size","10");ml.setAttribute("fill",m.c);
+ml.textContent=m.lbl;
+g.appendChild(ml);
+});
+svg.appendChild(g);
+}},
+{
+t:"提取四要素",
+l:"Input: arr[N]; Output: top-K; Constraint: K<=N; Criteria: 最大",
+d:"将模糊的自然语言<strong>结构化</strong>为四个明确的卡片：<em>输入</em>（数据格式）、<em>输出</em>（期望结果）、<em>约束</em>（前置条件）、<em>评判标准</em>（怎样算对）。",
+b:[{t:"结构化",c:"def"},{t:"四要素",c:"tip"}],
+r(svg){
+svg.innerHTML='';
+const cards=[
+{x:40,y:60,w:140,h:110,title:"输入 (Input)",lines:["arr: int[N]","N 个整数","范围不限"],col:"var(--accent)"},
+{x:200,y:60,w:140,h:110,title:"输出 (Output)",lines:["topK: int[K]","最大的 K 个","降序排列"],col:"var(--accent-2)"},
+{x:360,y:60,w:140,h:110,title:"约束 (Constraint)",lines:["1 ≤ K ≤ N","N ≤ 10⁶","内存 256MB"],col:"var(--grad)"},
+{x:520,y:60,w:140,h:110,title:"评判 (Criteria)",lines:["结果确为最大K个","时间复杂度","正确性 100%"],col:"var(--success)"},
+];
+cards.forEach(c=>{
+const g=document.createElementNS("http://www.w3.org/2000/svg","g");
+const r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+r.setAttribute("x",c.x);r.setAttribute("y",c.y);r.setAttribute("width",c.w);r.setAttribute("height",c.h);
+r.setAttribute("rx","8");r.setAttribute("fill","var(--bg-soft)");r.setAttribute("stroke",c.col);r.setAttribute("stroke-width","2");
+g.appendChild(r);
+const th=document.createElementNS("http://www.w3.org/2000/svg","rect");
+th.setAttribute("x",c.x);th.setAttribute("y",c.y);th.setAttribute("width",c.w);th.setAttribute("height","28");
+th.setAttribute("rx","8");th.setAttribute("fill",c.col);th.setAttribute("opacity","0.15");
+g.appendChild(th);
+const tt=document.createElementNS("http://www.w3.org/2000/svg","text");
+tt.setAttribute("x",c.x+c.w/2);tt.setAttribute("y",c.y+19);tt.setAttribute("text-anchor","middle");
+tt.setAttribute("font-size","12");tt.setAttribute("font-weight","700");tt.setAttribute("fill",c.col);
+tt.textContent=c.title;
+g.appendChild(tt);
+c.lines.forEach((l,i)=>{
+const lt=document.createElementNS("http://www.w3.org/2000/svg","text");
+lt.setAttribute("x",c.x+c.w/2);lt.setAttribute("y",c.y+48+i*22);lt.setAttribute("text-anchor","middle");
+lt.setAttribute("font-size","11");lt.setAttribute("fill","var(--fg-dim)");
+lt.textContent=l;
+g.appendChild(lt);
+});
+svg.appendChild(g);
+});
+}},
+{
+t:"检查边界条件",
+l:"if K==0: return []; if K==N: return arr;",
+d:"边界情况最容易出 Bug！分别检查 <em>K=0</em>（空结果）、<em>K=N</em>（全选）、<em>N=0</em>（空输入）等极端情况，确保算法不会崩溃。",
+b:[{t:"边界",c:"warn"},{t:"鲁棒性",c:"def"}],
+r(svg){
+svg.innerHTML='';
+const cases=[
+{x:60,y:60,val:"K = 0",desc:"返回空数组 []",col:"var(--danger)"},
+{x:220,y:60,val:"K = N",desc:"返回原数组副本",col:"var(--success)"},
+{x:380,y:60,val:"N = 0",desc:"立即返回 []",col:"var(--danger)"},
+{x:540,y:60,val:"K > N",desc:"抛出异常/返回错误",col:"var(--grad)"},
+];
+cases.forEach(c=>{
+const g=document.createElementNS("http://www.w3.org/2000/svg","g");
+// circle
+const cr=document.createElementNS("http://www.w3.org/2000/svg","circle");
+cr.setAttribute("cx",c.x+50);cr.setAttribute("cy",c.y+30);cr.setAttribute("r","22");
+cr.setAttribute("fill","var(--bg-soft)");cr.setAttribute("stroke",c.col);cr.setAttribute("stroke-width","2");
+g.appendChild(cr);
+const vt=document.createElementNS("http://www.w3.org/2000/svg","text");
+vt.setAttribute("x",c.x+50);vt.setAttribute("y",c.y+34);vt.setAttribute("text-anchor","middle");
+vt.setAttribute("font-size","10");vt.setAttribute("font-weight","700");vt.setAttribute("fill",c.col);
+vt.textContent=c.val;
+g.appendChild(vt);
+const dt=document.createElementNS("http://www.w3.org/2000/svg","text");
+dt.setAttribute("x",c.x+50);dt.setAttribute("y",c.y+75);dt.setAttribute("text-anchor","middle");
+dt.setAttribute("font-size","11");dt.setAttribute("fill","var(--fg-dim)");
+dt.textContent=c.desc;
+g.appendChild(dt);
+svg.appendChild(g);
+});
+// arrow flow
+const arr=document.createElementNS("http://www.w3.org/2000/svg","path");
+arr.setAttribute("d","M 170 90 L 210 90 M 330 90 L 370 90 M 490 90 L 530 90");
+arr.setAttribute("stroke","var(--line)");arr.setAttribute("stroke-width","1.5");
+arr.setAttribute("marker-end","url(#arrow)");
+svg.appendChild(arr);
+// marker def
+const defs=document.createElementNS("http://www.w3.org/2000/svg","defs");
+const mk=document.createElementNS("http://www.w3.org/2000/svg","marker");
+mk.setAttribute("id","arrow");mk.setAttribute("markerWidth","8");mk.setAttribute("markerHeight","6");
+mk.setAttribute("refX","8");mk.setAttribute("refY","3");mk.setAttribute("orient","auto");
+const mp=document.createElementNS("http://www.w3.org/2000/svg","polygon");
+mp.setAttribute("points","0 0, 8 3, 0 6");mp.setAttribute("fill","var(--line)");
+mk.appendChild(mp);defs.appendChild(mk);svg.appendChild(defs);
+// center label
+const lb=document.createElementNS("http://www.w3.org/2000/svg","text");
+lb.setAttribute("x",350);lb.setAttribute("y",180);lb.setAttribute("text-anchor","middle");
+lb.setAttribute("font-size","13");lb.setAttribute("fill","var(--fg-dim)");
+lb.textContent="先写边界测试，再写主体逻辑 —— 防御式编程";
+svg.appendChild(lb);
+}},
+{
+t:"明确完成标准",
+l:"verify: len(result)==K and all(x in arr for x in result)",
+d:"最后定义<strong>完成标准</strong>：结果长度等于 K、所有元素来自原数组、结果确为最大的 K 个。这是验收测试的依据。",
+b:[{t:"验收",c:"tip"},{t:"测试驱动",c:"def"}],
+r(svg){
+svg.innerHTML='';
+const checks=[
+{y:50,icon:"✓",txt:"结果长度 = K",col:"var(--success)"},
+{y:120,icon:"✓",txt:"所有元素 ∈ 原数组",col:"var(--success)"},
+{y:190,icon:"✓",txt:"任意 result[i] ≥ 剩余所有元素",col:"var(--success)"},
+{y:260,icon:"✓",txt:"降序排列 (可选)",col:"var(--fg-dim)"},
+];
+checks.forEach(c=>{
+const g=document.createElementNS("http://www.w3.org/2000/svg","g");
+const cr=document.createElementNS("http://www.w3.org/2000/svg","circle");
+cr.setAttribute("cx","100");cr.setAttribute("cy",c.y);cr.setAttribute("r","18");
+cr.setAttribute("fill",c.col);cr.setAttribute("opacity","0.15");
+g.appendChild(cr);
+const ct=document.createElementNS("http://www.w3.org/2000/svg","text");
+ct.setAttribute("x","100");ct.setAttribute("y",c.y+6);ct.setAttribute("text-anchor","middle");
+ct.setAttribute("font-size","16");ct.setAttribute("fill",c.col);ct.setAttribute("font-weight","700");
+ct.textContent=c.icon;
+g.appendChild(ct);
+const tt=document.createElementNS("http://www.w3.org/2000/svg","text");
+tt.setAttribute("x","140");tt.setAttribute("y",c.y+5);tt.setAttribute("font-size","15");tt.setAttribute("fill","var(--fg)");
+tt.textContent=c.txt;
+g.appendChild(tt);
+// connecting line
+if(c.y>50){
+const l=document.createElementNS("http://www.w3.org/2000/svg","line");
+l.setAttribute("x1","118");l.setAttribute("y1",c.y-52);l.setAttribute("x2","118");l.setAttribute("y2",c.y-18);
+l.setAttribute("stroke","var(--line)");l.setAttribute("stroke-width","1.5");
+g.appendChild(l);
+}
+svg.appendChild(g);
+});
+// bounding box
+const bb=document.createElementNS("http://www.w3.org/2000/svg","rect");
+bb.setAttribute("x","300");bb.setAttribute("y","40");bb.setAttribute("width","320");bb.setAttribute("height","240");
+bb.setAttribute("rx","10");bb.setAttribute("fill","none");bb.setAttribute("stroke","var(--accent)");bb.setAttribute("stroke-width","2");bb.setAttribute("stroke-dasharray","6,3");
+svg.appendChild(bb);
+const bl=document.createElementNS("http://www.w3.org/2000/svg","text");
+bl.setAttribute("x","460");bl.setAttribute("y","65");bl.setAttribute("text-anchor","middle");bl.setAttribute("font-size","14");bl.setAttribute("fill","var(--accent)");bl.setAttribute("font-weight","700");
+bl.textContent="问题边界已明确";
+svg.appendChild(bl);
+const bd=document.createElementNS("http://www.w3.org/2000/svg","text");
+bd.setAttribute("x","460");bd.setAttribute("y","155");bd.setAttribute("text-anchor","middle");bd.setAttribute("font-size","12");bd.setAttribute("fill","var(--fg-dim)");
+bd.textContent="输入 → 处理 → 输出";
+svg.appendChild(bd);
+const be=document.createElementNS("http://www.w3.org/2000/svg","text");
+be.setAttribute("x","460");be.setAttribute("y","175");be.setAttribute("text-anchor","middle");be.setAttribute("font-size","12");be.setAttribute("fill","var(--fg-dim)");
+be.textContent="约束明确，边界清晰";
+svg.appendChild(be);
+const bf=document.createElementNS("http://www.w3.org/2000/svg","text");
+bf.setAttribute("x","460");be.setAttribute("x",460);bf.setAttribute("y","260");bf.setAttribute("text-anchor","middle");bf.setAttribute("font-size","12");bf.setAttribute("fill","var(--fg-dim)");
+bf.textContent="可以开始设计算法了";
+svg.appendChild(bf);
+}}
+];
+
+let step=0,autoTimer=null,autoOn=false;
+const explain=document.getElementById("explain");
+const stage=document.getElementById("stage");
+const stepTitle=document.getElementById("stepTitle");
+const stepDesc=document.getElementById("stepDesc");
+const badges=document.getElementById("badges");
+const codeLine=document.getElementById("codeLine");
+const dots=document.getElementById("dots");
+const btnPrev=document.getElementById("btnPrev");
+const btnNext=document.getElementById("btnNext");
+const btnAuto=document.getElementById("btnAuto");
+
+function renderDots(){
+dots.innerHTML='';
+S.forEach((_,i)=>{
+const d=document.createElement("span");
+d.className="step-dot"+(i===step?" active":i<step?" done":"");
+d.onclick=()=>goTo(i);
+dots.appendChild(d);
+});
+}
+function goTo(i){
+step=Math.max(0,Math.min(S.length-1,i));
+const s=S[step];
+stepTitle.textContent=s.t;
+stepDesc.innerHTML=s.d;
+badges.innerHTML=s.b.map(b=>`<span class="badge badge--${b.c}">${b.t}</span>`).join('');
+codeLine.textContent=s.l;
+const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+svg.setAttribute("viewBox","0 0 700 340");
+svg.setAttribute("preserveAspectRatio","xMidYMid meet");
+stage.innerHTML='';
+stage.appendChild(svg);
+s.r(svg);
+btnPrev.disabled=step===0;
+btnNext.disabled=step===S.length-1;
+renderDots();
+}
+btnPrev.onclick=()=>goTo(step-1);
+btnNext.onclick=()=>{if(step<S.length-1)goTo(step+1);else{autoOn=false;btnAuto.innerHTML="&#9654; 自动播放";clearInterval(autoTimer);}};
+btnAuto.onclick=()=>{autoOn=!autoOn;btnAuto.innerHTML=autoOn?"&#9632; 停止":"&#9654; 自动播放";if(autoOn){autoTimer=setInterval(()=>{if(step<S.length-1)goTo(step+1);else goTo(0);},3500);}else clearInterval(autoTimer);};
+document.addEventListener("keydown",e=>{if(e.key==="ArrowLeft")goTo(step-1);if(e.key==="ArrowRight"){if(step<S.length-1)goTo(step+1);}});
+goTo(0);
+</script>
+</body>
+</html>

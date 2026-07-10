@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 功能范围矩阵 - 软件工程互动课程</title>
+<style>
+:root{--bg:#1c2128;--bg-soft:#252c35;--bg-code:#141820;--fg:#e6edf3;--fg-dim:#8b949e;--line:#30363d;--accent:#539bf5;--accent-2:#57ab5a;--grad:#c69026;--success:#57ab5a;--danger:#e5534b;--purple:#986ee2}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(83,155,245,.18);color:var(--accent)}.badge--tip{background:rgba(87,171,90,.18);color:var(--success)}.badge--warn{background:rgba(198,144,38,.18);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>功能范围矩阵</h1>
+<div class="breadcrumb"><a href="../index.html">软件工程</a> / 需求工程 / <span id="step-indicator">Step 1/4</span></div>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="panel-explain">
+<div class="step-title" id="step-title"></div>
+<div class="step-desc" id="step-desc"></div>
+<div class="badge-row" id="badge-row"></div>
+<div class="info-line" id="info-line"></div>
+</div>
+<div class="panel-stage"><svg id="stage" viewBox="0 0 800 480" style="width:100%;height:100%"></svg></div>
+</div>
+<div class="demo-controls">
+<button id="btn-prev" onclick="prev()">上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btn-next" onclick="next()">下一步</button>
+<button id="btn-auto" onclick="toggleAuto()" style="min-width:80px">自动播放</button>
+</div>
+</div>
+<script>
+const svgNS="http://www.w3.org/2000/svg";
+function T(t, a) { const e = document.createElementNS(svgNS, t); for (const [k, v] of Object.entries(a || {})) e.setAttribute(k, v); return e; }
+function tx(x, y, text, c, fs) { const e = T("text", { x, y, fill: c || "var(--fg)", "font-size": fs || "13", "text-anchor": "middle", "font-family": "-apple-system,'PingFang SC','Microsoft YaHei',sans-serif" }); e.textContent = text; return e; }
+function rct(x, y, w, h, fill, stroke, rx) { return T("rect", { x, y, width: w, height: h, fill: fill || "var(--bg-soft)", stroke: stroke || "var(--line)", "stroke-width": "1.5", rx: rx || 6 }); }
+
+const features = [
+  {n:"课程搜索",v:8,c:3},{n:"视频播放",v:9,c:7},{n:"在线支付",v:7,c:8},
+  {n:"用户注册",v:5,c:2},{n:"课程评论",v:4,c:2},{n:"直播功能",v:6,c:9},
+  {n:"进度追踪",v:6,c:5},{n:"证书生成",v:4,c:4},{n:"AI推荐",v:3,c:7},
+  {n:"教师后台",v:8,c:5},{n:"数据分析",v:3,c:6},{n:"社交分享",v:2,c:3}
+];
+
+function qLabel(v,c) {
+  if (v>=6 && c<=5) return {q:"核心功能",color:"var(--success)",x:0,y:0};
+  if (v>=6 && c>5) return {q:"增强功能",color:"var(--accent)",x:1,y:0};
+  if (v<6 && c<=5) return {q:"锦上添花",color:"var(--grad)",x:0,y:1};
+  return {q:"暂不实现",color:"var(--danger)",x:1,y:1};
+}
+
+function drawQuadrant(svg, highlightQ) {
+  const ox=80, oy=40, w=640, h=360;
+  // Axes
+  svg.append(T("line",{x1:ox,y1:oy,x2:ox,y2:oy+h,stroke:"var(--fg-dim)","stroke-width":2}));
+  svg.append(T("line",{x1:ox,y1:oy+h,x2:ox+w,y2:oy+h,stroke:"var(--fg-dim)","stroke-width":2}));
+  // Labels
+  svg.append(tx(ox+w/2,oy+h+20,"商业价值 →", "var(--fg-dim)"));
+  svg.append(tx(ox-14,oy+100,"实", "var(--fg-dim)"));
+  svg.append(tx(ox-14,oy+116,"现", "var(--fg-dim)"));
+  svg.append(tx(ox-14,oy+132,"成", "var(--fg-dim)"));
+  svg.append(tx(ox-14,oy+148,"本", "var(--fg-dim)"));
+  svg.append(tx(ox-14,oy+164,"↓", "var(--fg-dim)"));
+  // Threshold lines
+  svg.append(T("line",{x1:ox+w/2,y1:oy,x2:ox+w/2,y2:oy+h,stroke:"var(--line)","stroke-width":1,"stroke-dasharray":"6,4"}));
+  svg.append(T("line",{x1:ox,y1:oy+h/2,x2:ox+w,y2:oy+h/2,stroke:"var(--line)","stroke-width":1,"stroke-dasharray":"6,4"}));
+  // Quadrant labels
+  const qs = [
+    {x:ox+160,y:oy+80,label:"核心功能\nCore",color:"var(--success)",q:0},
+    {x:ox+480,y:oy+80,label:"增强功能\nEnhance",color:"var(--accent)",q:1},
+    {x:ox+160,y:oy+260,label:"锦上添花\nNice-to-Have",color:"var(--grad)",q:2},
+    {x:ox+480,y:oy+260,label:"暂不实现\nWon't Do",color:"var(--danger)",q:3}
+  ];
+  qs.forEach(q => {
+    const alpha = (highlightQ === undefined || highlightQ === q.q) ? "0.12" : "0.03";
+    svg.append(rct(q.x-155,q.y-75,310,140,`rgba(${hexToRgb(q.color)},${alpha})`,q.color,8));
+    svg.append(tx(q.x,q.y-25,q.label.split("\n")[0],q.color,"15"));
+    svg.append(tx(q.x,q.y-5,q.label.split("\n")[1],q.color,"11"));
+  });
+}
+
+function hexToRgb(hex) { const m = hex.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i); return m ? `${parseInt(m[1],16)},${parseInt(m[2],16)},${parseInt(m[3],16)}` : "255,255,255"; }
+
+function drawFCard(svg, x, y, name, color, scale) {
+  const s = scale || 1;
+  const g = T("g", { transform: `translate(${x},${y}) scale(${s})` });
+  g.append(rct(-55,-14,110,28,"var(--bg-soft)",color,6));
+  g.append(tx(0,4,name,"var(--fg)","11"));
+  svg.append(g);
+}
+
+function r0(svg) {
+  // All features listed
+  svg.append(rct(256,20,288,36,"var(--bg)","var(--line)"));
+  svg.append(tx(400,43,"全部需求功能列表","var(--fg)"));
+  const g = T("g",{});
+  features.forEach((f,i) => {
+    const col = Math.floor(i / 4), row = i % 4;
+    const x = 80 + col * 220, y = 80 + row * 42;
+    g.append(rct(x,y,195,34,"var(--bg-soft)","var(--line)"));
+    g.append(tx(x+14,y+22,f.n,"var(--fg)","13"));
+    g.append(tx(x+170,y+22,"V:"+f.v+" C:"+f.c,"var(--fg-dim)","11"));
+  });
+  g.append(tx(400,260,"12个功能需求，每个标注了商业价值(V)和实现成本(C)","var(--fg-dim)"));
+  svg.append(g);
+}
+
+function r1(svg) {
+  // Draw quadrant with features scattered
+  drawQuadrant(svg);
+  const ox=80, oy=40, w=640, h=360;
+  features.forEach(f => {
+    const rx = ox + (f.v/10)*w, ry = oy + h - (f.c/10)*h;
+    drawFCard(svg, rx, ry, f.n, "var(--fg-dim)");
+  });
+  svg.append(tx(400,440,"将12个功能按价值(V)和成本(C)放入矩阵中","var(--fg-dim)"));
+}
+
+function r2(svg) {
+  // Step 3: Quadrant classification
+  drawQuadrant(svg);
+  const ox=80, oy=40, w=640, h=360;
+  features.forEach(f => {
+    const q = qLabel(f.v, f.c);
+    const rx = ox + (f.v/10)*w, ry = oy + h - (f.c/10)*h;
+    drawFCard(svg, rx, ry, f.n, q.color, 1.05);
+  });
+  // Highlight quadrants with labels
+  ["核心功能: 课程搜索、视频播放、教师后台","增强功能: 在线支付、直播功能","锦上添花: 用户注册、课程评论、证书生成","暂不实现: AI推荐、数据分析、社交分享"].forEach((t,i)=>{
+    svg.append(tx(400,420+i*14,t,"var(--fg-dim)","10"));
+  });
+}
+
+function r3(svg) {
+  // Final: matrix with priority borders
+  drawQuadrant(svg);
+  const ox=80, oy=40, w=640, h=360;
+  // Priority zone highlight
+  svg.append(rct(ox,oy,w/2,h/2,"rgba(87,171,90,0.08)","var(--success)",0));
+  svg.append(tx(ox+w/4,oy-10,"第一优先级 - Sprint 1","var(--success)","12"));
+  svg.append(rct(ox+w/2,oy,w/2,h/2,"rgba(83,155,245,0.06)","var(--accent)",0));
+  svg.append(tx(ox+3*w/4,oy-10,"第二优先级 - Sprint 2","var(--accent)","12"));
+
+  features.forEach(f => {
+    const q = qLabel(f.v, f.c);
+    const rx = ox + (f.v/10)*w, ry = oy + h - (f.c/10)*h;
+    drawFCard(svg, rx, ry, f.n, q.color, 1.08);
+  });
+  svg.append(rct(60,oy+h+40,680,40,"var(--bg-soft)","var(--success)",6));
+  svg.append(tx(400,oy+h+65,"范围矩阵完成: 核心功能6个 → Sprint 1; 增强功能2个 → Sprint 2","var(--success)"));
+}
+
+const S = [
+  {t:"需求收集",l:"列表",d:"首先收集所有功能需求，为每个功能评估商业价值（1-10）和实现成本（1-10）。这是矩阵分析的前提。",b:["Backlog","Value","Cost"],r:r0},
+  {t:"功能定位",l:"散布",d:"将每个功能放入价值×成本的二维矩阵。X轴为商业价值，Y轴为实现成本（上低下高）。",b:["2D Matrix","Scatter"],r:r1},
+  {t:"四象限分类",l:"分类",d:"按分界线将功能归入四个象限：核心（高价值低成本）、增强（高价值高成本）、锦上添花（低价值低成本）、不做（低价值高成本）。",b:["Quadrant","Priority"],r:r2},
+  {t:"优先级排期",l:"排期",d:"制定迭代计划：核心功能优先（Sprint 1），增强功能次之（Sprint 2），锦上添花按需安排，暂不实现明确标记。",b:["Sprint Plan","MoSCoW"],r:r3}
+];
+
+let cur = 0, autoTimer = null, autoOn = false;
+
+function setStep(i) {
+  cur = Math.max(0, Math.min(S.length - 1, i));
+  const s = S[cur];
+  document.getElementById("step-title").textContent = s.t;
+  document.getElementById("step-desc").textContent = s.d;
+  document.getElementById("step-indicator").textContent = `Step ${cur+1}/${S.length}`;
+  const br = document.getElementById("badge-row"); br.innerHTML = "";
+  s.b.forEach(b => { const sp = document.createElement("span"); sp.className = "badge badge--def"; sp.textContent = b; br.append(sp); });
+  document.getElementById("info-line").textContent = s.l;
+  const svg = document.getElementById("stage"); svg.innerHTML = ""; s.r(svg);
+  document.querySelectorAll(".step-dot").forEach((d,j) => d.className = "step-dot" + (j === cur ? " active" : j < cur ? " done" : ""));
+  document.getElementById("btn-prev").disabled = cur === 0;
+  document.getElementById("btn-next").disabled = cur === S.length - 1;
+}
+
+function next() { setStep(cur + 1); }
+function prev() { setStep(cur - 1); }
+function toggleAuto() {
+  if (autoOn) { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; return; }
+  autoOn = true; document.getElementById("btn-auto").textContent = "暂停";
+  autoTimer = setInterval(() => { if (cur < S.length - 1) next(); else { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; } }, 2500);
+}
+
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight") next();
+  else if (e.key === "ArrowLeft") prev();
+  else if (e.key === " ") { e.preventDefault(); toggleAuto(); }
+  else if (e.key >= "1" && e.key <= String(S.length)) setStep(parseInt(e.key) - 1);
+});
+
+const dotsEl = document.getElementById("dots");
+S.forEach((s,i) => { const d = document.createElement("span"); d.className = "step-dot"; d.title = s.l; d.onclick = () => setStep(i); dotsEl.append(d); });
+setStep(0);
+</script>
+</body>
+</html>

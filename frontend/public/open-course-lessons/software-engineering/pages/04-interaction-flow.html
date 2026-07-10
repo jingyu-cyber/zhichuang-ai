@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04 交互流程设计 - 软件工程互动课程</title>
+<style>
+:root{--bg:#1c2128;--bg-soft:#252c35;--bg-code:#141820;--fg:#e6edf3;--fg-dim:#8b949e;--line:#30363d;--accent:#539bf5;--accent-2:#57ab5a;--grad:#c69026;--success:#57ab5a;--danger:#e5534b;--purple:#986ee2}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(83,155,245,.18);color:var(--accent)}.badge--tip{background:rgba(87,171,90,.18);color:var(--success)}.badge--warn{background:rgba(198,144,38,.18);color:var(--grad)}.badge--danger{background:rgba(229,83,75,.18);color:var(--danger)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>交互流程设计</h1>
+<div class="breadcrumb"><a href="../index.html">软件工程</a> / 软件设计 / <span id="step-indicator">Step 1/4</span></div>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="panel-explain">
+<div class="step-title" id="step-title"></div>
+<div class="step-desc" id="step-desc"></div>
+<div class="badge-row" id="badge-row"></div>
+<div class="info-line" id="info-line"></div>
+</div>
+<div class="panel-stage"><svg id="stage" viewBox="0 0 800 500" style="width:100%;height:100%"></svg></div>
+</div>
+<div class="demo-controls">
+<button id="btn-prev" onclick="prev()">上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btn-next" onclick="next()">下一步</button>
+<button id="btn-auto" onclick="toggleAuto()" style="min-width:80px">自动播放</button>
+</div>
+</div>
+<script>
+const svgNS="http://www.w3.org/2000/svg";
+function T(t, a) { const e = document.createElementNS(svgNS, t); for (const [k, v] of Object.entries(a || {})) e.setAttribute(k, v); return e; }
+function tx(x, y, t, c, fs, a) { const e = T("text", { x, y, fill: c || "var(--fg)", "font-size": fs || "13", "text-anchor": a || "middle", "font-family": "-apple-system,'PingFang SC','Microsoft YaHei',sans-serif" }); e.textContent = t; return e; }
+function rct(x, y, w, h, f, s, rx) { return T("rect", { x, y, width: w, height: h, fill: f || "var(--bg-soft)", stroke: s || "var(--line)", "stroke-width": "1.5", rx: rx || 8 }); }
+function node(svg, x, y, label, color) {
+  const g = T("g",{});
+  g.append(rct(x-65, y-20, 130, 40, "var(--bg-soft)", color || "var(--accent)"));
+  g.append(tx(x, y+4, label, "var(--fg)", "13"));
+  svg.append(g);
+}
+function arrow(svg, x1, y1, x2, y2, color, dashed, label) {
+  const c = color || "var(--line)";
+  const dash = dashed ? "6,4" : "none";
+  svg.append(T("line",{x1,y1,x2,y2,stroke:c,"stroke-width":1.5,"stroke-dasharray":dash,"marker-end":"url(#arrow-"+c.replace("#","").replace("var(--","").replace(")","")+")"}));
+  if (label) {
+    const mx = (x1+x2)/2, my = (y1+y2)/2 - 8;
+    svg.append(tx(mx, my, label, "var(--fg-dim)", "10"));
+  }
+}
+
+function r0(svg) {
+  // Step 1: Define page nodes
+  const pages = [
+    {x:400,y:30,label:"首页",color:"var(--accent)"},
+    {x:200,y:130,label:"课程列表",color:"var(--accent)"},
+    {x:600,y:130,label:"课程详情",color:"var(--accent)"},
+    {x:100,y:230,label:"购物车",color:"var(--accent)"},
+    {x:300,y:230,label:"支付页",color:"var(--accent)"},
+    {x:500,y:230,label:"我的课程",color:"var(--accent)"},
+    {x:700,y:230,label:"视频播放",color:"var(--accent)"},
+    {x:250,y:330,label:"个人中心",color:"var(--accent)"},
+    {x:550,y:330,label:"设置",color:"var(--accent)"}
+  ];
+  pages.forEach(p => node(svg, p.x, p.y, p.label, p.color));
+  svg.append(tx(400,400,"第一步：识别所有页面节点，列出完整页面清单","var(--fg-dim)"));
+}
+
+function r1(svg) {
+  // Step 2: Draw action paths
+  const map = [
+    [400,50,200,110,"浏览","var(--success)"],
+    [400,50,600,110,"浏览","var(--success)"],
+    [600,150,500,210,"购买","var(--grad)"],
+    [500,250,100,210,"取消","var(--fg-dim)"],
+    [500,250,680,210,"支付成功→学习","var(--success)"],
+    [680,250,300,210,"返回","var(--fg-dim)"],
+    [300,250,250,310,"我的","var(--fg-dim)"],
+    [250,350,550,310,"修改","var(--fg-dim)"],
+    [680,250,400,30,"返回首页","var(--fg-dim)"]
+  ];
+  // Pages
+  const pages = [
+    {x:400,y:40,label:"首页"},{x:200,y:120,label:"课程列表"},{x:600,y:120,label:"课程详情"},
+    {x:100,y:220,label:"购物车"},{x:300,y:220,label:"支付页"},{x:500,y:220,label:"我的课程"},
+    {x:680,y:220,label:"视频播放"},{x:250,y:320,label:"个人中心"},{x:550,y:320,label:"设置"}
+  ];
+  pages.forEach(p => node(svg, p.x, p.y, p.label, "var(--accent)"));
+  map.forEach(([x1,y1,x2,y2,label,color]) => arrow(svg,x1,y1+10,x2,y2-10,color,false,label));
+  svg.append(tx(400,380,"第二步：绘制页面间的操作路径（箭头+标签）","var(--fg-dim)"));
+}
+
+function r2(svg) {
+  // Step 3: Mark broken paths
+  const pages = [
+    {x:400,y:40,label:"首页"},{x:200,y:120,label:"课程列表"},{x:600,y:120,label:"课程详情"},
+    {x:100,y:220,label:"购物车"},{x:300,y:220,label:"支付页"},{x:500,y:220,label:"我的课程"},
+    {x:680,y:220,label:"视频播放"},{x:250,y:320,label:"个人中心"},{x:550,y:320,label:"设置"}
+  ];
+  pages.forEach(p => node(svg, p.x, p.y, p.label, "var(--accent)"));
+  // Normal paths
+  arrow(svg,400,60,200,100,"var(--success)",false,"浏览");
+  arrow(svg,400,60,600,100,"var(--success)",false,"浏览");
+  arrow(svg,600,140,300,200,"var(--grad)",false,"购买");
+  arrow(svg,300,240,100,200,"var(--fg-dim)",true,"回退");
+  arrow(svg,300,240,680,200,"var(--success)",false,"支付成功→学习");
+  // Broken path: video player → payment (dead end)
+  arrow(svg,680,240,300,200,"var(--danger)",true,"TODO: 断头路!");
+  // Missing: cart → course list (can't go back to browse)
+  arrow(svg,100,240,200,100,"var(--danger)",true,"TODO: 缺少路径");
+  // Back routes
+  arrow(svg,680,240,400,20,"var(--fg-dim)",true,"返回首页");
+  // Dead end node
+  node(svg, 550, 320, "设置", "var(--danger)");
+  svg.append(tx(400,390,"第三步：标记断头路(红色虚线)和缺失路径","var(--danger)"));
+  svg.append(tx(400,415,"视频播放页→支付页：已支付用户不需要再次跳转支付","var(--fg-dim)","11"));
+}
+
+function r3(svg) {
+  // Step 4: Complete flow diagram
+  const pages = [
+    {x:400,y:30,label:"首页"},{x:180,y:110,label:"课程列表"},{x:620,y:110,label:"课程详情"},
+    {x:80,y:210,label:"购物车"},{x:280,y:210,label:"支付页"},{x:520,y:210,label:"我的课程"},
+    {x:680,y:210,label:"视频播放"},{x:200,y:310,label:"个人中心"},{x:550,y:310,label:"设置"}
+  ];
+  pages.forEach(p => node(svg, p.x, p.y, p.label, "var(--accent)"));
+
+  const paths = [
+    [400,50,180,90,"浏览","var(--success)",false],
+    [400,50,620,90,"浏览","var(--success)",false],
+    [620,130,280,190,"购买","var(--grad)",false],
+    [280,230,80,190,"取消","var(--fg-dim)",true],
+    [280,230,680,190,"支付成功","var(--success)",false],
+    [680,230,520,190,"完成","var(--success)",false],
+    [520,230,200,290,"我的","var(--fg-dim)",false],
+    [200,330,550,290,"设置","var(--fg-dim)",false],
+    [680,230,400,30,"返回首页","var(--fg-dim)",true],
+    [80,230,180,90,"继续购物","var(--success)",false],
+    [520,230,620,90,"查看课程","var(--fg-dim)",false]
+  ];
+  paths.forEach(([x1,y1,x2,y2,l,c,d]) => arrow(svg,x1,y1+10,x2,y2-10,c,d,l));
+
+  // Legend
+  svg.append(rct(40,380,720,100,"var(--bg-soft)","var(--line)"));
+  svg.append(tx(400,402,"图例","var(--fg)"));
+  svg.append(T("line",{x1:80,y1:425,x2:140,y2:425,stroke:"var(--success)","stroke-width":2}));
+  svg.append(tx(180,430,"正常路径","var(--fg-dim)","11"));
+  svg.append(T("line",{x1:320,y1:425,x2:380,y2:425,stroke:"var(--fg-dim)","stroke-width":2,"stroke-dasharray":"6,4"}));
+  svg.append(tx(420,430,"回退/可选路径","var(--fg-dim)","11"));
+  svg.append(T("line",{x1:560,y1:425,x2:620,y2:425,stroke:"var(--danger)","stroke-width":2,"stroke-dasharray":"6,4"}));
+  svg.append(tx(660,430,"已修复/断头路","var(--fg-dim)","11"));
+}
+
+const S = [
+  {t:"页面节点识别",l:"节点",d:"列出系统中所有页面（或屏幕），每个页面是流程图中的一个节点。包括主要页面和辅助页面（设置、个人中心等）。",b:["Pages","Nodes"],r:r0},
+  {t:"操作路径绘制",l:"路径",d:"在页面之间画出用户操作路径：点击什么按钮 → 跳转到哪个页面。每条路径标注操作名称。",b:["Paths","Actions"],r:r1},
+  {t:"断头路标记",l:"异常",d:"检查每条路径的完整性：是否有\"只能进不能出\"的断头路？是否有缺失的返回路径？用红色虚线标记问题。",b:["Dead Ends","Missing"],r:r2},
+  {t:"完整交互流程图",l:"输出",d:"输出包含所有页面、正常路径、回退路径和已修复问题的完整交互流程图。附带图例说明。",b:["Flow Chart","Complete"],r:r3}
+];
+
+let cur = 0, autoTimer = null, autoOn = false;
+
+function setStep(i) {
+  cur = Math.max(0, Math.min(S.length - 1, i));
+  const s = S[cur];
+  document.getElementById("step-title").textContent = s.t;
+  document.getElementById("step-desc").textContent = s.d;
+  document.getElementById("step-indicator").textContent = `Step ${cur+1}/${S.length}`;
+  const br = document.getElementById("badge-row"); br.innerHTML = "";
+  s.b.forEach(b => { const sp = document.createElement("span"); sp.className = "badge badge--def"; sp.textContent = b; br.append(sp); });
+  document.getElementById("info-line").textContent = s.l;
+  const svg = document.getElementById("stage"); svg.innerHTML = ""; s.r(svg);
+  document.querySelectorAll(".step-dot").forEach((d,j) => d.className = "step-dot" + (j === cur ? " active" : j < cur ? " done" : ""));
+  document.getElementById("btn-prev").disabled = cur === 0;
+  document.getElementById("btn-next").disabled = cur === S.length - 1;
+}
+
+function next() { setStep(cur + 1); }
+function prev() { setStep(cur - 1); }
+function toggleAuto() {
+  if (autoOn) { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; return; }
+  autoOn = true; document.getElementById("btn-auto").textContent = "暂停";
+  autoTimer = setInterval(() => { if (cur < S.length - 1) next(); else { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; } }, 2500); }
+
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight") next();
+  else if (e.key === "ArrowLeft") prev();
+  else if (e.key === " ") { e.preventDefault(); toggleAuto(); }
+  else if (e.key >= "1" && e.key <= String(S.length)) setStep(parseInt(e.key) - 1);
+});
+
+const dotsEl = document.getElementById("dots");
+S.forEach((s,i) => { const d = document.createElement("span"); d.className = "step-dot"; d.title = s.l; d.onclick = () => setStep(i); dotsEl.append(d); });
+setStep(0);
+</script>
+</body>
+</html>

@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>模型保存与恢复 · 深度学习框架</title>
+<style>
+:root{--bg:#1e1a1a;--bg-soft:#2d2525;--bg-code:#141010;--fg:#f0e8e0;--fg-dim:#b0a090;--line:#3d3030;--accent:#ff9050;--accent-2:#ffc040;--grad:#7b8cff;--success:#50d890;--danger:#f05060;--shadow:0 10px 30px rgba(0,0,0,.35);--radius:14px;--radius-sm:8px}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}
+.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}
+.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.demo-header h1{font-size:20px;font-weight:700}
+.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}
+.demo-header .breadcrumb a{color:var(--accent);text-decoration:none}
+.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}
+.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:var(--radius);padding:20px;display:flex;flex-direction:column;gap:14px}
+.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}
+.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}
+.panel-explain .code-line{font-family:"JetBrains Mono","Fira Code",monospace;font-size:18px;color:var(--accent-2);text-align:center;padding:12px;background:var(--bg-code);border-radius:var(--radius-sm)}
+.badge-row{display:flex;gap:8px;flex-wrap:wrap}
+.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.badge--def{background:rgba(123,140,255,.18);color:var(--grad)}
+.badge--tip{background:rgba(80,216,144,.18);color:var(--success)}
+.badge--warn{background:rgba(240,80,96,.18);color:var(--danger)}
+.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:var(--radius);padding:16px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.panel-stage svg{max-width:100%;max-height:100%}
+.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}
+.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:var(--radius-sm);cursor:pointer;font-size:14px;transition:.15s}
+.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}
+.demo-controls button:disabled{opacity:.35;cursor:default}
+.step-dots{display:flex;gap:8px;align-items:center}
+.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}
+.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}
+.step-dot.done{background:var(--success)}
+@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+  <div class="demo-header">
+    <div>
+      <h1>模型保存与恢复</h1>
+      <div class="breadcrumb"><a href="../index.html">深度学习框架</a> / 第三章 / 09</div>
+    </div>
+    <span class="badge badge--def">state_dict · checkpoint · resume</span>
+  </div>
+
+  <div class="demo-main">
+    <div class="panel-explain" id="explain">
+      <div class="step-title" id="stepTitle">为什么需要保存模型</div>
+      <div class="code-line" id="codeDisplay">torch.save(model.state_dict(), "model.pt")</div>
+      <div class="step-desc" id="stepDesc">训练一个模型可能需要几小时甚至几天。如果中途崩溃而没有保存——一切归零。<br><br><b>state_dict</b> 是一个 Python 字典，把每个层的名字映射到它的参数 tensor（权重和偏置）。保存 state_dict 就是保存「模型学到了什么」。</div>
+      <div class="badge-row" id="badges">
+        <span class="badge badge--def">state_dict</span><span class="badge badge--tip">参数字典</span>
+      </div>
+    </div>
+    <div class="panel-stage" id="stage"></div>
+  </div>
+
+  <div class="demo-controls">
+    <button id="btnPrev" onclick="changeStep(-1)">← 上一步</button>
+    <div class="step-dots" id="dots"></div>
+    <button id="btnNext" onclick="changeStep(1)">下一步 →</button>
+    <button onclick="resetStep()">⟳ 重置</button>
+    <button id="btnAuto" onclick="toggleAuto()">▶ 自动</button>
+  </div>
+</div>
+
+<script>
+const steps = [
+  {
+    title: "state_dict：模型的知识结晶",
+    code: "model.state_dict() → 参数字典",
+    desc: '<b>state_dict</b> = 层名 → 参数 tensor 的映射字典。只有含可学习参数的层（Linear、Conv2d、BatchNorm）才会出现，ReLU 和 Dropout 没有参数，不在其中。<br><br>例如一个两层 MLP 的 state_dict：<br><code>"fc1.weight" → tensor(256, 784)</code><br><code>"fc1.bias" → tensor(256,)</code><br><code>"fc2.weight" → tensor(10, 256)</code>',
+    badges: [{t:'层名→tensor',c:'def'},{t:'只有可学习参数',c:'tip'}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="20" text-anchor="middle" font-size="14" fill="var(--fg-dim)">model.state_dict() 内部结构</text>
+<rect x="80" y="45" width="640" height="160" rx="10" fill="var(--bg-soft)" stroke="var(--grad)" stroke-width="2"/>
+<text x="120" y="80" font-size="13" fill="var(--accent-2)" font-family="JetBrains Mono" font-weight="700">state_dict = {</text>
+<text x="140" y="105" font-size="13" fill="var(--fg-dim)" font-family="JetBrains Mono">"fc1.weight": tensor([[0.2, -0.5, ...], ...]),  # shape (256, 784)</text>
+<text x="140" y="128" font-size="13" fill="var(--fg-dim)" font-family="JetBrains Mono">"fc1.bias":   tensor([0.01, 0.03, ...]),          # shape (256,)</text>
+<text x="140" y="151" font-size="13" fill="var(--fg-dim)" font-family="JetBrains Mono">"fc2.weight": tensor([[0.1, -0.2, ...], ...]),   # shape (10, 256)</text>
+<text x="140" y="174" font-size="13" fill="var(--fg-dim)" font-family="JetBrains Mono">"fc2.bias":   tensor([0.0, 0.0, ...]),            # shape (10,)</text>
+<text x="120" y="197" font-size="13" fill="var(--accent-2)" font-family="JetBrains Mono" font-weight="700">}</text>
+<text x="400" y="240" text-anchor="middle" font-size="12" fill="var(--fg-dim)">只有 nn.Linear, nn.Conv2d, nn.BatchNorm2d 等有参数的层才出现在 state_dict 中</text>`;
+    }
+  },
+  {
+    title: "保存的三种方式",
+    code: "state_dict · 全模型 · checkpoint",
+    desc: '<b>方式1: 只保存参数 (推荐)</b><br><code>torch.save(model.state_dict(), "weights.pt")</code> ← 最常用<br>加载: <code>model.load_state_dict(torch.load("weights.pt"))</code><br><br><b>方式2: 保存整个模型 (不推荐)</b><br><code>torch.save(model, "full.pt")</code> ← 依赖代码目录结构<br><br><b>方式3: 保存 checkpoint (恢复训练)</b><br>同时保存 model、optimizer、epoch、loss 的 state_dict',
+    badges: [{t:'方式1=推荐',c:'def'},{t:'方式3=恢复',c:'tip'},{t:'方式2=避免',c:'warn'}],
+    render(svg){
+      svg.innerHTML = `<rect x="10" y="10" width="250" height="170" rx="10" fill="var(--bg-soft)" stroke="var(--success)" stroke-width="2"/>
+<text x="135" y="40" text-anchor="middle" font-size="14" fill="var(--success)" font-weight="700">✓ state_dict (推荐)</text>
+<text x="25" y="70" font-size="11" fill="var(--fg-dim)" font-family="JetBrains Mono">torch.save(model.state_dict())</text>
+<text x="25" y="95" font-size="11" fill="var(--fg-dim)">✓ 文件小 · 可移植</text>
+<text x="25" y="118" font-size="11" fill="var(--fg-dim)">✓ 代码改架构也能加载</text>
+<text x="25" y="141" font-size="11" fill="var(--fg-dim)">✓ strict=False 部分加载</text>
+<rect x="275" y="10" width="250" height="170" rx="10" fill="var(--bg-soft)" stroke="var(--danger)" stroke-width="2"/>
+<text x="400" y="40" text-anchor="middle" font-size="14" fill="var(--danger)" font-weight="700">✗ 全模型 (避免)</text>
+<text x="290" y="70" font-size="11" fill="var(--fg-dim)" font-family="JetBrains Mono">torch.save(model)</text>
+<text x="290" y="95" font-size="11" fill="var(--fg-dim)">✗ 文件大 · 依赖pickle</text>
+<text x="290" y="118" font-size="11" fill="var(--fg-dim)">✗ 强依赖目录结构</text>
+<text x="290" y="141" font-size="11" fill="var(--fg-dim)">✗ 代码移动就加载不了</text>
+<rect x="540" y="10" width="250" height="170" rx="10" fill="var(--bg-soft)" stroke="var(--accent)" stroke-width="2"/>
+<text x="665" y="40" text-anchor="middle" font-size="14" fill="var(--accent)" font-weight="700">★ checkpoint (恢复)</text>
+<text x="555" y="70" font-size="11" fill="var(--fg-dim)" font-family="JetBrains Mono">保存: model+optimizer+epoch</text>
+<text x="555" y="95" font-size="11" fill="var(--fg-dim)">加载: 完全恢复训练状态</text>
+<text x="555" y="118" font-size="11" fill="var(--fg-dim)">适合: 长时间训练中断</text>
+<text x="555" y="141" font-size="11" fill="var(--fg-dim)">key: 选最佳checkpoint</text>`;
+    }
+  },
+  {
+    title: "Checkpoint: 保存完整训练状态",
+    code: "ckpt = {model, optimizer, epoch, loss}",
+    desc: 'Checkpoint = 不仅保存模型参数，还保存 <b>optimizer 状态 + epoch 数 + loss 值</b>，用于完全恢复训练：<br><br><code>torch.save({</code><br><code>  "epoch": epoch,</code><br><code>  "model": model.state_dict(),</code><br><code>  "optimizer": optimizer.state_dict(),</code><br><code>  "loss": loss</code><br><code>}, f"ckpt_{epoch}.tar")</code><br><br>optimizer.state_dict() 包含 Adam 的 m/v 动量缓存，少了它就无法从断点继续训练。',
+    badges: [{t:'完整恢复',c:'def'},{t:'optimizer状态',c:'tip'},{t:'epoch记录',c:'def'}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="20" text-anchor="middle" font-size="14" fill="var(--fg-dim)">checkpoint.tar 包含的内容</text>
+<rect x="40" y="40" width="180" height="70" rx="8" fill="var(--grad)" opacity=".7"/>
+<text x="130" y="68" text-anchor="middle" font-size="13" fill="#fff" font-weight="700">model参数</text>
+<text x="130" y="88" text-anchor="middle" font-size="10" fill="#fff">state_dict()</text>
+<rect x="240" y="40" width="180" height="70" rx="8" fill="var(--accent)" opacity=".7"/>
+<text x="330" y="68" text-anchor="middle" font-size="13" fill="#1e1a1a" font-weight="700">optimizer状态</text>
+<text x="330" y="88" text-anchor="middle" font-size="10" fill="#1e1a1a">m, v 动量缓存</text>
+<rect x="440" y="40" width="140" height="70" rx="8" fill="var(--accent-2)" opacity=".7"/>
+<text x="510" y="68" text-anchor="middle" font-size="13" fill="#1e1a1a" font-weight="700">epoch</text>
+<text x="510" y="88" text-anchor="middle" font-size="10" fill="#1e1a1a">从哪轮继续</text>
+<rect x="600" y="40" width="140" height="70" rx="8" fill="var(--success)" opacity=".7"/>
+<text x="670" y="68" text-anchor="middle" font-size="13" fill="#1e1a1a" font-weight="700">loss</text>
+<text x="670" y="88" text-anchor="middle" font-size="10" fill="#1e1a1a">复原状态</text>
+<text x="400" y="155" text-anchor="middle" font-size="14" fill="var(--accent-2)">少了 optimizer 状态 → 加载后 Adam 的动量归零 → 不像断点续训 → 像重新开始</text>
+<text x="400" y="185" text-anchor="middle" font-size="12" fill="var(--fg-dim)">每 N 个 epoch 保存一次；保留最近的 K 个 checkpoint，旧的可删除节省空间</text>`;
+    }
+  },
+  {
+    title: "从 Checkpoint 恢复训练",
+    code: "ckpt = torch.load() → load_state_dict()",
+    desc: '恢复训练的完整步骤：<br><br>1. 重建 model 和 optimizer（架构必须一致）<br>2. <code>ckpt = torch.load("ckpt_45.tar")</code><br>3. <code>model.load_state_dict(ckpt["model"])</code><br>4. <code>optimizer.load_state_dict(ckpt["optimizer"])</code><br>5. <code>start_epoch = ckpt["epoch"] + 1</code><br>6. 从 start_epoch 继续训练循环<br><br>GPU→CPU 加载: 加 <code>map_location="cpu"</code>。',
+    badges: [{t:'恢复流程',c:'def'},{t:'map_location',c:'tip'}],
+    render(svg){
+      svg.innerHTML = `<rect x="15" y="15" width="770" height="160" rx="10" fill="var(--bg-soft)" stroke="var(--accent)" stroke-width="2"/>
+<text x="35" y="40" font-size="12" fill="var(--fg-dim)" font-family="JetBrains Mono">model = MyModel()                                # 1. 重建架构</text>
+<text x="35" y="62" font-size="12" fill="var(--fg-dim)" font-family="JetBrains Mono">optimizer = torch.optim.Adam(model.parameters())  # 1. 重建optimizer</text>
+<text x="35" y="84" font-size="12" fill="var(--fg-dim)" font-family="JetBrains Mono"></text>
+<text x="35" y="106" font-size="12" fill="var(--accent)" font-family="JetBrains Mono">ckpt = torch.load("checkpoint_45.tar", map_location="cpu")  # 2. 加载</text>
+<text x="35" y="128" font-size="12" fill="var(--accent)" font-family="JetBrains Mono">model.load_state_dict(ckpt["model"])              # 3. 恢复模型</text>
+<text x="35" y="150" font-size="12" fill="var(--accent)" font-family="JetBrains Mono">optimizer.load_state_dict(ckpt["optimizer"])      # 4. 恢复优化器</text>
+<text x="35" y="172" font-size="12" fill="var(--accent-2)" font-family="JetBrains Mono">start_epoch = ckpt["epoch"] + 1                   # 5. 从下个epoch继续</text>
+<text x="400" y="215" text-anchor="middle" font-size="12" fill="var(--fg-dim)">map_location: GPU保存→CPU加载 / CPU保存→GPU加载 自动处理设备差异</text>`;
+    }
+  },
+  {
+    title: "最佳实践：保存最佳模型",
+    code: "val_loss 最低的那个 checkpoint = 最佳模型",
+    desc: '不要只保存最后一个 epoch 的模型。训练久了可能过拟合——后面 epoch 的 val_loss 不降反升。<br><br><b>最佳实践</b>：<br>• 每 N 个 epoch 保存一次 checkpoint<br>• 额外跟踪 val_loss 最低的那个 → 单独保存为 "best.pt"<br>• 训练结束后，用 best.pt 做最终评估<br>• 保留最近 K 个 checkpoint（如 K=3），旧的自动删除',
+    badges: [{t:'best.pt',c:'def'},{t:'防止过拟合',c:'tip'},{t:'下一步→',c:'tip'}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="25" text-anchor="middle" font-size="14" fill="var(--fg-dim)">checkpoint 管理策略</text>
+<rect x="30" y="50" width="180" height="100" rx="8" fill="var(--bg-soft)" stroke="var(--accent)" stroke-width="2"/>
+<text x="120" y="80" text-anchor="middle" font-size="13" fill="var(--accent)" font-weight="700">定期保存</text>
+<text x="120" y="105" text-anchor="middle" font-size="11" fill="var(--fg-dim)">每5-10 epoch</text>
+<text x="120" y="128" text-anchor="middle" font-size="11" fill="var(--fg-dim)">ckpt_epoch_{n}.tar</text>
+<rect x="240" y="50" width="180" height="100" rx="8" fill="var(--bg-soft)" stroke="var(--success)" stroke-width="2"/>
+<text x="330" y="80" text-anchor="middle" font-size="13" fill="var(--success)" font-weight="700">追踪最佳</text>
+<text x="330" y="105" text-anchor="middle" font-size="11" fill="var(--fg-dim)">if val_loss < best_loss:</text>
+<text x="330" y="128" text-anchor="middle" font-size="11" fill="var(--fg-dim)">    save best.pt</text>
+<rect x="450" y="50" width="180" height="100" rx="8" fill="var(--bg-soft)" stroke="var(--grad)" stroke-width="2"/>
+<text x="540" y="80" text-anchor="middle" font-size="13" fill="var(--grad)" font-weight="700">轮转清理</text>
+<text x="540" y="105" text-anchor="middle" font-size="11" fill="var(--fg-dim)">保留最近K个</text>
+<text x="540" y="128" text-anchor="middle" font-size="11" fill="var(--fg-dim)">旧的自动删除</text>
+<text x="400" y="185" text-anchor="middle" font-size="13" fill="var(--accent-2)">best.pt ≠ 最后一个epoch的模型！val_loss最低的才是最好的</text>`;
+    }
+  }
+];
+
+let step=0,timer=null;
+const dotsEl=document.getElementById('dots'),svgEl=document.getElementById('stage');
+svgEl.innerHTML='<svg viewBox="0 0 800 380" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%"><defs><marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="var(--fg-dim)"/></marker></defs></svg>';
+const svg=svgEl.querySelector('svg');
+
+for(let i=0;i<steps.length;i++){let d=document.createElement('div');d.className='step-dot';d.onclick=()=>gotoStep(i);dotsEl.appendChild(d);}
+
+function renderStep(){
+  const s=steps[step  {
+    title: "ONNX 导出: 从训练到部署的桥梁",
+    info: "torch.onnx.export() -> 跨框架模型交换",
+    desc: '<b>ONNX (Open Neural Network Exchange)</b> 是跨深度学习框架的模型交换格式。PyTorch 模型可以通过 <code>torch.onnx.export()</code> 导出为 ONNX 格式，然后在 TensorRT、ONNX Runtime、OpenVINO 等推理引擎中运行。<br><br><b>为什么需要 ONNX？</b> PyTorch 训练 → 导出 ONNX → TensorRT 优化 → 生产部署。这条流水线可以实现 2-5x 推理加速。<br><br><b>动态轴 (Dynamic Axes)</b>: batch size 和 sequence length 通常是动态的。导出时指定 dynamic_axes 参数，ONNX Runtime 可以处理可变输入形状。',
+    badges: [{t:"ONNX",c:"def"},{t:"TensorRT",c:"tip"},{t:"2-5x speedup",c:"warn"}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="25" text-anchor="middle" font-size="14" fill="var(--accent)">Model Deployment Pipeline: PyTorch -> ONNX -> TensorRT</text><rect x="30" y="50" width="200" height="70" rx="8" fill="var(--grad)" opacity="0.7"/><text x="130" y="85" text-anchor="middle" font-size="14" fill="#fff">PyTorch</text><text x="130" y="105" text-anchor="middle" font-size="10" fill="#fff">Training</text><text x="250" y="90" font-size="20" fill="var(--accent)">-></text><rect x="280" y="50" width="200" height="70" rx="8" fill="var(--accent)" opacity="0.7"/><text x="380" y="85" text-anchor="middle" font-size="14" fill="#1e1a1a">ONNX</text><text x="380" y="105" text-anchor="middle" font-size="10" fill="#1e1a1a">Export</text><text x="500" y="90" font-size="20" fill="var(--accent)">-></text><rect x="530" y="50" width="230" height="70" rx="8" fill="var(--success)" opacity="0.7"/><text x="645" y="85" text-anchor="middle" font-size="14" fill="#1e1a1a">TensorRT / ONNX RT</text><text x="645" y="105" text-anchor="middle" font-size="10" fill="#1e1a1a">2-5x faster inference</text><text x="400" y="170" text-anchor="middle" font-size="12" fill="var(--fg-dim)">torch.onnx.export(model, dummy_input, "model.onnx", dynamic_axes={"input":{0:"batch"}})</text><text x="400" y="200" text-anchor="middle" font-size="12" fill="var(--accent-2)">One model, train in PyTorch, deploy anywhere ONNX supports.</text>`;
+    }
+  },
+  {
+    title: "ONNX 导出: 从训练到部署的桥梁",
+    info: "torch.onnx.export() -> 跨框架模型交换",
+    desc: '<b>ONNX (Open Neural Network Exchange)</b> 是跨深度学习框架的模型交换格式。PyTorch 模型可以通过 <code>torch.onnx.export()</code> 导出为 ONNX 格式，然后在 TensorRT、ONNX Runtime、OpenVINO 等推理引擎中运行。<br><br><b>为什么需要 ONNX？</b> PyTorch 训练 → 导出 ONNX → TensorRT 优化 → 生产部署。这条流水线可以实现 2-5x 推理加速。<br><br><b>动态轴 (Dynamic Axes)</b>: batch size 和 sequence length 通常是动态的。导出时指定 dynamic_axes 参数，ONNX Runtime 可以处理可变输入形状。',
+    badges: [{t:"ONNX",c:"def"},{t:"TensorRT",c:"tip"},{t:"2-5x speedup",c:"warn"}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="25" text-anchor="middle" font-size="14" fill="var(--accent)">Model Deployment Pipeline: PyTorch -> ONNX -> TensorRT</text><rect x="30" y="50" width="200" height="70" rx="8" fill="var(--grad)" opacity="0.7"/><text x="130" y="85" text-anchor="middle" font-size="14" fill="#fff">PyTorch</text><text x="130" y="105" text-anchor="middle" font-size="10" fill="#fff">Training</text><text x="250" y="90" font-size="20" fill="var(--accent)">-></text><rect x="280" y="50" width="200" height="70" rx="8" fill="var(--accent)" opacity="0.7"/><text x="380" y="85" text-anchor="middle" font-size="14" fill="#1e1a1a">ONNX</text><text x="380" y="105" text-anchor="middle" font-size="10" fill="#1e1a1a">Export</text><text x="500" y="90" font-size="20" fill="var(--accent)">-></text><rect x="530" y="50" width="230" height="70" rx="8" fill="var(--success)" opacity="0.7"/><text x="645" y="85" text-anchor="middle" font-size="14" fill="#1e1a1a">TensorRT / ONNX RT</text><text x="645" y="105" text-anchor="middle" font-size="10" fill="#1e1a1a">2-5x faster inference</text><text x="400" y="170" text-anchor="middle" font-size="12" fill="var(--fg-dim)">torch.onnx.export(model, dummy_input, "model.onnx", dynamic_axes={"input":{0:"batch"}})</text><text x="400" y="200" text-anchor="middle" font-size="12" fill="var(--accent-2)">One model, train in PyTorch, deploy anywhere ONNX supports.</text>`;
+    }
+  },
+];
+  document.getElementById('stepTitle').textContent=s.title;
+  document.getElementById('codeDisplay').textContent=s.code;
+  document.getElementById('stepDesc').innerHTML=s.desc;
+  let bd=document.getElementById('badges');bd.innerHTML='';
+  s.badges.forEach(b=>{let sp=document.createElement('span');sp.className='badge badge--'+b.c;sp.textContent=b.t;bd.appendChild(sp);});
+  s.render(svg);
+  document.querySelectorAll('.step-dot').forEach((d,i)=>{d.className='step-dot'+(i===step?' active':i<step?' done':'');});
+  document.getElementById('btnPrev').disabled=step===0;
+  document.getElementById('btnNext').disabled=step===steps.length-1;
+}
+function gotoStep(n){step=Math.max(0,Math.min(n,steps.length-1));renderStep();}
+function changeStep(d){gotoStep(step+d);}
+function resetStep(){stopAuto();gotoStep(0);}
+function toggleAuto(){timer?stopAuto():startAuto();}
+function startAuto(){timer=setInterval(()=>{if(step<steps.length-1)gotoStep(step+1);else stopAuto();},1800);document.getElementById('btnAuto').textContent='⏸ 暂停';}
+function stopAuto(){clearInterval(timer);timer=null;document.getElementById('btnAuto').textContent='▶ 自动';}
+document.addEventListener('keydown',e=>{if(e.key==='ArrowLeft')changeStep(-1);if(e.key==='ArrowRight')changeStep(1);if(e.key===' ')e.preventDefault(),toggleAuto();if(e.key==='r'||e.key==='R')resetStep();});
+renderStep();
+</script>
+</body>
+</html>

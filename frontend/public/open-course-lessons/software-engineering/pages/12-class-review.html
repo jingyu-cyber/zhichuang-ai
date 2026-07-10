@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>12 课堂评审与复盘 - 软件工程互动课程</title>
+<style>
+:root{--bg:#1c2128;--bg-soft:#252c35;--bg-code:#141820;--fg:#e6edf3;--fg-dim:#8b949e;--line:#30363d;--accent:#539bf5;--accent-2:#57ab5a;--grad:#c69026;--success:#57ab5a;--danger:#e5534b;--purple:#986ee2}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(83,155,245,.18);color:var(--accent)}.badge--tip{background:rgba(87,171,90,.18);color:var(--success)}.badge--warn{background:rgba(198,144,38,.18);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>课堂评审与复盘</h1>
+<div class="breadcrumb"><a href="../index.html">软件工程</a> / 项目管理 / <span id="step-indicator">Step 1/4</span></div>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="panel-explain">
+<div class="step-title" id="step-title"></div>
+<div class="step-desc" id="step-desc"></div>
+<div class="badge-row" id="badge-row"></div>
+<div class="info-line" id="info-line"></div>
+</div>
+<div class="panel-stage"><svg id="stage" viewBox="0 0 800 500" style="width:100%;height:100%"></svg></div>
+</div>
+<div class="demo-controls">
+<button id="btn-prev" onclick="prev()">上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btn-next" onclick="next()">下一步</button>
+<button id="btn-auto" onclick="toggleAuto()" style="min-width:80px">自动播放</button>
+</div>
+</div>
+<script>
+const svgNS="http://www.w3.org/2000/svg";
+function T(t, a) { const e = document.createElementNS(svgNS, t); for (const [k, v] of Object.entries(a || {})) e.setAttribute(k, v); return e; }
+function tx(x, y, t, c, fs, a) { const e = T("text", { x, y, fill: c || "var(--fg)", "font-size": fs || "13", "text-anchor": a || "middle", "font-family": "-apple-system,'PingFang SC','Microsoft YaHei',sans-serif" }); e.textContent = t; return e; }
+function rct(x, y, w, h, f, s, rx) { return T("rect", { x, y, width: w, height: h, fill: f || "var(--bg-soft)", stroke: s || "var(--line)", "stroke-width": "1.5", rx: rx || 6 }); }
+
+function r0(svg) {
+  // Step 1: Common issues catalog
+  svg.append(tx(400,20,"软件工程项目常见问题","var(--accent)","14"));
+
+  const issues = [
+    {title:"需求蔓延",desc:"项目过程中不断添加新功能，原始范围失控",seve:"高",color:"var(--danger)",icon:"!"},
+    {title:"测试缺失",desc:"代码写完了但几乎没有测试，回归全靠手动",seve:"高",color:"var(--danger)",icon:"!"},
+    {title:"文档滞后",desc:"架构图与实际代码不一致，文档形同虚设",seve:"中",color:"var(--grad)",icon:"!"},
+    {title:"分工不均",desc:"1人写80%代码，其他人参与度低",seve:"中",color:"var(--grad)",icon:"!"},
+    {title:"硬编码",desc:"API密钥、数据库密码直接写在代码里",seve:"高",color:"var(--danger)",icon:"!"},
+    {title:"部署沼泽",desc:"\"在我机器上能跑\"，团队其他人无法复现环境",seve:"中",color:"var(--grad)",icon:"!"},
+    {title:"无版本管理",desc:"代码通过U盘/QQ传输，没有Git工作流",seve:"高",color:"var(--danger)",icon:"!"},
+    {title:"过早优化",desc:"花大量时间优化非瓶颈部分，忽视核心功能",seve:"低",color:"var(--success)",icon:"!"}
+  ];
+
+  issues.forEach((isu,i) => {
+    const col = i%4, row = Math.floor(i/4);
+    const x = 20+col*193, y = 44+row*100;
+    svg.append(rct(x,y,183,90,"var(--bg)","var(--line)",8));
+    svg.append(T("circle",{cx:x+16,cy:y+16,r:12,fill:isu.color}));
+    svg.append(tx(x+16,y+20,isu.icon,"#fff","14"));
+    svg.append(tx(x+50,y+18,isu.title,"var(--fg)","13","start"));
+    svg.append(tx(x+50,y+38,isu.desc,"var(--fg-dim)","10","start"));
+    svg.append(rct(x+110,y+65,60,18,`rgba(${isu.color==="var(--danger)"?"229,83,75":isu.color==="var(--grad)"?"198,144,38":"87,171,90"},0.15)`,isu.color,4));
+    svg.append(tx(x+140,y+78,"严重度: "+isu.seve,isu.color,"10"));
+  });
+
+  svg.append(tx(400,260,"每类问题标注严重度和典型表现","var(--fg-dim)"));
+}
+
+function r1(svg) {
+  // Step 2: Review topics and discussion
+  svg.append(tx(400,18,"评审议题生成","var(--accent)","14"));
+
+  const topics = [
+    {id:"T1",title:"需求对齐检查","q":"当前实现的功能是否与需求文档一致？哪些需求遗漏了？","duration:"15min"},
+    {id:"T2",title:"代码质量审查","q":"抽查3个核心模块：命名是否一致？错误处理是否完善？注释是否清晰？","duration:"20min"},
+    {id:"T3",title:"安全审计","q":"检查SQL注入、XSS、CSRF、密钥管理。是否有安全漏洞？","duration:"15min"},
+    {id:"T4",title:"测试覆盖复盘","q":"单元测试覆盖率是否达标？有没有写过但从未通过的测试？","duration:"15min"},
+    {id:"T5",title:"部署可复现验证","q":"随机选一名成员，按部署文档操作，能否在30分钟内跑起来？","duration:"20min"}
+  ];
+
+  topics.forEach((t,i) => {
+    const y = 44+i*64;
+    svg.append(rct(20,y,760,58,"var(--bg)","var(--line)",8));
+    svg.append(rct(24,y+4,44,24,"var(--accent)",4));
+    svg.append(tx(46,y+20,t.id,"#fff","12"));
+    svg.append(tx(90,y+16,t.title,"var(--fg)","14","start"));
+    svg.append(tx(90,y+36,t.q,"var(--fg-dim)","11","start"));
+    svg.append(rct(660,y+14,110,26,"var(--bg)","var(--line)",4));
+    svg.append(tx(715,y+32,"时长: "+t["duration:"] || "15min","var(--accent)","10"));
+  });
+
+  svg.append(rct(20,380,760,40,"var(--bg-soft)","var(--purple)",6));
+  svg.append(tx(400,405,"评审流程: 项目展示(10min) → 议题讨论(5个议题,85min) → 总结与作业布置(15min) → 共计110分钟","var(--fg)","12"));
+}
+
+function r2(svg) {
+  // Step 3: Auto-generated outline
+  svg.append(tx(400,18,"自动生成评审大纲","var(--success)","14"));
+
+  // Outline sections
+  const sections = [
+    {num:"第1部分",title:"项目演示 (10min)",items:["每组5分钟展示核心功能","演示环境必须提前准备好","重点展示亮点和遇到的挑战"]},
+    {num:"第2部分",title:"交叉评审 (30min)",items:["A组评审B组 → B组评审C组 → C组评审A组","使用评审检查清单逐项打分","记录具体问题和改进建议"]},
+    {num:"第3部分",title:"集中讨论 (30min)",items:["每组分享发现的问题","共同讨论共性问题（需求蔓延、测试缺失等）","讲师点评和最佳实践分享"]},
+    {num:"第4部分",title:"总结改进 (15min)",items:["每组制定改进计划（基于评审反馈）","提交评审报告和改进roadmap","布置课后作业"]}
+  ];
+
+  sections.forEach((s,i) => {
+    const x = 20 + i*193;
+    svg.append(rct(x,44,183,200,"var(--bg)","var(--line)",8));
+    svg.append(T("rect",{x:x,y:44,width:183,height:30,fill:"var(--accent)",rx:8}));
+    svg.append(T("rect",{x:x,y:62,width:183,height:12,fill:"var(--accent)"}));
+    svg.append(tx(x+91,64,s.num,"#fff","12"));
+    svg.append(tx(x+91,94,s.title,"var(--fg)","12"));
+    s.items.forEach((item,j) => {
+      svg.append(tx(x+91,118+j*28,"• "+item,"var(--fg-dim)","10"));
+    });
+  });
+
+  // Timeline bar
+  svg.append(rct(20,265,760,40,"var(--bg)","var(--line)",8));
+  svg.append(tx(400,276,"评审时间线","var(--fg-dim)","11"));
+  const segments = [
+    [0.09,"演示","var(--accent)"],[0.27,"交叉评审","var(--purple)"],[0.27,"集中讨论","var(--success)"],[0.14,"总结","var(--grad)"]
+  ];
+  let sx = 25;
+  segments.forEach(s => {
+    const w = 750*s[0];
+    svg.append(rct(sx,280,w,20,s[2],s[2],4));
+    svg.append(tx(sx+w/2,294,s[1],"#fff","10"));
+    sx += w;
+  });
+}
+
+function r3(svg) {
+  // Step 4: Exercises
+  svg.append(tx(400,18,"课后练习与自测","var(--accent)","14"));
+
+  const exercises = [
+    {type:"实战",title:"编写验收标准",desc:"选取第3课中的\"用户登录\"场景，写出完整的 Given-When-Then 验收标准（至少4个场景）","time:"30min",color:"var(--accent)"},
+    {type:"分析",title:"评估项目结构",desc:"分析你自己的项目仓库结构，对照第7课的标准，列出3个改进点","time:"20min",color:"var(--purple)"},
+    {type:"设计",title:"绘制交互流程图",desc:"为\"在线购物车→支付→订单确认\"流程绘制交互流程图，标注断头路和回退路径","time:"40min",color:"var(--success)"},
+    {type:"评审",title:"团队交叉评审",desc:"与另一组交换项目报告，使用第11课的雷达图方法进行多维度评估","time:"45min",color:"var(--grad)"}
+  ];
+
+  exercises.forEach((e,i) => {
+    const x = 20+i*193, y = 44;
+    svg.append(rct(x,y,183,200,"var(--bg)","var(--line)",8));
+    svg.append(T("rect",{x:x,y:y,width:183,height:6,fill:e.color,rx:3}));
+    svg.append(tx(x+12,y+22,e.type,e.color,"11","start"));
+    svg.append(tx(x+12,y+46,e.title,"var(--fg)","13","start"));
+    svg.append(tx(x+12,y+74,e.desc,"var(--fg-dim)","10","start"));
+
+    // Time
+    svg.append(tx(x+12,y+130,"预计用时","var(--fg-dim)","10","start"));
+    svg.append(rct(x+12,y+140,80,26,"var(--bg)","e.color",4));
+    svg.append(tx(x+52,y+157,e["time:"] || "30min",e.color,"11"));
+
+    // Status checkbox
+    svg.append(rct(x+12,y+180,160,30,"var(--bg)","var(--line)",4));
+    svg.append(tx(x+92,y+200,"勾选完成","var(--fg-dim)","10"));
+  });
+
+  // Learning objectives summary
+  svg.append(rct(20,265,760,80,"var(--bg-soft)","var(--line)",8));
+  svg.append(tx(400,289,"12 课完整学习目标","var(--fg)"));
+  svg.append(tx(400,319,"需求工程(01-03) → 软件设计(04-06) → 实现与测试(07-09) → 项目管理(10-12)","var(--accent)","12"));
+
+  // Key takeaway
+  svg.append(rct(20,360,760,120,"var(--bg-soft)","var(--success)",8));
+  svg.append(tx(400,384,"课程核心收获","var(--success)","14"));
+  const takeaways = [
+    "软件工程 = 需求定义 + 系统设计 + 工程实现 + 项目管理",
+    "好的软件 = 可维护的代码 + 充分的测试 + 可复现的部署",
+    "评审和复盘是持续改进的核心机制"
+  ];
+  takeaways.forEach((t,i) => {
+    svg.append(tx(400,410+i*26,t,"var(--fg-dim)","12"));
+  });
+}
+
+const S = [
+  {t:"常见问题目录",l:"问题",d:"列出软件工程项目中最常见的8类问题：需求蔓延、测试缺失、文档滞后、分工不均等。每类标注严重度和典型表现。",b:["Common Issues","8 Types"],r:r0},
+  {t:"评审议题生成",l:"议题",d:"针对项目生成5个核心评审议题：需求对齐检查、代码质量审查、安全审计、测试覆盖复盘、部署可复现验证。每个议题附带讨论问题和时长。",b:["Topics","5 Questions"],r:r1},
+  {t:"自动生成大纲",l:"大纲",d:"自动生成4部分评审大纲：项目演示→交叉评审→集中讨论→总结改进。附带时间线分配和详细议程。",b:["Outline","Agenda"],r:r2},
+  {t:"课后练习",l:"练习",d:"布置4个课后练习，覆盖12课的核心技能：编写验收标准、评估项目结构、绘制交互流程图、团队交叉评审。",b:["Exercises","Practice"],r:r3}
+];
+
+let cur = 0, autoTimer = null, autoOn = false;
+
+function setStep(i) {
+  cur = Math.max(0, Math.min(S.length - 1, i));
+  const s = S[cur];
+  document.getElementById("step-title").textContent = s.t;
+  document.getElementById("step-desc").textContent = s.d;
+  document.getElementById("step-indicator").textContent = `Step ${cur+1}/${S.length}`;
+  const br = document.getElementById("badge-row"); br.innerHTML = "";
+  s.b.forEach(b => { const sp = document.createElement("span"); sp.className = "badge badge--def"; sp.textContent = b; br.append(sp); });
+  document.getElementById("info-line").textContent = s.l;
+  const svg = document.getElementById("stage"); svg.innerHTML = ""; s.r(svg);
+  document.querySelectorAll(".step-dot").forEach((d,j) => d.className = "step-dot" + (j === cur ? " active" : j < cur ? " done" : ""));
+  document.getElementById("btn-prev").disabled = cur === 0;
+  document.getElementById("btn-next").disabled = cur === S.length - 1;
+}
+
+function next() { setStep(cur + 1); }
+function prev() { setStep(cur - 1); }
+function toggleAuto() {
+  if (autoOn) { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; return; }
+  autoOn = true; document.getElementById("btn-auto").textContent = "暂停";
+  autoTimer = setInterval(() => { if (cur < S.length - 1) next(); else { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; } }, 2500); }
+
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight") next();
+  else if (e.key === "ArrowLeft") prev();
+  else if (e.key === " ") { e.preventDefault(); toggleAuto(); }
+  else if (e.key >= "1" && e.key <= String(S.length)) setStep(parseInt(e.key) - 1);
+});
+
+const dotsEl = document.getElementById("dots");
+S.forEach((s,i) => { const d = document.createElement("span"); d.className = "step-dot"; d.title = s.l; d.onclick = () => setStep(i); dotsEl.append(d); });
+setStep(0);
+</script>
+</body>
+</html>

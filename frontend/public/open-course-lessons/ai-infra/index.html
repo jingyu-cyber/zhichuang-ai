@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>AI基础设施 — 交互式课程</title>
+<style>
+:root{--bg:#0a0e14;--bg-soft:#141b22;--bg-code:#06080c;--fg:#d0e0e8;--fg-dim:#607888;--line:#1c2836;--accent:#00e5a0;--accent-2:#b050ff;--grad:#40a0ff;--success:#30d060;--danger:#ff8020}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}
+.page-shell{max-width:1100px;margin:0 auto;padding:30px 24px 60px}
+.page-header{text-align:center;padding:40px 0 32px;border-bottom:1px solid var(--line);margin-bottom:32px}
+.page-header h1{font-size:32px;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--accent-2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:8px}
+.page-header .subtitle{color:var(--fg-dim);font-size:16px}
+.chapter{background:var(--bg-soft);border:1px solid var(--line);border-radius:16px;padding:24px;margin-bottom:20px}
+.chapter h2{font-size:18px;font-weight:700;color:var(--accent);margin-bottom:4px}
+.chapter .ch-desc{font-size:13px;color:var(--fg-dim);margin-bottom:16px}
+.lesson-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:860px){.lesson-grid{grid-template-columns:1fr}}
+.lesson-card{display:block;background:var(--bg-code);border:1px solid var(--line);border-radius:10px;padding:16px;text-decoration:none;transition:border-color .2s,transform .15s}
+.lesson-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.lesson-card .lc-num{font-size:11px;font-family:"JetBrains Mono",monospace;color:var(--fg-dim);margin-bottom:4px}
+.lesson-card .lc-title{font-size:15px;font-weight:700;color:var(--fg);margin-bottom:6px}
+.lesson-card .lc-desc{font-size:12px;color:var(--fg-dim);line-height:1.5}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.tag{padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600}
+.tag--c1{background:rgba(176,80,255,.18);color:var(--accent-2)}
+.tag--c2{background:rgba(0,229,160,.15);color:var(--accent)}
+.tag--c3{background:rgba(64,160,255,.15);color:var(--grad)}
+.tag--c4{background:rgba(255,128,32,.15);color:var(--danger)}
+.footer{text-align:center;padding:40px 0 20px;color:var(--fg-dim);font-size:12px}
+</style>
+</head>
+<body>
+<div class="page-shell">
+
+<div class="page-header">
+  <h1>AI基础设施</h1>
+  <div class="subtitle">从高性能算子到分布式训练的性能优化全流程 &middot; 12 节交互式课程</div>
+</div>
+
+<!-- Chapter 1 -->
+<div class="chapter">
+  <h2>第1章：高性能算子基础</h2>
+  <div class="ch-desc">理解GPU计算的底层机制——从算子抽象到内存访问模式再到并行执行模型。</div>
+  <div class="lesson-grid">
+    <a class="lesson-card" href="pages/01-operator-abstract.html">
+      <div class="lc-num">1.1</div>
+      <div class="lc-title">运算符抽象</div>
+      <div class="lc-desc">MatMul / Activation / Normalization 张量算子块，输入→输出维度流程</div>
+      <div class="tags"><span class="tag tag--c1">高性能算子</span></div>
+    </a>
+    <a class="lesson-card" href="pages/02-memory-access.html">
+      <div class="lc-num">1.2</div>
+      <div class="lc-title">内存访问模式</div>
+      <div class="lc-desc">顺序 vs 跨步 vs 随机访问，HBM 带宽对比柱状图</div>
+      <div class="tags"><span class="tag tag--c1">高性能算子</span></div>
+    </a>
+    <a class="lesson-card" href="pages/03-parallel-exec.html">
+      <div class="lc-num">1.3</div>
+      <div class="lc-title">并行执行模型</div>
+      <div class="lc-desc">Thread Block → Warp → Thread 层级，SM 占用率可视化</div>
+      <div class="tags"><span class="tag tag--c1">高性能算子</span></div>
+    </a>
+  </div>
+</div>
+
+<!-- Chapter 2 -->
+<div class="chapter">
+  <h2>第2章：AI编译优化</h2>
+  <div class="ch-desc">从模型到计算图再到优化后的可执行代码——编译器管线全览。</div>
+  <div class="lesson-grid">
+    <a class="lesson-card" href="pages/04-compute-graph.html">
+      <div class="lc-num">2.1</div>
+      <div class="lc-title">计算图表示</div>
+      <div class="lc-desc">ResNet 残差块 → DAG，节点=算子，边=张量</div>
+      <div class="tags"><span class="tag tag--c2">AI编译优化</span></div>
+    </a>
+    <a class="lesson-card" href="pages/05-operator-fusion.html">
+      <div class="lc-num">2.2</div>
+      <div class="lc-title">算子融合</div>
+      <div class="lc-desc">Conv+BN+ReLU → 单一 kernel，融合前后内存读写对比</div>
+      <div class="tags"><span class="tag tag--c2">AI编译优化</span></div>
+    </a>
+    <a class="lesson-card" href="pages/06-graph-rewrite.html">
+      <div class="lc-num">2.3</div>
+      <div class="lc-title">图重写</div>
+      <div class="lc-desc">常量折叠 → CSE → 布局变换，每轮展示图结构变化</div>
+      <div class="tags"><span class="tag tag--c2">AI编译优化</span></div>
+    </a>
+  </div>
+</div>
+
+<!-- Chapter 3 -->
+<div class="chapter">
+  <h2>第3章：分布式通信</h2>
+  <div class="ch-desc">多GPU训练的核心通信模式与瓶颈分析。</div>
+  <div class="lesson-grid">
+    <a class="lesson-card" href="pages/07-data-parallel.html">
+      <div class="lc-num">3.1</div>
+      <div class="lc-title">数据并行</div>
+      <div class="lc-desc">Batch 拆分 → 4 GPU，局部梯度计算 + 同步动画</div>
+      <div class="tags"><span class="tag tag--c3">分布式通信</span></div>
+    </a>
+    <a class="lesson-card" href="pages/08-allreduce-ring.html">
+      <div class="lc-num">3.2</div>
+      <div class="lc-title">AllReduce 环算法</div>
+      <div class="lc-desc">4 GPU 环形数据传输，Scatter-Reduce 然后 AllGather</div>
+      <div class="tags"><span class="tag tag--c3">分布式通信</span></div>
+    </a>
+    <a class="lesson-card" href="pages/09-comm-bottleneck.html">
+      <div class="lc-num">3.3</div>
+      <div class="lc-title">通信瓶颈分析</div>
+      <div class="lc-desc">训练时间线：计算(蓝) + 通信(橙) bar，气泡识别</div>
+      <div class="tags"><span class="tag tag--c3">分布式通信</span></div>
+    </a>
+  </div>
+</div>
+
+<!-- Chapter 4 -->
+<div class="chapter">
+  <h2>第4章：性能分析综合实验</h2>
+  <div class="ch-desc">从指标体系建立到Profiling实操到最终优化报告的完整实验流程。</div>
+  <div class="lesson-grid">
+    <a class="lesson-card" href="pages/10-performance-metrics.html">
+      <div class="lc-num">4.1</div>
+      <div class="lc-title">性能指标体系</div>
+      <div class="lc-desc">吞吐/延迟/显存/利用率四维指标，同步折线图</div>
+      <div class="tags"><span class="tag tag--c4">性能分析</span></div>
+    </a>
+    <a class="lesson-card" href="pages/11-profiling-hotspot.html">
+      <div class="lc-num">4.2</div>
+      <div class="lc-title">Profiling 热点分析</div>
+      <div class="lc-desc">Kernel 时间线按耗时着色，热点调用栈 + 内存带宽</div>
+      <div class="tags"><span class="tag tag--c4">性能分析</span></div>
+    </a>
+    <a class="lesson-card" href="pages/12-optimization-report.html">
+      <div class="lc-num">4.3</div>
+      <div class="lc-title">综合优化报告</div>
+      <div class="lc-desc">瓶颈 → 候选方案 → 预期收益 → 风险 → 验证计划</div>
+      <div class="tags"><span class="tag tag--c4">性能分析</span></div>
+    </a>
+  </div>
+</div>
+
+<div class="footer">
+  AI Infrastructure Interactive Course &middot; 12 Lessons &middot; Extreme Dark HPC Theme
+</div>
+
+</div>
+</body>
+</html>

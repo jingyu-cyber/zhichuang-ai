@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>数据加载与划分 · 深度学习框架</title>
+<style>
+:root{--bg:#1e1a1a;--bg-soft:#2d2525;--bg-code:#141010;--fg:#f0e8e0;--fg-dim:#b0a090;--line:#3d3030;--accent:#ff9050;--accent-2:#ffc040;--grad:#7b8cff;--success:#50d890;--danger:#f05060;--shadow:0 10px 30px rgba(0,0,0,.35);--radius:14px;--radius-sm:8px}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}
+.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}
+.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.demo-header h1{font-size:20px;font-weight:700}
+.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}
+.demo-header .breadcrumb a{color:var(--accent);text-decoration:none}
+.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}
+.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:var(--radius);padding:20px;display:flex;flex-direction:column;gap:14px}
+.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}
+.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}
+.panel-explain .info-line{font-family:"JetBrains Mono","Fira Code",monospace;font-size:20px;color:var(--accent-2);text-align:center;padding:12px;background:var(--bg-code);border-radius:var(--radius-sm)}
+.badge-row{display:flex;gap:8px;flex-wrap:wrap}
+.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.badge--def{background:rgba(123,140,255,.18);color:var(--grad)}
+.badge--tip{background:rgba(80,216,144,.18);color:var(--success)}
+.badge--warn{background:rgba(240,80,96,.18);color:var(--danger)}
+.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:var(--radius);padding:16px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.panel-stage svg{max-width:100%;max-height:100%}
+.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}
+.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:var(--radius-sm);cursor:pointer;font-size:14px;transition:.15s}
+.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}
+.demo-controls button:disabled{opacity:.35;cursor:default}
+.step-dots{display:flex;gap:8px;align-items:center}
+.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}
+.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}
+.step-dot.done{background:var(--success)}
+@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+  <div class="demo-header">
+    <div>
+      <h1>数据加载与划分</h1>
+      <div class="breadcrumb"><a href="../index.html">深度学习框架</a> / 第三章 / 07</div>
+    </div>
+    <span class="badge badge--def">Dataset · DataLoader · Split</span>
+  </div>
+
+  <div class="demo-main">
+    <div class="panel-explain" id="explain">
+      <div class="step-title" id="stepTitle">Dataset: 数据的容器</div>
+      <div class="info-line" id="infoDisplay">class MyDataset(Dataset)</div>
+      <div class="step-desc" id="stepDesc">PyTorch 中数据流的第一站：<b>Dataset</b>。自定义 Dataset 只需实现两个方法：<br><br><b>__len__()</b>：返回样本总数<br><b>__getitem__(idx)</b>：返回第 idx 个样本的 (数据, 标签)</b><br><br>关键：数据加载写 __init__ 里（只执行一次），不要写 __getitem__ 里（每次取样本都执行）。</div>
+      <div class="badge-row" id="badges"><span class="badge badge--def">__len__</span><span class="badge badge--tip">__getitem__</span></div>
+    </div>
+    <div class="panel-stage" id="stage"></div>
+  </div>
+
+  <div class="demo-controls">
+    <button id="btnPrev" onclick="changeStep(-1)">← 上一步</button>
+    <div class="step-dots" id="dots"></div>
+    <button id="btnNext" onclick="changeStep(1)">下一步 →</button>
+    <button onclick="resetStep()">⟳ 重置</button>
+    <button id="btnAuto" onclick="toggleAuto()">▶ 自动</button>
+  </div>
+</div>
+
+<script>
+const steps = [
+  {
+    title: "Dataset: 数据的容器",
+    info: "class MyDataset(Dataset)",
+    desc: 'PyTorch 中数据流的第一站：<b>Dataset</b>。自定义 Dataset 只需实现两个方法：<br><br><b>__len__()</b>：返回样本总数<br><b>__getitem__(idx)</b>：返回第 idx 个样本的 (数据, 标签)<br><br>关键：数据加载写 __init__ 里（只执行一次），不要写 __getitem__ 里（每次取样本都执行 N 次！）。',
+    badges: [{t:'__len__',c:'def'},{t:'__getitem__',c:'tip'}],
+    render(svg){
+      svg.innerHTML = `<rect x="20" y="20" width="760" height="200" rx="10" fill="var(--bg-soft)" stroke="var(--grad)" stroke-width="2"/>
+<text x="50" y="50" font-size="13" fill="var(--fg-dim)" font-family="JetBrains Mono">from torch.utils.data import Dataset</text>
+<text x="50" y="75" font-size="13" fill="var(--fg-dim)" font-family="JetBrains Mono"></text>
+<text x="50" y="100" font-size="13" fill="var(--accent)" font-family="JetBrains Mono">class MyDataset(Dataset):</text>
+<text x="70" y="125" font-size="13" fill="var(--fg-dim)" font-family="JetBrains Mono">def __init__(self, data, labels):       # 只执行一次!</text>
+<text x="90" y="150" font-size="13" fill="var(--fg-dim)" font-family="JetBrains Mono">self.data = data   # 这里加载全部数据</text>
+<text x="90" y="175" font-size="13" fill="var(--fg-dim)" font-family="JetBrains Mono">self.labels = labels</text>
+<text x="70" y="200" font-size="13" fill="var(--fg-dim)" font-family="JetBrains Mono">def __len__(self): return len(self.data)</text>
+<text x="70" y="220" font-size="13" fill="var(--accent-2)" font-family="JetBrains Mono">def __getitem__(self, idx):              # 多次调用</text>
+<text x="90" y="240" font-size="13" fill="var(--accent-2)" font-family="JetBrains Mono">return self.data[idx], self.labels[idx]</text>`;
+    }
+  },
+  {
+    title: "Train / Val / Test 划分",
+    info: "random_split() → 7:1.5:1.5",
+    desc: '数据划分的三重角色：<br><br><b>训练集 (Train)</b>：模型学习的数据，每 epoch 都过一遍（~70%）<br><b>验证集 (Val)</b>：每 epoch 后评估，用于调参和选模型（~15%）<br><b>测试集 (Test)</b>：训练完成后只用一次，评估最终泛化能力（~15%）<br><br>使用 <code>random_split()</code> 随机划分，避免各类别集中在某一份。',
+    badges: [{t:'7:2:1',c:'def'},{t:'random_split',c:'tip'},{t:'test只用一次',c:'warn'}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="25" text-anchor="middle" font-size="14" fill="var(--fg-dim)">train_ds, val_ds, test_ds = random_split(dataset, [7000, 1500, 1500])</text>
+<rect x="20" y="45" width="500" height="70" rx="8" fill="var(--grad)" opacity=".7"/>
+<text x="270" y="78" text-anchor="middle" font-size="16" fill="#fff" font-weight="700">Train 训练集 · 70% · 7000 样本</text>
+<text x="270" y="102" text-anchor="middle" font-size="12" fill="#fff" opacity=".8">shuffle=true · 模型从这里学习参数</text>
+<rect x="540" y="45" width="120" height="70" rx="8" fill="var(--accent)" opacity=".7"/>
+<text x="600" y="78" text-anchor="middle" font-size="14" fill="#1e1a1a" font-weight="700">Val</text>
+<text x="600" y="98" text-anchor="middle" font-size="12" fill="#1e1a1a">15%</text>
+<rect x="680" y="45" width="110" height="70" rx="8" fill="var(--accent-2)" opacity=".7"/>
+<text x="735" y="78" text-anchor="middle" font-size="14" fill="#1e1a1a" font-weight="700">Test</text>
+<text x="735" y="98" text-anchor="middle" font-size="12" fill="#1e1a1a">15%</text>
+<text x="400" y="155" text-anchor="middle" font-size="13" fill="var(--fg-dim)">Val vs Test: Val 用于开发阶段反复评估 → 可能过拟合 Val；Test 只测一次 → 真实泛化指标</text>
+<text x="400" y="180" text-anchor="middle" font-size="12" fill="var(--accent-2)">重要: 不能看着 Test 结果调参 = 信息泄漏 = Test 变成了 Val</text>`;
+    }
+  },
+  {
+    title: "DataLoader: 批量服务引擎",
+    info: "DataLoader(ds, batch_size=32, shuffle=True)",
+    desc: 'Dataset 提供单个样本，<b>DataLoader</b> 把它们打包成 batch：<br><br><b>batch_size</b>：每批多少样本。典型值 32/64/128，受 GPU 显存限制。<br><b>shuffle</b>：训练=True（打乱顺序，防止模型记忆样本顺序），验证=False。<br><b>num_workers</b>：并行加载进程数，0=主进程，4-8=多进程加速。<br><br>为什么需要 batch？一次处理全部（batch=全集）→ GPU 爆显存；一次处理 1 个 → 梯度噪音太大。',
+    badges: [{t:'批量打包',c:'def'},{t:'shuffle=true',c:'tip'},{t:'num_workers',c:'def'}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="25" text-anchor="middle" font-size="14" fill="var(--fg-dim)">DataLoader 把 Dataset 的单个样本 → 批量输出</text>
+<rect x="30" y="50" width="120" height="50" rx="8" fill="var(--bg-soft)" stroke="var(--grad)" stroke-width="1"/>
+<text x="90" y="80" text-anchor="middle" font-size="12" fill="var(--fg-dim)" font-family="JetBrains Mono">[img₀,_label₀]</text>
+<rect x="170" y="50" width="120" height="50" rx="8" fill="var(--bg-soft)" stroke="var(--grad)" stroke-width="1"/>
+<text x="230" y="80" text-anchor="middle" font-size="12" fill="var(--fg-dim)" font-family="JetBrains Mono">[img₁,_label₁]</text>
+<rect x="310" y="50" width="120" height="50" rx="8" fill="var(--bg-soft)" stroke="var(--grad)" stroke-width="1"/>
+<text x="370" y="80" text-anchor="middle" font-size="12" fill="var(--fg-dim)" font-family="JetBrains Mono">[img₂,_label₂]</text>
+<text x="460" y="80" text-anchor="middle" font-size="20" fill="var(--fg-dim)">...</text>
+<text x="400" y="130" text-anchor="middle" font-size="22" fill="var(--accent-2)">↓ DataLoader(batch_size=3)</text>
+<rect x="100" y="155" width="600" height="70" rx="10" fill="var(--bg-soft)" stroke="var(--accent)" stroke-width="2"/>
+<text x="400" y="185" text-anchor="middle" font-size="14" fill="var(--accent)" font-weight="700">Batch 输出: imgs.shape = (3, 28, 28), labels.shape = (3,)</text>
+<text x="400" y="210" text-anchor="middle" font-size="12" fill="var(--fg-dim)">3个样本堆叠成一个 tensor → input to model</text>
+<text x="400" y="260" text-anchor="middle" font-size="13" fill="var(--success)">shuffle=True 训练: 每个epoch样本顺序不同 → 防止模型「记住顺序」</text>`;
+    }
+  },
+  {
+    title: "为什么要 Shuffle?",
+    info: "不 shuffle 的后果: 灾难性遗忘",
+    desc: '假设数据集按类别排序：[猫×1000, 狗×1000, 鸟×1000]。如果不 shuffle：<br><br>• 前 1000 个 batch 全是猫 → 模型学会「输出=猫」<br>• 接着 1000 个 batch 全是狗 → 模型改学「输出=狗」，忘了猫<br>• 最后 1000 个 batch 全是鸟 → 又忘了狗<br><br>这就是<b>灾难性遗忘（Catastrophic Forgetting）</b>。shuffle 把类别打散在每个 batch 里 → 模型同时学习所有类别。',
+    badges: [{t:'灾难性遗忘',c:'warn'},{t:'shuffle解决',c:'tip'}],
+    render(svg){
+      svg.innerHTML = `<rect x="10" y="10" width="380" height="170" rx="10" fill="var(--bg-soft)" stroke="var(--danger)" stroke-width="2"/>
+<text x="200" y="40" text-anchor="middle" font-size="15" fill="var(--danger)" font-weight="700">不 Shuffle ✗</text>
+<text x="200" y="70" text-anchor="middle" font-size="12" fill="var(--fg-dim)">Batch 1-1000: 全是猫 → 学会猫</text>
+<text x="200" y="95" text-anchor="middle" font-size="12" fill="var(--fg-dim)">Batch 1001-2000: 全是狗 → 忘了猫!</text>
+<text x="200" y="120" text-anchor="middle" font-size="12" fill="var(--fg-dim)">Batch 2001-3000: 全是鸟 → 忘了狗!</text>
+<text x="200" y="150" text-anchor="middle" font-size="12" fill="var(--danger)">→ 倒数几个batch主导模型行为</text>
+<rect x="410" y="10" width="380" height="170" rx="10" fill="var(--bg-soft)" stroke="var(--success)" stroke-width="2"/>
+<text x="600" y="40" text-anchor="middle" font-size="15" fill="var(--success)" font-weight="700">Shuffle ✓</text>
+<text x="600" y="70" text-anchor="middle" font-size="12" fill="var(--fg-dim)">每个 batch 都包含(猫,狗,鸟)混合</text>
+<text x="600" y="95" text-anchor="middle" font-size="12" fill="var(--fg-dim)">→ 模型同时学习所有类别</text>
+<text x="600" y="120" text-anchor="middle" font-size="12" fill="var(--fg-dim)">→ 梯度方向更稳定</text>
+<text x="600" y="150" text-anchor="middle" font-size="12" fill="var(--success)">→ 每个 epoch 所有样本均匀学习</text>
+<text x="400" y="220" text-anchor="middle" font-size="13" fill="var(--accent-2)">训练: shuffle=True → 验证/测试: shuffle=False (评估不需要打乱)</text>`;
+    }
+  },
+  {
+    title: "一个 Epoch = 多少步?",
+    info: "5,732 样本 ÷ 32 = 180 步/epoch",
+    desc: '掌握了 Dataset 和 DataLoader 后，理解训练循环的关键参数：<br><br><b>Epoch</b>：完整遍历训练集 1 次<br><b>Step (Iteration)</b>：处理完 1 个 batch<br><br>steps_per_epoch = ceil(训练样本数 / batch_size)<br>总步数 = steps_per_epoch × num_epochs<br><br>例如 5732 样本，batch_size=32：每 epoch 有 ⌈5732/32⌉ = 180 步，训练 10 个 epoch = 1800 次参数更新。',
+    badges: [{t:'epoch',c:'def'},{t:'step=参数更新',c:'tip'},{t:'下一节→',c:'tip'}],
+    render(svg){
+      svg.innerHTML = `<rect x="40" y="30" width="200" height="80" rx="10" fill="var(--grad)" opacity=".7"/>
+<text x="140" y="60" text-anchor="middle" font-size="15" fill="#fff" font-weight="700">1 Epoch</text>
+<text x="140" y="85" text-anchor="middle" font-size="12" fill="#fff">5732 样本全部过一遍</text>
+<text x="270" y="75" text-anchor="middle" font-size="22" fill="var(--fg-dim)">=</text>
+<rect x="300" y="30" width="220" height="80" rx="10" fill="var(--accent)" opacity=".7"/>
+<text x="410" y="60" text-anchor="middle" font-size="15" fill="#1e1a1a" font-weight="700">180 Steps</text>
+<text x="410" y="85" text-anchor="middle" font-size="12" fill="#1e1a1a">每步 32 个样本</text>
+<text x="550" y="75" text-anchor="middle" font-size="22" fill="var(--fg-dim)">=</text>
+<rect x="580" y="30" width="190" height="80" rx="10" fill="var(--success)" opacity=".7"/>
+<text x="675" y="60" text-anchor="middle" font-size="15" fill="#1e1a1a" font-weight="700">180 次更新</text>
+<text x="675" y="85" text-anchor="middle" font-size="12" fill="#1e1a1a">optimizer.step()</text>
+<text x="400" y="150" text-anchor="middle" font-size="14" fill="var(--fg-dim)">10 epochs × 180 steps/epoch = 1800 次参数更新</text>
+<text x="400" y="180" text-anchor="middle" font-size="13" fill="var(--accent-2)">下一节: 完整的训练循环怎么写? → 08-training-loop</text>`;
+    }
+  }
+];
+
+let step=0,timer=null;
+const dotsEl=document.getElementById('dots'),svgEl=document.getElementById('stage');
+svgEl.innerHTML='<svg viewBox="0 0 800 380" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%"><defs><marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="var(--fg-dim)"/></marker></defs></svg>';
+const svg=svgEl.querySelector('svg');
+
+for(let i=0;i<steps.length;i++){let d=document.createElement('div');d.className='step-dot';d.onclick=()=>gotoStep(i);dotsEl.appendChild(d);}
+
+function renderStep(){
+  const s=steps[step  {
+    title: "DataLoader 性能调优: num_workers + prefetch",
+    info: "GPU不应等CPU —— 构建高效数据流水线",
+    desc: '<b>DataLoader 是训练性能的第一瓶颈</b>: GPU 等待数据=算力浪费。三个关键参数协同工作:<br><br><code>num_workers=4~8</code>: 子进程并行加载。0=主进程(慢)、过多=CPU竞争。<br><code>prefetch_factor=2</code>: 每worker预取batch数，隐藏I/O延迟。<br><code>persistent_workers=True</code>: 跨epoch复用worker，避免反复fork(<b>显著加速</b>)。<br><br><b>经验公式</b>: workers=CPU核心数×80%, pin_memory=True, non_blocking=True配合使用。',
+    badges: [{t:"num_workers=4",c:"def"},{t:"prefetch=2",c:"tip"},{t:"persistent",c:"warn"}],
+    render(svg){
+      svg.innerHTML = `<text x="400" y="25" text-anchor="middle" font-size="14" fill="var(--accent)">DataLoader Performance Pipeline</text><rect x="30" y="50" width="220" height="90" rx="8" fill="var(--bg-soft)" stroke="var(--grad)" stroke-width="1.5"/><text x="140" y="78" text-anchor="middle" font-size="12" fill="var(--grad)">Disk I/O</text><text x="140" y="100" text-anchor="middle" font-size="10" fill="var(--fg-dim)">Read raw data</text><text x="140" y="118" text-anchor="middle" font-size="10" fill="var(--fg-dim)">num_workers parallel</text><text x="260" y="95" font-size="16" fill="var(--accent)">-></text><rect x="285" y="50" width="220" height="90" rx="8" fill="var(--bg-soft)" stroke="var(--accent)" stroke-width="1.5"/><text x="395" y="78" text-anchor="middle" font-size="12" fill="var(--accent)">CPU Transform</text><text x="395" y="100" text-anchor="middle" font-size="10" fill="var(--fg-dim)">Decode + Augment</text><text x="395" y="118" text-anchor="middle" font-size="10" fill="var(--fg-dim)">prefetch_factor=2</text><text x="515" y="95" font-size="16" fill="var(--accent)">-></text><rect x="540" y="50" width="220" height="90" rx="8" fill="var(--bg-soft)" stroke="var(--success)" stroke-width="1.5"/><text x="650" y="78" text-anchor="middle" font-size="12" fill="var(--success)">GPU Compute</text><text x="650" y="100" text-anchor="middle" font-size="10" fill="var(--fg-dim)">Forward+Backward</text><text x="650" y="118" text-anchor="middle" font-size="10" fill="var(--fg-dim)">pin_memory+non_blocking</text><text x="400" y="180" text-anchor="middle" font-size="12" fill="var(--accent-2)">persistent_workers=True: keep workers alive across epochs</text><text x="400" y="205" text-anchor="middle" font-size="11" fill="var(--fg-dim)">Without: fork/destroy workers every epoch -> huge overhead -> training stalls between epochs</text><text x="400" y="230" text-anchor="middle" font-size="12" fill="var(--fg-dim)">Ideal: GPU utilization > 90%, CPU utilization < 85%</text>`;
+    }
+  },
+];
+  document.getElementById('stepTitle').textContent=s.title;
+  document.getElementById('infoDisplay').textContent=s.info;
+  document.getElementById('stepDesc').innerHTML=s.desc;
+  let bd=document.getElementById('badges');bd.innerHTML='';
+  s.badges.forEach(b=>{let sp=document.createElement('span');sp.className='badge badge--'+b.c;sp.textContent=b.t;bd.appendChild(sp);});
+  s.render(svg);
+  document.querySelectorAll('.step-dot').forEach((d,i)=>{d.className='step-dot'+(i===step?' active':i<step?' done':'');});
+  document.getElementById('btnPrev').disabled=step===0;
+  document.getElementById('btnNext').disabled=step===steps.length-1;
+}
+function gotoStep(n){step=Math.max(0,Math.min(n,steps.length-1));renderStep();}
+function changeStep(d){gotoStep(step+d);}
+function resetStep(){stopAuto();gotoStep(0);}
+function toggleAuto(){timer?stopAuto():startAuto();}
+function startAuto(){timer=setInterval(()=>{if(step<steps.length-1)gotoStep(step+1);else stopAuto();},1800);document.getElementById('btnAuto').textContent='⏸ 暂停';}
+function stopAuto(){clearInterval(timer);timer=null;document.getElementById('btnAuto').textContent='▶ 自动';}
+document.addEventListener('keydown',e=>{if(e.key==='ArrowLeft')changeStep(-1);if(e.key==='ArrowRight')changeStep(1);if(e.key===' ')e.preventDefault(),toggleAuto();if(e.key==='r'||e.key==='R')resetStep();});
+renderStep();
+</script>
+</body>
+</html>

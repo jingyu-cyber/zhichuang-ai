@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>训练循环结构 - 深度学习框架</title>
+<style>
+:root{--bg:#1e1a1a;--bg-soft:#2d2525;--bg-code:#141010;--fg:#f0e8e0;--fg-dim:#b0a090;--line:#3d3030;--accent:#ff9050;--accent2:#ffc040;--success:#50d890;--danger:#f05060;--purple:#7b8cff}
+*{box-sizing:border-box}html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;height:100%;overflow:hidden}
+.mono{font-family:"JetBrains Mono","Fira Code",Menlo,Consolas,monospace}
+.shell{display:flex;flex-direction:column;height:100vh}
+.bar{display:flex;align-items:center;gap:16px;padding:10px 22px;background:linear-gradient(90deg,#2a2222,#352a2a);border-bottom:1px solid var(--line)}
+.bar h1{font-size:17px;margin:0}.bar h1 span{color:var(--fg-dim);font-weight:400;margin-left:8px;font-size:13px}
+.bar a{color:var(--fg);text-decoration:none;padding:5px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg-soft);font-size:12px}
+.bar a:hover{border-color:var(--accent);color:var(--accent)}.spacer{flex:1}
+.badge-num{padding:5px 12px;background:var(--bg-code);border:1px solid var(--line);border-radius:6px;color:var(--accent);font-size:13px}
+.main{flex:1;display:flex;min-height:0}
+.left{width:420px;min-width:420px;padding:20px;overflow-y:auto;background:var(--bg-soft);border-right:1px solid var(--line)}
+.right{flex:1;position:relative;background:var(--bg);overflow:hidden}
+.tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;background:rgba(255,144,80,.12);color:var(--accent);border:1px solid rgba(255,144,80,.35);margin-bottom:10px}
+h2.step{font-size:18px;margin:0 0 8px;line-height:1.3;color:var(--fg)}
+.desc{font-size:13px;line-height:1.85;color:var(--fg)}
+.desc p{margin:6px 0}.desc code{background:var(--bg-code);padding:1px 5px;border-radius:3px;color:var(--accent);font-size:12px}
+.badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:3px;margin-right:4px;font-weight:600}
+.bd{background:rgba(123,140,255,.18);color:var(--purple);border:1px solid rgba(123,140,255,.4)}
+.bt{background:rgba(80,216,144,.15);color:var(--success);border:1px solid rgba(80,216,144,.4)}
+.bw{background:rgba(240,80,96,.15);color:var(--danger);border:1px solid rgba(240,80,96,.4)}
+.tip{border-left:3px solid var(--accent);padding:6px 10px;margin:8px 0;background:rgba(255,144,80,.06);border-radius:4px;font-size:12px;line-height:1.6}
+.stage-label{position:absolute;top:12px;left:20px;font-size:12px;color:var(--fg-dim);display:flex;align-items:center;gap:6px}
+.stage-label b{display:inline-block;padding:2px 6px;border-radius:3px;background:var(--accent);color:var(--bg);font-weight:800;font-size:10px}
+.ctrl{display:flex;align-items:center;gap:8px;padding:8px 20px;background:var(--bg-soft);border-top:1px solid var(--line)}
+.ctrl button{padding:5px 12px;font-size:12px;font-weight:600;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg-dim);cursor:pointer;transition:all .2s;font-family:inherit}
+.ctrl button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.ctrl button:disabled{opacity:.3;cursor:default}
+.ctrl button.go{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.dots{display:flex;gap:4px;flex:1;justify-content:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--line);transition:all .3s;cursor:pointer}
+.dot.on{background:var(--accent);box-shadow:0 0 8px var(--accent);transform:scale(1.3)}
+.dot.ok{background:var(--success)}
+@media(max-width:940px){.main{flex-direction:column}.left{width:100%;min-width:0;max-height:35vh}}
+</style>
+</head>
+<body>
+<div class="shell">
+<div class="bar"><a href="../index.html">← Back</a><h1>Training Loop Architecture<span>· Epoch · Batch · Gradient Update</span></h1><span class="spacer"></span><span class="badge-num" id="sn">1/14</span></div>
+<div class="main">
+<div class="left" id="panel"></div>
+<div class="right"><div class="stage-label"><b>TL</b> Training Loop Visualization</div><svg id="s" viewBox="0 0.8520 480" preserveAspectRatio="xMidYMid meet" style="max-width:100%;max-height:100%"></svg></div>
+</div>
+<div class="ctrl">
+<button id="br">↺ Reset</button><button id="bp">◀ Prev</button><button class="go" id="bn">Next ▶</button><button id="ba">▶ Auto</button>
+<div class="dots" id="dots"></div>
+</div>
+</div>
+<script>
+var SVG_NS="http://www.w3.org/2000/svg";
+var svgEl;
+
+// ----- Layout helpers with built-in padding -----
+function R(x,y,w,h,fill,stroke,rx,sw){
+  var e=document.createElementNS(SVG_NS,"rect");
+  e.setAttribute("x",x);e.setAttribute("y",y);e.setAttribute("width",w);e.setAttribute("height",h);
+  e.setAttribute("fill",fill);e.setAttribute("rx",rx||4);
+  if(stroke){e.setAttribute("stroke",stroke);e.setAttribute("stroke-width",sw||1.5)}
+  svgEl.appendChild(e);
+}
+
+// Draw text CENTERED within a rect [x, x+w] with padding px on each side
+function TC(x,y,w,txt,size,color,padding){
+  padding=padding||15;
+  var maxW=w-2*padding;
+  var estW=txt.length*(size||13)*0.85; // approximate mono font width
+  if(estW>maxW) size=(size||13)*maxW/estW; // shrink to fit
+  if(size<8) size=8;
+  var e=document.createElementNS(SVG_NS,"text");
+  e.setAttribute("x",x+w/2);e.setAttribute("y",y);e.setAttribute("fill",color||"#f0e8e0");
+  e.setAttribute("font-size",size);e.setAttribute("text-anchor","middle");
+  e.setAttribute("font-weight","bold");e.setAttribute("font-family","JetBrains Mono");
+  e.textContent=txt;svgEl.appendChild(e);
+}
+
+// Draw text LEFT-ALIGNED within a rect [x, x+w] with padding px left
+function TL(x,y,w,txt,size,color,padding){
+  padding=padding||15;
+  var maxW=w-2*padding;
+  var estW=txt.length*(size||12)*0.85;
+  if(estW>maxW){
+    // Truncate with ...
+    var maxChars=Math.floor(maxW/((size||12)*0.85))-2;
+    if(maxChars<3) maxChars=3;
+    txt=txt.substring(0,maxChars)+"..";
+  }
+  var e=document.createElementNS(SVG_NS,"text");
+  e.setAttribute("x",x+padding);e.setAttribute("y",y);e.setAttribute("fill",color||"#f0e8e0");
+  e.setAttribute("font-size",size);e.setAttribute("text-anchor","start");
+  e.textContent=txt;svgEl.appendChild(e);
+}
+
+function L(x1,y1,x2,y2,color,sw){
+  var e=document.createElementNS(SVG_NS,"line");
+  e.setAttribute("x1",x1);e.setAttribute("y1",y1);e.setAttribute("x2",x2);e.setAttribute("y2",y2);
+  e.setAttribute("stroke",color||"#3d3030");e.setAttribute("stroke-width",sw||1);
+  svgEl.appendChild(e);
+}
+
+// ===== STEP DATA =====
+var S=[
+{t:"双层嵌套结构: Epoch × Batch",p:"Architecture",
+b:'<p>The training loop is a <b>doubly-nested iteration</b> — the fundamental paradigm underlying all gradient-based optimization in deep learning.</p><p><span class="badge bd">Outer</span> <code>for epoch in range(N)</code> — one complete pass over dataset D={(x_i,y_i)}.</p><p><span class="badge bd">Inner</span> <code>for (x,y) in dataloader</code> — processes mini-batch B of size m.</p><div class="tip"><b>Definition:</b> 1 epoch = |D|/m iterations. Total updates = N_epochs × |D|/m.</div>',
+d:function(){
+var W=720,H=480,P=15;
+R(P,P,W-2*P,H-2*P,"#141010","#ff9050",8,2);
+TC(P,40,W-2*P,"Epoch Loop (Outer)",16,"#ff9050",P);
+TC(P,68,W-2*P,"for epoch in range(num_epochs):",13,"#f0e8e0",P);
+// Inner loop box
+var bx=60,by=100,bw=600,bh=100;
+R(bx,by,bw,bh,"rgba(80,216,144,.1)","#50d890",8,1.5);
+TC(bx,by+25,bw,"Batch Loop (Inner) - 5 Standard Operations",14,"#50d890",P);
+TC(bx,by+48,bw,"for x, y in train_loader:",12,"#b0a090",P);
+// 5 ops in one line with proper spacing
+var ops="1.zero_grad()  2.model(x)  3.loss=criterion()  4.loss.backward()  5.optim.step()";
+var opSize=10;var estW=ops.length*opSize*0.85;
+if(estW>bw-2*P) opSize=Math.max(8,(bw-2*P)/(ops.length*0.85));
+TC(bx,by+75,bw,ops,opSize,"#b0a090",P);
+// Summary
+TC(P,230,W-2*P,"Total Iterations = N_epochs × ceil(|D| / batch_size)",14,"#ffc040",P);
+TC(P,260,W-2*P,"Example: 50 epochs × 200 batches = 10,000 gradient updates",13,"#b0a090",P);
+}},
+
+{t:"SGD: Mathematical Formulation",p:"Theory",
+b:'<p><code>θ_{t+1} = θ_t - η · ∇_θL(θ_t; B_t)</code></p><p>θ_t: parameters;  η: learning rate;  ∇_θL: stochastic gradient from mini-batch B_t.</p><p><span class="badge bd">Key</span> The mini-batch gradient is an <b>unbiased estimator</b>: E[∇_θL(θ;B)] = ∇_θL(θ;D). Variance scales as O(1/m).</p><p>Larger m → more stable gradients. Smaller m → implicit regularization via gradient noise.</p><div class="tip"><b>Convergence:</b> E[L(θ_t)-L(θ*)] ≤ O(1/√t) for convex objectives.</div>',
+d:function(){
+var W=720,H=480,P=15;
+R(P,P,W-2*P,H-2*P,"#141010","#7b8cff",8,2);
+TC(P,40,W-2*P,"Stochastic Gradient Descent Update Rule",15,"#7b8cff",P);
+TC(P,85,W-2*P,"θ_{t+1} = θ_t - η · ∇_θ L(θ_t; B_t)",18,"#f0e8e0",P);
+TC(P,120,W-2*P,"Parameters = Parameters - LearningRate × Gradient",13,"#b0a090",P);
+L(100,145,620,145,"#3d3030",1);
+var bx=80,by=165,bw=560;
+TL(bx,by+18,bw,"Gradient Estimation:",13,"#ffc040",10);
+TL(bx,by+42,bw,"E_B[grad L] = grad L_true  (unbiased estimator)",12,"#50d890",10);
+TL(bx,by+66,bw,"Var(grad) ~ 1/m  (larger batch = less noise)",12,"#50d890",10);
+TL(bx,by+95,bw,"Convergence: O(1/sqrt(t)) for convex, non-convex needs strong conditions",11,"#b0a090",10);
+}},
+
+{t:"Operation 1: zero_grad()",p:"5-Step Pipeline",
+b:'<p><code>optimizer.zero_grad(set_to_none=True)</code></p><p>PyTorch <b>accumulates gradients by default</b>. Forgetting this call creates a silent bug: each batch adds to the previous gradient, corrupting the update direction.</p><p><span class="badge bt">Optimization</span> <code>set_to_none=True</code> avoids allocating zero tensors → ~10% throughput gain.</p><p><span class="badge bw">#1 silent training bug</span> — loss drops but model never converges.</p>',
+d:function(){var W=720,H=480,P=15;
+R(P,P,W-2*P,H-2*P,"#141010","#f05060",8,2);
+TC(P,30,W-2*P,"Gradient Accumulation - The #1 Silent Training Bug",14,"#f05060",P);
+var lx=50,ly=65,lw=310,lh=120;var rx=360,ry=65,rw=310,rh=120;
+// Left box
+R(lx,ly,lw,lh,"rgba(240,80,96,.1)","#f05060",6,1.5);
+TC(lx,ly+22,lw,"WITHOUT zero_grad()",14,"#f05060",P);
+TL(lx,ly+52,lw,"grad = sum(all prev batches)",11,"#f05060",P);
+TL(lx,ly+78,lw,"-> Corrupted direction",11,"#f05060",P);
+TL(lx,ly+104,lw,"Loss drops but no convergence",11,"#f05060",P);
+// Right box
+R(rx,ry,rw,rh,"rgba(80,216,144,.1)","#50d890",6,1.5);
+TC(rx,ry+22,rw,"WITH zero_grad()",14,"#50d890",P);
+TL(rx,ry+52,rw,"grad = dL/dtheta (current batch)",11,"#50d890",P);
+TL(rx,ry+78,rw,"-> Clean gradient each step",11,"#50d890",P);
+TL(rx,ry+104,rw,"Proper convergence guaranteed",11,"#50d890",P);
+// Bottom
+TC(P,220,W-2*P,"set_to_none=True: no tensor allocation, ~10% faster",12,"#ffc040",P);
+TC(P,255,W-2*P,"Forgetting zero_grad is the most common silent training bug",13,"#ffc040",P);
+}},
+
+{t:"Operation 2: Forward Propagation - model(x)",p:"5-Step Pipeline",
+b:'<p><code>y_pred = model(x)</code> performs two functions simultaneously:</p><p><span class="badge bd">1</span> <b>Computation:</b> Input flows through layers: h^(l) = f^(l)(W^(l)·h^(l-1)+b^(l)).</p><p><span class="badge bd">2</span> <b>Graph construction:</b> PyTorch autograd records each operation with its grad_fn for backward pass. This <b>define-by-run</b> paradigm rebuilds the graph every forward pass.</p><p>This dual role is why training is 2-3× slower than inference.</p>',
+d:function(){var W=720,H=480,P=15;
+R(P,P,W-2*P,H-2*P,"#141010","#7b8cff",8,2);
+TC(P,35,W-2*P,"Forward Pass: Computation + Autograd Graph Construction",14,"#7b8cff",P);
+var layers=["Input: x in R^(B x d_in)","Linear: h1 = x @ W1.T + b1","ReLU:  h2 = max(0, h1)","Linear: h3 = h2 @ W2.T + b2","Output: y_pred = softmax(h3)"];
+var bx=80,by=70,bw=560,bh=34;
+for(var i=0;i<5;i++){
+  R(bx,by+i*(bh+8),bw,bh,"rgba(123,140,255,.08)","#7b8cff",4,1);
+  TL(bx,by+i*(bh+8)+22,bw,layers[i],11,"#f0e8e0",10);
+}
+TC(P,310,W-2*P,"Autograd: each node records grad_fn for backward pass",12,"#b0a090",P);
+TC(P,345,W-2*P,"Define-by-Run: graph is dynamic, rebuilt every forward pass",12,"#b0a090",P);
+}},
+
+{t:"Operation 3: Loss Computation",p:"5-Step Pipeline",
+b:'<p><code>loss = criterion(y_pred, y_target)</code> reduces output to a <b>scalar</b> — the root node of the backward computation graph.</p><p><span class="badge bd">Classification</span> CrossEntropyLoss = LogSoftmax + NLL: L = -Σ y_k·log(p_k).</p><p><span class="badge bd">Regression</span> MSELoss: L = mean((pred-true)²).</p><p>The loss must be <b>differentiable almost everywhere</b> for backpropagation to work.</p>',
+d:function(){var W=720,H=480,P=15;
+R(P,P,W-2*P,H-2*P,"#141010","#ffc040",8,2);
+TC(P,35,W-2*P,"Loss Function: Differentiable Scalar Objective",14,"#ffc040",P);
+var lx=50,ly=70,lw=300,lh=100;var rx=370,ry=70,rw=300,rh=100;
+R(lx,ly,lw,lh,"rgba(123,140,255,.1)","#7b8cff",6,1.5);
+TC(lx,ly+22,lw,"CrossEntropyLoss",14,"#7b8cff",P);
+TL(lx,ly+50,lw,"L = -sum(y_k * log(p_k))",11,"#f0e8e0",P);
+TL(lx,ly+75,lw,"Softmax + NLLLoss combined",10,"#b0a090",P);
+R(rx,ry,rw,rh,"rgba(80,216,144,.1)","#50d890",6,1.5);
+TC(rx,ry+22,rw,"MSELoss",14,"#50d890",P);
+TL(rx,ry+50,rw,"L = mean((pred - true)^2)",11,"#f0e8e0",P);
+TL(rx,ry+75,rw,"Squared L2 distance",10,"#b0a090",P);
+TC(P,220,W-2*P,"The loss scalar is the ROOT of the backward graph",13,"#ffc040",P);
+TC(P,260,W-2*P,"grad_L = 0 => stationary point (min, saddle, or max)",12,"#b0a090",P);
+}},
+
+{t:"Operation 4: Backpropagation - loss.backward()",p:"5-Step Pipeline",
+b:'<p><code>loss.backward()</code> triggers reverse-mode automatic differentiation. It traverses the computation graph in reverse topological order, applying the chain rule: ∂L/∂h^(l) = ∂L/∂h^(l+1) · ∂h^(l+1)/∂h^(l).</p><p>This computes gradients for all p parameters in a single backward pass — O(p) vs O(p²) for naive methods. Uses <b>vector-Jacobian products</b> (VJP), not full Jacobians.</p><p>After backward(): model.weight.grad contains ∂L/∂W.</p>',
+d:function(){var W=720,H=480,P=15;
+R(P,P,W-2*P,H-2*P,"#141010","#ff9050",8,2);
+TC(P,35,W-2*P,"Backpropagation: Reverse-Mode Automatic Differentiation",14,"#ff9050",P);
+TC(P,80,W-2*P,"Chain Rule: dL/dθ = dL/dh_n × dh_n/dh_{n-1} × ... × dh_1/dθ",12,"#f0e8e0",P);
+L(80,100,640,100,"#3d3030",1);
+var bx=60,by=120,bw=600;
+TL(bx,by+20,bw,"Computational Complexity:",13,"#ffc040",10);
+TL(bx,by+50,bw,"Naive: O(p²) - evaluate each parameter gradient independently",12,"#f05060",10);
+TL(bx,by+78,bw,"Backprop (VJP): O(p) - one forward + one backward pass",12,"#50d890",10);
+TL(bx,by+106,bw,"Key: dL/dθ = dL/dh_n * dh_n/dh_{n-1} * ... * dh_1/dθ  (vector-Jacobian product)",11,"#b0a090",10);
+TC(P,280,W-2*P,"After backward(): model.linear.weight.grad = dL/dW",13,"#50d890",P);
+TC(P,320,W-2*P,"Gradient is STORED in .grad, not applied - step() does the update",12,"#b0a090",P);
+}},
+
+{t:"Operation 5: Parameter Update - optimizer.step()",p:"5-Step Pipeline",
+b:'<p><code>optimizer.step()</code> applies gradients to update parameters:</p><p><span class="badge bd">SGD</span> θ := θ - η·g_t</p><p><span class="badge bd">Momentum</span> v=β·v+g_t; θ:=θ-η·v — accelerates through ravines.</p><p><span class="badge bd">Adam</span> Adaptive per-parameter learning rates with bias-corrected momentum estimates. Convergence: O(1/√t) convex.</p><p><span class="badge bw">Warning</span> step() does NOT clear .grad — next iteration MUST call zero_grad().</p>',
+d:function(){var W=720,H=480,P=15;
+R(P,P,W-2*P,H-2*P,"#141010","#50d890",8,2);
+TC(P,30,W-2*P,"Parameter Update Rules",15,"#50d890",P);
+var rules=[{n:"SGD",f:"w = w - lr * grad",c:"#7b8cff"},{n:"SGD + Momentum",f:"v=b*v+grad; w=w-lr*v",c:"#ffc040"},{n:"Adam",f:"m=b1*m+(1-b1)*g; w-=lr*m_hat/(sqrt(v_hat)+eps)",c:"#50d890"}];
+var bx=60,by=70,bw=600,bh=60;
+for(var i=0;i<3;i++){
+  var cy=by+i*(bh+12);
+  R(bx,cy,bw,bh,rules[i].c+"10",rules[i].c,6,1.5);
+  TL(bx,cy+22,bw,rules[i].n,13,rules[i].c,15);
+  TL(bx+120,cy+22,bw-120,rules[i].f,11,"#f0e8e0",10);
+  TL(bx,cy+48,bw,"Convergence: O(1/sqrt(t)) convex; non-convex needs additional conditions",10,"#b0a090",15);
+}
+TC(P,300,W-2*P,"step() applies gradients but does NOT clear them",13,"#f05060",P);
+TC(P,340,W-2*P,"Next iteration MUST call zero_grad() to avoid accumulation",13,"#ffc040",P);
+}},
+
+{t:"Mode Management: model.train() vs model.eval()",p:"State Control",
+b:'<p>PyTorch modules maintain an internal <b>training state flag</b> controlling stateful layer behavior:</p><p><code>model.train()</code> — Dropout randomly zeros activations (MC regularization); BatchNorm updates running estimates.</p><p><code>model.eval()</code> — Dropout disabled; BatchNorm uses fixed statistics. Essential for <b>deterministic inference</b>.</p><p><span class="badge bw">Failure</span> eval() omission → Dropout active during validation → metrics biased and non-reproducible.</p>',
+d:function(){var W=720,H=480,P=15;
+var lx=30,ly=50,lw=320,lh=160;var rx=370,ry=50,rw=320,rh=160;
+R(lx,ly,lw,lh,"rgba(255,144,80,.1)","#ff9050",8,2);
+TC(lx,ly+22,lw,"model.train()",15,"#ff9050",P);
+TL(lx,ly+52,lw,"Dropout: active (stochastic reg)",11,"#f0e8e0",P);
+TL(lx,ly+76,lw,"BatchNorm: update running stats",11,"#f0e8e0",P);
+TL(lx,ly+100,lw,"Use: each training iteration",11,"#b0a090",P);
+TL(lx,ly+130,lw,"Gradient-enabled, graph built",10,"#ff9050",P);
+R(rx,ry,rw,rh,"rgba(80,216,144,.1)","#50d890",8,2);
+TC(rx,ry+22,rw,"model.eval()",15,"#50d890",P);
+TL(rx,ry+52,rw,"Dropout: disabled (identity)",11,"#f0e8e0",P);
+TL(rx,ry+76,rw,"BatchNorm: use fixed stats",11,"#f0e8e0",P);
+TL(rx,ry+100,rw,"Use: validation / inference",11,"#b0a090",P);
+TL(rx,ry+130,rw,"Deterministic forward pass",10,"#50d890",P);
+TC(P,260,W-2*P,"Forgetting eval() -> Dropout active during validation",13,"#f05060",P);
+TC(P,295,W-2*P,"-> Validation metrics biased, not reproducible",12,"#f05060",P);
+TC(P,345,W-2*P,"train() and eval() must appear as a matched pair in every epoch",13,"#ffc040",P);
+}},
+
+{t:"Gradient Flow Control: torch.no_grad()",p:"State Control",
+b:'<p><code>with torch.no_grad():</code> disables autograd tracking — no computation graph built, no intermediate activations stored.</p><p><span class="badge bt">Memory</span> 50% reduction — activations not retained for backward.</p><p><span class="badge bt">Speed</span> 25% faster — no graph construction overhead.</p><p><span class="badge bt">Safety</span> Impossible to accidentally mutate parameters during validation.</p><p><span class="badge bw">Never</span> wrap training in no_grad() — backward() needs the graph.</p>',
+d:function(){var W=720,H=480,P=15;
+R(P,P,W-2*P,H-2*P,"#141010","#7b8cff",8,2);
+TC(P,30,W-2*P,"torch.no_grad() - Disable Autograd Tracking",14,"#7b8cff",P);
+TC(P,65,W-2*P,"with torch.no_grad():  // all ops skip autograd",13,"#f0e8e0",P);
+TC(P,95,W-2*P,"No computation graph built, no activations stored",11,"#b0a090",P);
+// 3 benefit cards with generous spacing
+var cards=[{t:"Memory",v:"~ -50%",d:"No activations"}, {t:"Speed",v:"~ +25%",d:"Skip graph build"}, {t:"Safety",v:"100%",d:"No accidental grad"}];
+var cw=200,ch=90,startX=60,gap=20;
+for(var i=0;i<3;i++){
+  var cx=startX+i*(cw+gap);
+  R(cx,130,cw,ch,"rgba(80,216,144,.08)","#50d890",6,1.5);
+  TC(cx,155,cw,cards[i].t,14,"#50d890",10);
+  TC(cx,182,cw,cards[i].v,20,"#ffc040",10);
+  TC(cx,210,cw,cards[i].d,10,"#b0a090",10);
+}
+TC(P,260,W-2*P,"Always: eval() + no_grad() together during validation",13,"#ffc040",P);
+TC(P,300,W-2*P,"Never: train() + no_grad() - backward would have no graph",12,"#f05060",P);
+}},
+
+{t:"Gradient Accumulation: Large-Batch Emulation",p:"Advanced",
+b:'<p>When GPU memory limits batch size, <b>gradient accumulation</b> simulates larger batches: sum gradients over K micro-batches before calling step().</p><p><code>loss = criterion(pred,y) / K</code> — normalize so accumulated gradient equals large-batch gradient.</p><p>Effective batch = micro_batch × K. Memory used = micro_batch only.</p><p><span class="badge bw">BatchNorm caveat</span> BN stats per micro-batch ≠ per effective batch. Use SyncBN or momentum correction.</p>',
+d:function(){var W=720,H=480,P=15;
+R(P,P,W-2*P,H-2*P,"#141010","#ffc040",8,2);
+TC(P,30,W-2*P,"Gradient Accumulation: Effective Large Batch from Small Batches",14,"#ffc040",P);
+var bx=60,by=60,bw=600;
+["for i, (x,y) in enumerate(train_loader):","  loss = criterion(model(x), y) / K","  loss.backward()  // accumulate, do NOT zero!","  if (i+1) % K == 0:","    optimizer.step(); optimizer.zero_grad()"].forEach(function(l,j){
+  TL(bx,by+j*22,bw,l,11,"#b0a090",15);
+});
+TC(P,200,W-2*P,"K=4 micro-batches × 64 = effective batch 256, memory=64",12,"#50d890",P);
+TC(P,235,W-2*P,"BN stats: per micro-batch != per effective batch -> use SyncBN",11,"#f05060",P);
+TC(P,275,W-2*P,"This is the #1 memory optimization for single-GPU training",12,"#ffc040",P);
+}},
+
+{t:"Common Failure Modes",p:"Debugging",
+b:'<p>Training loop bugs <b>rarely throw exceptions</b> — they silently corrupt results. Systematic diagnosis is essential:</p><p><span class="badge bw">1</span> Forgetting zero_grad() → accumulated gradients → model fails to converge.</p><p><span class="badge bw">2</span> Loss explosion (NaN) → unstable init, excessive lr, or log(0).</p><p><span class="badge bw">3</span> Memory leak → storing loss tensors instead of loss.item().</p><p><span class="badge bw">4</span> Missing eval() → Dropout during validation → biased metrics.</p>',
+d:function(){var W=720,H=480,P=15;
+var bugs=[{t:"1. Gradient Contamination",s:"zero_grad() forgotten",c:"#f05060"},{t:"2. Loss Explosion (NaN)",s:"Unstable init or high lr",c:"#f05060"},{t:"3. Memory Leak",s:"loss tensor stored (not .item())",c:"#ff9050"},{t:"4. eval() Omission",s:"Dropout during validation",c:"#ff9050"}];
+var bx=30,by=30,bw=660,bh=60;
+bugs.forEach(function(b,i){
+  var cy=by+i*(bh+10);
+  R(bx,cy,bw,bh,b.c+"10",b.c,6,1.5);
+  TL(bx,cy+22,bw,b.t,14,b.c,15);
+  TL(bx+250,cy+22,bw-250,b.s,12,"#f0e8e0",10);
+  TL(bx,cy+50,bw,"Symptom: training appears normal but model silently degraded",10,"#b0a090",15);
+});
+TC(P,340,W-2*P,"Diagnostic: print(grad_norm), detect_anomaly(True), .item(), double-eval test",11,"#ffc040",P);
+}},
+
+{t:"Production Training Template",p:"Integration",
+b:'<p>The complete training loop integrating all best practices — AMP, gradient clipping, checkpointing, validation — is the <b>invariant skeleton</b> of all PyTorch training code.</p><p><span class="badge bd">Structure</span> Each epoch: (1) Training with train()+autocast() → (2) Validation with eval()+no_grad() → (3) Checkpoint if best → (4) Early stopping check.</p><div class="tip"><b>Golden Rule:</b> Establish a working single-GPU baseline BEFORE applying optimizations (AMP, compile, DDP).</div>',
+d:function(){var W=720,H=480,P=15;
+R(P,P,W-2*P,H-2*P,"#141010","#50d890",8,2);
+TC(P,30,W-2*P,"Production-Grade Training Template",14,"#50d890",P);
+var bx=40,by=55,bw=320;
+["for epoch in range(num_epochs):","  model.train()","  for x,y in train_loader:","    with autocast(): pred=model(x)","    loss=criterion(pred,y)/K","    scaler.scale(loss).backward()","    if (i+1)%K==0:","      scaler.step(opt); scaler.update()","      opt.zero_grad(set_to_none=True)","  model.eval()","  with torch.no_grad():","    ...validate...","  if val_loss < best: save()"].forEach(function(l,j){
+  TL(bx,by+j*20,bw,l,10,"#b0a090",10);
+});
+var rx=390,ry=55,rw=290;
+["This template is the","invariant skeleton of","all PyTorch training code.","","Model/data/optimizer","change per task.","","Loop structure is","UNIVERSAL.","","Golden Rule:","Baseline first,","optimize later."].forEach(function(l,j){
+  TC(rx,ry+j*26,rw,l,11,"#b0a090",10);
+});
+TC(P,420,W-2*P,"Establish working eager baseline BEFORE AMP, compile, or DDP",11,"#ffc040",P);
+}},
+
+{t:"Mixed Precision Training (AMP)",p:"Performance",
+b:'<p><b>Automatic Mixed Precision</b> (AMP) trains with FP16/BF16 for speed while keeping master weights in FP32 for stability:</p><p><code>with autocast(): output = model(x)</code> — auto-selects precision per operation.</p><p><code>scaler.scale(loss).backward()</code> — prevents gradient underflow in FP16.</p><p><span class="badge bt">BF16</span> on Ampere+ GPUs: same dynamic range as FP32, no GradScaler needed.</p><p><span class="badge bd">Effect</span> 1.5-3x speedup, ~50% memory reduction, near-zero accuracy loss.</p>',
+d:function(){var W=720,H=480,P=15;
+R(P,P,W-2*P,H-2*P,"#141010","#7b8cff",8,2);
+TC(P,30,W-2*P,"Automatic Mixed Precision (AMP)",14,"#7b8cff",P);
+var bx=60,by=60,bw=600;
+["scaler = GradScaler()","for x, y in train_loader:","  with autocast(): # auto FP16/BF16","    output = model(x)","    loss = criterion(output, y)","  scaler.scale(loss).backward()","  scaler.step(optimizer)","  scaler.update()"].forEach(function(l,j){
+  TL(bx,by+j*22,bw,l,11,"#b0a090",15);
+});
+var cards=[{t:"Speed",v:"1.5-3x",d:"FP16 matmul faster"},{t:"Memory",v:"~ -50%",d:"Half activations"},{t:"Accuracy",v:"~ 0% loss",d:"FP32 master weights"}];
+var cw=190,ch=80,cx=60,gap=20;
+for(var i=0;i<3;i++){var x=cx+i*(cw+gap);R(x,260,cw,ch,"rgba(80,216,144,.08)","#50d890",6,1.5);TC(x,285,cw,cards[i].t,14,"#50d890",10);TC(x,312,cw,cards[i].v,20,"#ffc040",10);TC(x,332,cw,cards[i].d,10,"#b0a090",10)}
+TC(P,380,W-2*P,"BF16 is preferred on Ampere+ GPUs: no GradScaler needed",12,"#ffc040",P);
+TC(P,410,W-2*P,"AMP should be enabled in ALL modern training scripts by default",11,"#ffc040",P);
+}},
+
+{t:"Debugging Toolkit and Best Practices",p:"Debugging",
+b:'<p>When training fails silently, systematic diagnosis beats intuition:</p><p><code>torch.autograd.set_detect_anomaly(True)</code> — traces the exact operation producing NaN.</p><p><code>torch.nn.utils.clip_grad_norm_(params, 1.0)</code> — prevents gradient explosion.</p><p><code>print(param.grad.norm())</code> — check gradient health every 100 steps.</p><p><span class="badge bt">Profiler</span> <code>torch.profiler</code> — identify CPU/GPU bottlenecks in the training loop.</p>',
+d:function(){var W=720,H=480,P=15;
+R(P,P,W-2*P,H-2*P,"#141010","#ffc040",8,2);
+TC(P,30,W-2*P,"Debugging Toolkit",14,"#ffc040",P);
+var tools=[{n:"detect_anomaly(True)",d:"Traces exact NaN-producing operation",c:"#f05060"},{n:"clip_grad_norm_(params,1.0)",d:"Prevents gradient explosion",c:"#ff9050"},{n:"print(grad_norm) every 100 steps",d:"Monitor gradient health",c:"#ffc040"},{n:"torch.profiler + chrome trace",d:"Identify CPU/GPU bottlenecks",c:"#7b8cff"}];
+var bx=40,by=60,bw=640,bh=50;
+tools.forEach(function(t,i){
+  var cy=by+i*(bh+10);
+  R(bx,cy,bw,bh,t.c+"10",t.c,6,1.5);
+  TL(bx,cy+20,bw,t.n,13,t.c,15);
+  TL(bx,cy+42,bw,t.d,11,"#b0a090",15);
+});
+TC(P,320,W-2*P,"Checklist: zero_grad()? eval()? no_grad()? .item()? grad_norm OK?",12,"#ffc040",P);
+TC(P,355,W-2*P,"If loss=NaN: detect_anomaly → clip_grad → reduce lr → check log(0)",11,"#b0a090",P);
+TC(P,390,W-2*P,"If GPU underutilized: DataLoader num_workers=0? pin_memory=False?",11,"#b0a090",P);
+}},
+];
+
+function R(x,y,w,h,f,s,rx,sw){var e=document.createElementNS(SVG_NS,"rect");e.setAttribute("x",x);e.setAttribute("y",y);e.setAttribute("width",w);e.setAttribute("height",h);e.setAttribute("fill",f);e.setAttribute("rx",rx||4);if(s){e.setAttribute("stroke",s);e.setAttribute("stroke-width",sw||1.5)}svgEl.appendChild(e)}
+function TC(x,y,w,t,sz,c,pad){pad=pad||15;var mw=w-2*pad,ew=t.length*(sz||13)*0.85;if(ew>mw)sz=(sz||13)*mw/ew;if(sz<8)sz=8;var e=document.createElementNS(SVG_NS,"text");e.setAttribute("x",x+w/2);e.setAttribute("y",y);e.setAttribute("fill",c||"#f0e8e0");e.setAttribute("font-size",sz);e.setAttribute("text-anchor","middle");e.setAttribute("font-weight","bold");e.textContent=t;svgEl.appendChild(e)}
+function TL(x,y,w,t,sz,c,pad){pad=pad||15;var mw=w-2*pad,ew=t.length*(sz||12)*0.85;if(ew>mw){var mc=Math.floor(mw/((sz||12)*0.85))-2;if(mc<3)mc=3;t=t.substring(0,mc)+".."}var e=document.createElementNS(SVG_NS,"text");e.setAttribute("x",x+pad);e.setAttribute("y",y);e.setAttribute("fill",c||"#f0e8e0");e.setAttribute("font-size",sz);e.setAttribute("text-anchor","start");e.textContent=t;svgEl.appendChild(e)}
+function L(x1,y1,x2,y2,c,sw){var e=document.createElementNS(SVG_NS,"line");e.setAttribute("x1",x1);e.setAttribute("y1",y1);e.setAttribute("x2",x2);e.setAttribute("y2",y2);e.setAttribute("stroke",c||"#3d3030");e.setAttribute("stroke-width",sw||1);svgEl.appendChild(e)}
+
+var cs=0,at=null,ia=false,N=S.length;
+function init(){
+  svgEl=document.getElementById("s");
+  for(var i=0;i<N;i++){var d=document.createElement("div");d.className="dot";d.onclick=(function(j){return function(){go(j)}})(i);document.getElementById("dots").appendChild(d)}
+  render();
+}
+function go(i){if(i<0||i>=N)return;cs=i;render()}
+function render(){
+  while(svgEl.firstChild)svgEl.removeChild(svgEl.firstChild);
+  var s=S[cs];document.getElementById("sn").textContent=(cs+1)+"/"+N;
+  document.getElementById("panel").innerHTML='<div class="tag">'+s.p+'</div><h2 class="step">'+s.t+'</h2><div class="desc">'+s.b+'</div>';
+  s.d();
+  var dots=document.querySelectorAll(".dot");
+  for(var i=0;i<dots.length;i++)dots[i].className="dot"+(i===cs?" on":i<cs?" ok":"");
+  document.getElementById("bp").disabled=cs===0;document.getElementById("bn").disabled=cs===N-1;
+}
+function next(){if(cs<N-1){cs++;render()}else sa()}
+function prev(){if(cs>0){cs--;render()}}
+function rst(){sa();cs=0;render()}
+function ta(){ia?sa():startA()}
+function startA(){ia=true;document.getElementById("ba").textContent="⏸ Pause";at=setInterval(next,2500)}
+function sa(){ia=false;if(at){clearInterval(at);at=null}document.getElementById("ba").textContent="▶ Auto"}
+document.addEventListener("keydown",function(e){if(e.key==="ArrowRight"){e.preventDefault();next()}else if(e.key==="ArrowLeft"){e.preventDefault();prev()}else if(e.key===" "){e.preventDefault();ta()}else if(e.key==="r"||e.key==="R"){e.preventDefault();rst()}});
+document.getElementById("bp").onclick=prev;document.getElementById("bn").onclick=next;document.getElementById("br").onclick=rst;document.getElementById("ba").onclick=ta;
+window.onload=init;
+</script>
+</body>
+</html>

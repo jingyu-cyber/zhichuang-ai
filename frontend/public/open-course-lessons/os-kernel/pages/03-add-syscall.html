@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>添加系统调用 — 操作系统内核构建</title>
+<style>:root{--bg:#0d1117;--bg-soft:#161b22;--bg-code:#0a0c10;--fg:#e6edf3;--fg-dim:#8b949e;--line:#30363d;--accent:#58a6ff;--accent-2:#3fb950;--grad:#d29922;--success:#3fb950;--danger:#f85149}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(88,166,255,.18);color:var(--accent)}.badge--tip{background:rgba(63,185,80,.18);color:var(--success)}.badge--warn{background:rgba(210,153,34,.18);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.code-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>第 3 节 &middot; 添加系统调用</h1>
+<span class="breadcrumb"><a href="../index.html">课程首页</a> / 内核启动与系统调用</span>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="explain"></div>
+<div class="panel-stage" id="stage"></div>
+</div>
+<div class="demo-controls">
+<button id="prevBtn">&larr; 上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="nextBtn">下一步 &rarr;</button>
+<button id="autoBtn">&#9654; 自动播放</button>
+</div>
+</div>
+<script>
+const S=[
+  {
+    t:"1. 定义系统调用号",
+    l:"#define SYS_mycall 22   // 分配新的调用号",
+    d:"在 <code>syscall.h</code> 中为新系统调用分配一个唯一的调用号。<br>例如 <code>SYS_mycall = 22</code>，所有系统调用号必须唯一，<br>这是 syscall table 的索引键。",
+    b:[{t:"编号分配",c:"badge--def"},{t:"syscall.h",c:"badge--tip"}],
+    r(svg){
+      svg.innerHTML='';svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <text x="400" y="35" text-anchor="middle" fill="var(--fg)" font-size="16" font-weight="700">定义新系统调用号</text>
+        <rect x="80" y="60" width="640" height="320" rx="8" fill="var(--bg)" stroke="var(--line)" stroke-width="1"/>
+        <text x="100" y="88" fill="var(--accent)" font-family="monospace" font-size="13">// include/syscall.h</text>
+        <line x1="100" y1="96" x2="700" y2="96" stroke="var(--line)" stroke-width="1"/>
+        <text x="100" y="120" fill="var(--fg-dim)" font-family="monospace" font-size="13">#define SYS_read     0</text>
+        <text x="100" y="144" fill="var(--fg-dim)" font-family="monospace" font-size="13">#define SYS_write    1</text>
+        <text x="100" y="168" fill="var(--fg-dim)" font-family="monospace" font-size="13">#define SYS_open     2</text>
+        <text x="100" y="192" fill="var(--fg-dim)" font-family="monospace" font-size="13">...</text>
+        <rect x="90" y="208" width="620" height="30" rx="4" fill="rgba(63,185,80,.12)"/>
+        <text x="110" y="229" fill="var(--accent-2)" font-family="monospace" font-size="14" font-weight="700">#define SYS_mycall   22   // ← 新增！</text>
+        <text x="100" y="260" fill="var(--fg-dim)" font-family="monospace" font-size="13">...</text>
+        <text x="100" y="284" fill="var(--fg-dim)" font-family="monospace" font-size="13">#define SYS_execve   59</text>
+        <rect x="90" y="300" width="620" height="30" rx="4" fill="rgba(88,166,255,.08)"/>
+        <text x="110" y="321" fill="var(--accent)" font-family="monospace" font-size="13">#define NUM_SYSCALLS 60  // 从 59 → 60</text>
+        <text x="100" y="355" fill="var(--fg-dim)" font-family="monospace" font-size="13">// 总调用数也要更新！</text>
+        <!-- Highlight -->
+        <rect x="90" y="208" width="620" height="30" rx="4" fill="none" stroke="var(--accent-2)" stroke-width="2">
+          <animate attributeName="opacity" values="1;0.3;1" dur="1.8s" repeatCount="indefinite"/>
+        </rect>`;
+      svg.appendChild(g);
+    }
+  },
+  {
+    t:"2. 编写内核处理函数",
+    l:"int sys_mycall(int a, int b) { return a + b; }",
+    d:"在 <code>syscall.c</code>（或专用文件）中实现内核处理函数。<br>函数签名遵循系统调用约定：<code>int sys_XXX(args...)</code>，<br>参数通过寄存器传递，返回值放在 <code>%eax</code>。",
+    b:[{t:"实现",c:"badge--def"},{t:"syscall.c",c:"badge--tip"}],
+    r(svg){
+      svg.innerHTML='';svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <text x="400" y="35" text-anchor="middle" fill="var(--fg)" font-size="16" font-weight="700">实现内核处理函数</text>
+        <rect x="40" y="55" width="340" height="200" rx="8" fill="var(--bg)" stroke="var(--line)" stroke-width="1"/>
+        <text x="60" y="80" fill="var(--accent)" font-family="monospace" font-size="12">// kernel/syscall.c</text>
+        <line x1="60" y1="88" x2="360" y2="88" stroke="var(--line)" stroke-width="1"/>
+        <text x="60" y="112" fill="var(--fault)" font-family="monospace" font-size="12">int</text>
+        <text x="90" y="112" fill="var(--accent-2)" font-family="monospace" font-size="13" font-weight="700">sys_mycall</text>
+        <text x="195" y="112" fill="var(--fg-dim)" font-family="monospace" font-size="12">(int a, int b) {</text>
+        <text x="80" y="136" fill="var(--fg-dim)" font-family="monospace" font-size="12">int result = a + b;</text>
+        <text x="80" y="160" fill="var(--fg-dim)" font-family="monospace" font-size="12">cprintf("mycall: %d+%d=%d</text>
+        <text x="285" y="160" fill="var(--fg-dim)" font-family="monospace" font-size="12">", a, b, result);</text>
+        <text x="80" y="184" fill="var(--accent)" font-family="monospace" font-size="12">return</text>
+        <text x="145" y="184" fill="var(--fg-dim)" font-family="monospace" font-size="12">result;   // 返回值 → eax</text>
+        <text x="60" y="208" fill="var(--fg-dim)" font-family="monospace" font-size="12">}</text>
+        <!-- Right: register convention -->
+        <rect x="420" y="55" width="350" height="200" rx="8" fill="var(--bg)" stroke="var(--line)" stroke-width="1"/>
+        <text x="440" y="80" fill="var(--grad)" font-family="monospace" font-size="12" font-weight="700">调用约定 (x86 syscall)</text>
+        <text x="440" y="105" fill="var(--fg-dim)" font-family="monospace" font-size="12">eax ← 系统调用号</text>
+        <text x="440" y="128" fill="var(--fg-dim)" font-family="monospace" font-size="12">ebx ← 参数1 (int a)</text>
+        <text x="440" y="151" fill="var(--fg-dim)" font-family="monospace" font-size="12">ecx ← 参数2 (int b)</text>
+        <text x="440" y="174" fill="var(--fg-dim)" font-family="monospace" font-size="12">edx ← 参数3</text>
+        <text x="440" y="197" fill="var(--fg-dim)" font-family="monospace" font-size="12">esi ← 参数4</text>
+        <text x="440" y="220" fill="var(--fg-dim)" font-family="monospace" font-size="12">edi ← 参数5</text>
+        <text x="440" y="243" fill="var(--accent-2)" font-family="monospace" font-size="12" font-weight="600">eax ← 返回值</text>
+        <!-- Flow: code to syscall convention -->
+        <line x1="380" y1="130" x2="420" y2="130" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <!-- Bottom: explanation note -->
+        <rect x="40" y="280" width="730" height="170" rx="8" fill="rgba(88,166,255,.06)" stroke="var(--accent)" stroke-width="1" stroke-dasharray="4,2"/>
+        <text x="400" y="310" text-anchor="middle" fill="var(--accent)" font-size="13">内核函数从 trapframe 中读取参数</text>
+        <text x="60" y="340" fill="var(--fg-dim)" font-family="monospace" font-size="12">int sys_mycall(void) {</text>
+        <text x="80" y="365" fill="var(--fg-dim)" font-family="monospace" font-size="12">struct trapframe *tf = myproc()->tf;  // 获取当前进程的 trapframe</text>
+        <text x="80" y="390" fill="var(--fg-dim)" font-family="monospace" font-size="12">int a = tf->ebx;  int b = tf->ecx;    // 从寄存器取参数</text>
+        <text x="80" y="415" fill="var(--fg-dim)" font-family="monospace" font-size="12">tf->eax = a + b;                       // 返回值放入 eax</text>
+        <text x="80" y="440" fill="var(--fg-dim)" font-family="monospace" font-size="12">return 0;</text>
+        <text x="60" y="445" fill="var(--fg-dim)" font-family="monospace" font-size="12">}</text>`;
+      svg.appendChild(g);
+    }
+  },
+  {
+    t:"3. 注册到系统调用表",
+    l:"syscalls[SYS_mycall] = sys_mycall;  // 填充跳转表",
+    d:"在 <code>syscall.c</code> 的 <code>syscalls[]</code> 数组中，<br>将 <code>SYS_mycall</code> 索引位置填入 <code>sys_mycall</code> 函数指针。<br>这样 dispatcher 就能根据调用号找到对应函数。",
+    b:[{t:"跳转表",c:"badge--def"},{t:"函数指针",c:"badge--warn"}],
+    r(svg){
+      svg.innerHTML='';svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <text x="400" y="35" text-anchor="middle" fill="var(--fg)" font-size="16" font-weight="700">注册到系统调用跳转表</text>
+        <rect x="60" y="55" width="680" height="340" rx="8" fill="var(--bg)" stroke="var(--line)" stroke-width="1"/>
+        <text x="80" y="80" fill="var(--accent)" font-family="monospace" font-size="12">// kernel/syscall.c — 系统调用跳转表</text>
+        <line x1="80" y1="88" x2="720" y2="88" stroke="var(--line)" stroke-width="1"/>
+        <text x="80" y="112" fill="var(--fg-dim)" font-family="monospace" font-size="12">static int (*syscalls[])(void) = {</text>
+        <rect x="80" y="122" width="640" height="22" rx="3" fill="rgba(88,166,255,.06)"/>
+        <text x="100" y="138" fill="var(--fg-dim)" font-family="monospace" font-size="11">[SYS_read]    = sys_read,        //  0</text>
+        <rect x="80" y="150" width="640" height="22" rx="3" fill="rgba(88,166,255,.06)"/>
+        <text x="100" y="166" fill="var(--fg-dim)" font-family="monospace" font-size="11">[SYS_write]   = sys_write,       //  1</text>
+        <rect x="80" y="178" width="640" height="22" rx="3" fill="rgba(88,166,255,.06)"/>
+        <text x="100" y="194" fill="var(--fg-dim)" font-family="monospace" font-size="11">[SYS_open]    = sys_open,        //  2</text>
+        <text x="80" y="222" fill="var(--fg-dim)" font-family="monospace" font-size="12">    ...</text>
+        <rect x="80" y="245" width="640" height="28" rx="4" fill="rgba(63,185,80,.15)"/>
+        <text x="100" y="264" fill="var(--accent-2)" font-family="monospace" font-size="12" font-weight="700">[SYS_mycall]  = sys_mycall,      // 22  ← 新增！</text>
+        <text x="80" y="295" fill="var(--fg-dim)" font-family="monospace" font-size="12">    ...</text>
+        <rect x="80" y="305" width="640" height="22" rx="3" fill="rgba(88,166,255,.06)"/>
+        <text x="100" y="321" fill="var(--fg-dim)" font-family="monospace" font-size="11">[SYS_execve]  = sys_execve,      // 59</text>
+        <text x="80" y="355" fill="var(--fg-dim)" font-family="monospace" font-size="12">};</text>
+        <!-- Highlight -->
+        <rect x="80" y="245" width="640" height="28" rx="4" fill="none" stroke="var(--accent-2)" stroke-width="2">
+          <animate attributeName="opacity" values="1;0.3;1" dur="1.8s" repeatCount="indefinite"/>
+        </rect>
+        <!-- Dispatcher code below -->
+        <text x="400" y="430" text-anchor="middle" fill="var(--fg-dim)" font-size="12">dispatcher: syscalls[tf->eax]() — 通过函数指针调用</text>
+        <line x1="400" y1="383" x2="400" y2="415" stroke="var(--accent-2)" stroke-width="1.5" stroke-dasharray="4,3"/>`;
+      svg.appendChild(g);
+    }
+  },
+  {
+    t:"4. 用户态调用新系统调用",
+    l:"result = syscall(SYS_mycall, 3, 7);  // result = 10",
+    d:"在用户程序中，通过封装的 <code>syscall()</code> 宏/函数发起调用。<br>设置 <code>eax=SYS_mycall, ebx=3, ecx=7</code>，<br>执行 <code>int $0x80</code>，内核处理后返回 <code>eax=10</code>。",
+    b:[{t:"用户调用",c:"badge--tip"},{t:"端到端",c:"badge--def"}],
+    r(svg){
+      svg.innerHTML='';svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <text x="400" y="30" text-anchor="middle" fill="var(--fg)" font-size="16" font-weight="700">用户态调用新系统调用 — 端到端流程</text>
+        <!-- User side -->
+        <rect x="30" y="55" width="340" height="110" rx="8" fill="rgba(63,185,80,.08)" stroke="var(--accent-2)" stroke-width="1"/>
+        <text x="200" y="80" text-anchor="middle" fill="var(--accent-2)" font-size="13" font-weight="600">User Program (Ring 3)</text>
+        <rect x="50" y="95" width="300" height="55" rx="6" fill="var(--bg)"/>
+        <text x="200" y="115" text-anchor="middle" fill="var(--accent-2)" font-family="monospace" font-size="12">result = mycall(3, 7);</text>
+        <text x="200" y="138" text-anchor="middle" fill="var(--fg-dim)" font-family="monospace" font-size="11">→ eax=22, ebx=3, ecx=7, int $0x80</text>
+        <!-- Arrow -->
+        <line x1="370" y1="110" x2="430" y2="110" stroke="var(--grad)" stroke-width="2.5" marker-end="url(#arrT)"/>
+        <text x="400" y="102" text-anchor="middle" fill="var(--grad)" font-size="10" font-weight="600">trap</text>
+        <!-- Kernel side -->
+        <rect x="430" y="55" width="340" height="110" rx="8" fill="rgba(88,166,255,.08)" stroke="var(--accent)" stroke-width="1"/>
+        <text x="600" y="80" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="600">Kernel (Ring 0)</text>
+        <rect x="450" y="95" width="300" height="55" rx="6" fill="var(--bg)"/>
+        <text x="600" y="115" text-anchor="middle" fill="var(--accent)" font-family="monospace" font-size="12">syscalls[22](tf)</text>
+        <text x="600" y="138" text-anchor="middle" fill="var(--fg-dim)" font-family="monospace" font-size="11">→ sys_mycall → tf->eax = 10</text>
+        <!-- Return arrow -->
+        <line x1="430" y1="150" x2="370" y2="150" stroke="var(--accent-2)" stroke-width="2.5" marker-end="url(#arrG)"/>
+        <text x="400" y="142" text-anchor="middle" fill="var(--accent-2)" font-size="10" font-weight="600">return 10</text>
+        <!-- Bottom: Full flow sequence -->
+        <text x="400" y="210" text-anchor="middle" fill="var(--fg)" font-size="14" font-weight="700">端到端时间线</text>
+        <rect x="30" y="230" width="740" height="6" rx="3" fill="var(--line)"/>
+        <circle cx="80" cy="233" r="10" fill="var(--accent-2)"/><text x="80" y="258" text-anchor="middle" fill="var(--accent-2)" font-size="11">User</text>
+        <text x="80" y="273" text-anchor="middle" fill="var(--fg-dim)" font-size="10">mycall(3,7)</text>
+        <line x1="80" y1="233" x2="180" y2="233" stroke="var(--grad)" stroke-width="2"/>
+        <circle cx="180" cy="233" r="10" fill="var(--grad)"/><text x="180" y="258" text-anchor="middle" fill="var(--grad)" font-size="11">Trap</text>
+        <text x="180" y="273" text-anchor="middle" fill="var(--fg-dim)" font-size="10">int 0x80</text>
+        <line x1="180" y1="233" x2="320" y2="233" stroke="var(--accent)" stroke-width="2"/>
+        <circle cx="320" cy="233" r="10" fill="var(--accent)"/><text x="320" y="258" text-anchor="middle" fill="var(--accent)" font-size="11">Dispatch</text>
+        <text x="320" y="273" text-anchor="middle" fill="var(--fg-dim)" font-size="10">syscalls[22]</text>
+        <line x1="320" y1="233" x2="480" y2="233" stroke="var(--accent)" stroke-width="2"/>
+        <circle cx="480" cy="233" r="10" fill="var(--accent)"/><text x="480" y="258" text-anchor="middle" fill="var(--accent)" font-size="11">Execute</text>
+        <text x="480" y="273" text-anchor="middle" fill="var(--fg-dim)" font-size="10">3+7=10</text>
+        <line x1="480" y1="233" x2="600" y2="233" stroke="var(--accent-2)" stroke-width="2"/>
+        <circle cx="600" cy="233" r="10" fill="var(--accent-2)"/><text x="600" y="258" text-anchor="middle" fill="var(--accent-2)" font-size="11">Return</text>
+        <text x="600" y="273" text-anchor="middle" fill="var(--fg-dim)" font-size="10">eax=10</text>
+        <line x1="600" y1="233" x2="700" y2="233" stroke="var(--accent-2)" stroke-width="2"/>
+        <circle cx="700" cy="233" r="10" fill="var(--accent-2)"/><text x="700" y="258" text-anchor="middle" fill="var(--accent-2)" font-size="11">User</text>
+        <text x="700" y="273" text-anchor="middle" fill="var(--fg-dim)" font-size="10">result=10</text>
+        <!-- Pulse on user -->
+        <circle cx="80" cy="233" r="15" fill="none" stroke="var(--accent-2)" stroke-width="2" opacity="0.5">
+          <animate attributeName="r" from="10" to="25" dur="1.2s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" from="0.5" to="0" dur="1.2s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="700" cy="233" r="15" fill="none" stroke="var(--accent-2)" stroke-width="2" opacity="0.5">
+          <animate attributeName="r" from="10" to="25" dur="1.2s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" from="0.5" to="0" dur="1.2s" repeatCount="indefinite"/>
+        </circle>
+        <!-- Code recap -->
+        <rect x="30" y="295" width="740" height="160" rx="8" fill="var(--bg)"/>
+        <text x="50" y="320" fill="var(--accent-2)" font-family="monospace" font-size="12">// User program:  usertests.c</text>
+        <text x="50" y="345" fill="var(--fg-dim)" font-family="monospace" font-size="12">#include "user.h"</text>
+        <text x="50" y="368" fill="var(--fg-dim)" font-family="monospace" font-size="12">void test_mycall() {</text>
+        <text x="70" y="391" fill="var(--fg-dim)" font-family="monospace" font-size="12">int r = mycall(3, 7);</text>
+        <text x="70" y="414" fill="var(--fg-dim)" font-family="monospace" font-size="12">printf(1, "mycall(3,7) = %d</text>
+        <text x="285" y="414" fill="var(--fg-dim)" font-family="monospace" font-size="12">", r);  // prints "mycall(3,7) = 10"</text>
+        <text x="50" y="437" fill="var(--fg-dim)" font-family="monospace" font-size="12">}</text>
+        <defs><marker id="arrT" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--grad)"/></marker>
+        <marker id="arrG" markerWidth="8" markerHeight="6" refX="0" refY="3" orient="auto"><polygon points="8 0,0 3,8 6" fill="var(--accent-2)"/></marker></defs>`;
+      svg.appendChild(g);
+    }
+  }
+];
+
+let step=0,autoTimer=null,autoOn=false;
+const explain=document.getElementById('explain'),stage=document.getElementById('stage'),dots=document.getElementById('dots');
+const prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn'),autoBtn=document.getElementById('autoBtn');
+function render(){
+  const s=S[step];
+  explain.innerHTML=`<div class="step-title">${s.t}</div>${s.l?`<div class="code-line">${s.l}</div>`:''}<div class="badge-row">${s.b.map(b=>`<span class="badge ${b.c||'badge--def'}">${b.t}</span>`).join('')}</div><div class="step-desc">${s.d}</div>`;
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('viewBox','0 0 800 480');svg.style.width='100%';svg.style.height='100%';
+  stage.innerHTML='';stage.appendChild(svg);s.r(svg);
+  dots.innerHTML=S.map((_,i)=>{let cls=i===step?'active':i<step?'done':'';return `<span class="step-dot ${cls}"></span>`;}).join('');
+  prevBtn.disabled=step===0;nextBtn.disabled=step===S.length-1;
+}
+function next(){if(step<S.length-1){step++;render();}}
+function prev(){if(step>0){step--;render();}}
+function restart(){step=0;render();}
+function toggleAuto(){
+  if(autoTimer){clearInterval(autoTimer);autoTimer=null;autoOn=false;autoBtn.innerHTML='&#9654; 自动播放';}
+  else{autoOn=true;autoBtn.innerHTML='&#9646;&#9646; 停止';autoTimer=setInterval(()=>{if(step<S.length-1){step++;render();}else{clearInterval(autoTimer);autoTimer=null;autoOn=false;autoBtn.innerHTML='&#9654; 自动播放';}},3000);}
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();next();}
+  else if(e.key==='ArrowLeft'){e.preventDefault();prev();}
+  else if(e.key==='r'||e.key==='R'){e.preventDefault();restart();}
+  else if(e.key==='a'||e.key==='A'){e.preventDefault();toggleAuto();}
+});
+prevBtn.onclick=prev;nextBtn.onclick=next;autoBtn.onclick=toggleAuto;render();
+</script>
+</body>
+</html>

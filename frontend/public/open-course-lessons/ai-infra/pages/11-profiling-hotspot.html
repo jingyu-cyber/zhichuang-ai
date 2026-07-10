@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Profiling 热点分析 — AI基础设施</title>
+<style>
+:root{--bg:#0a0e14;--bg-soft:#141b22;--bg-code:#06080c;--fg:#d0e0e8;--fg-dim:#607888;--line:#1c2836;--accent:#00e5a0;--accent-2:#b050ff;--grad:#40a0ff;--success:#30d060;--danger:#ff8020}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(176,80,255,.18);color:var(--accent-2)}.badge--tip{background:rgba(0,229,160,.15);color:var(--accent)}.badge--warn{background:rgba(255,128,32,.18);color:var(--danger)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.code-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 12px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+  <div class="demo-header">
+    <div>
+      <div class="breadcrumb"><a href="../index.html">AI基础设施</a> / 第4章 /</div>
+      <h1>4.2 Profiling 热点分析</h1>
+    </div>
+    <div class="badge-row">
+      <span class="badge badge--def">性能分析</span>
+      <span class="badge badge--warn">Profiling</span>
+    </div>
+  </div>
+  <div class="demo-main">
+    <div class="panel-explain" id="explain"></div>
+    <div class="panel-stage" id="stage"></div>
+  </div>
+  <div class="demo-controls">
+    <button id="btn-prev">&larr; 上一步</button>
+    <div class="step-dots" id="dots"></div>
+    <button id="btn-next">下一步 &rarr;</button>
+  </div>
+</div>
+<script>
+const S=[{
+  t:"Kernel 执行时间线",
+  l:"Nsight / nsys profile → kernel timeline bars",
+  d:"使用 NVIDIA Nsight Systems 或 nsys 命令行工具可以生成详细的 GPU kernel 执行时间线。时间线显示每个 kernel 的启动时间和持续时长，按颜色区分 kernel 类型。热点(hotspot)是耗时最长或频繁调用的 kernel。",
+  b:["Nsight","Timeline","Kernel Bars"],
+  r:function(svg){
+    function E(t,a,tx){let e=document.createElementNS("http://www.w3.org/2000/svg",t);for(let k in a)e.setAttribute(k,a[k]);if(tx)e.textContent=tx;return e;}
+    svg.setAttribute("viewBox","0 0 800 420");svg.style.background="#06080c";
+
+    svg.append(E("text",{x:400,y:18,fill:"#d0e0e8","font-size":"14","font-weight":"700","text-anchor":"middle"},"GPU Kernel Timeline — 1 Training Step"));
+
+    // Stream labels
+    let streams=["Default","Stream 14","Stream 21","Stream 15"];
+    let sColors=["#607888","#40a0ff","#b050ff","#00e5a0"];
+
+    streams.forEach((s,i)=>{
+      svg.append(E("text",{x:10,y:45+i*65,fill:sColors[i],"font-size":"10","font-family":"JetBrains Mono,monospace"},s));
+    });
+
+    // Kernel bars: [stream, x, width, label, duration_us, color]
+    let kernels=[
+      [0,80,90,"cudaMemset",45,"#607888"],
+      [0,190,45,"cuFFT",22,"#607888"],
+      [1,80,120,"volta_sgemm_128x128_nn",520,"#40a0ff"],
+      [1,220,80,"volta_sgemm_64x64_nn",180,"#40a0ff"],
+      [1,320,60,"elementwise_kernel",30,"#40a0ff"],
+      [2,80,70,"batch_norm_fp16",95,"#b050ff"],
+      [2,170,60,"relu_kernel",28,"#b050ff"],
+      [2,250,80,"reduce_kernel",60,"#b050ff"],
+      [3,80,55,"ncclAllReduce",340,"#00e5a0"],
+      [3,160,50,"layer_norm_kernel",25,"#00e5a0"],
+      [3,230,70,"adam_update",85,"#00e5a0"],
+    ];
+
+    kernels.forEach(k=>{
+      let y=38+k[0]*65;
+      let hue=k[4]<100?"#30d060":k[4]>300?"#ff8020":"#40a0ff";
+      svg.append(E("rect",{x:k[1],y:y,width:k[2],height:30,rx:4,fill:hue,opacity:"0.7",stroke:hue,"stroke-width":"1"}));
+      // Label inside if wide enough
+      if(k[2]>60){
+        svg.append(E("text",{x:k[1]+5,y:y+20,fill:"#fff","font-size":"8","font-family":"JetBrains Mono,monospace"},k[3]));
+      }
+      // Duration label
+      svg.append(E("text",{x:k[1]+k[2]+5,y:y+20,fill:"#607888","font-size":"8","font-family":"JetBrains Mono,monospace"},k[4]+"us"));
+    });
+
+    // Hotspot highlight
+    // volta_sgemm_128x128_nn is the hotspot
+    svg.append(E("rect",{x:80,y:38+1*65,width:120,height:30,rx:4,fill:"none",stroke:"#ff8020","stroke-width":"2.5","stroke-dasharray":"4,2"}));
+    svg.append(E("text",{x:140,y:38+1*65-8,fill:"#ff8020","font-size":"9","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"HOTSPOT 520us"));
+
+    // Time axis
+    svg.append(E("line",{x1:70,y1:340,x2:700,y2:340,stroke:"#1c2836","stroke-width":"1"}));
+    for(let t=0;t<=600;t+=100){
+      svg.append(E("text",{x:70+t*0.9,y:355,fill:"#607888","font-size":"8","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},t+"us"));
+    }
+    svg.append(E("text",{x:400,y:380,fill:"#607888","font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Total step time: ~940us. Hotspot: sgemm_128x128 = 55% of step time."));
+  }
+},{
+  t:"热点调用栈分析",
+  l:"Click hotspot → call stack + memory bandwidth usage",
+  d:"定位热点 kernel 后，分析其调用栈可以追溯到模型代码的哪个算子、哪一层。同时检查该 kernel 的内存带宽利用率——如果 SM 利用率高但带宽低，说明是 memory-bound，应该优化数据布局；反之如果带宽高但 SM 低，则计算是瓶颈。",
+  b:["Call Stack","Hotspot","Memory BW"],
+  r:function(svg){
+    function E(t,a,tx){let e=document.createElementNS("http://www.w3.org/2000/svg",t);for(let k in a)e.setAttribute(k,a[k]);if(tx)e.textContent=tx;return e;}
+    svg.setAttribute("viewBox","0 0 800 420");svg.style.background="#06080c";
+
+    // Call stack (left side)
+    svg.append(E("text",{x:160,y:22,fill:"#ff8020","font-size":"14","font-weight":"700","text-anchor":"middle"},"Call Stack"));
+
+    let stack=[
+      {l:"sgemm_128x128_nn [CUDA]",c:"#ff8020",d:"520us",x:80,y:45},
+      {l:" + cublasGemmEx()",c:"#40a0ff",d:"",x:100,y:75},
+      {l:"  + aten::linear()",c:"#b050ff",d:"",x:120,y:105},
+      {l:"   + TransformerLayer.forward()",c:"#00e5a0",d:"",x:140,y:135},
+      {l:"    + Block 0, Layer 3 (Self-Attn QKV)",c:"#607888",d:"",x:160,y:165},
+    ];
+
+    stack.forEach(s=>{
+      svg.append(E("text",{x:s.x,y:s.y,fill:s.c,"font-size":"11","font-family":"JetBrains Mono,monospace"},s.l));
+      if(s.d)svg.append(E("text",{x:400,y:s.y,fill:"#ff8020","font-size":"10","font-family":"JetBrains Mono,monospace"},s.d));
+    });
+
+    // Connection lines
+    svg.append(E("line",{x1:190,y1:42,x2:190,y2:82,stroke:"#607888","stroke-width":"1"}));
+    svg.append(E("line",{x1:210,y1:72,x2:210,y2:112,stroke:"#607888","stroke-width":"1"}));
+    svg.append(E("line",{x1:230,y1:102,x2:230,y2:142,stroke:"#607888","stroke-width":"1"}));
+
+    // Memory bandwidth gauge
+    svg.append(E("text",{x:620,y:22,fill:"#40a0ff","font-size":"14","font-weight":"700","text-anchor":"middle"},"Memory Bandwidth"));
+
+    // Gauge arc
+    let gx=620,gy=140,gr=80;
+    for(let a=-180;a<=0;a+=5){
+      let rad=a*Math.PI/180;
+      let x1=gx+(gr-15)*Math.cos(rad),y1=gy+(gr-15)*Math.sin(rad);
+      let x2=gx+gr*Math.cos(rad),y2=gy+gr*Math.sin(rad);
+      let hue=a<-90?"#30d060":a<-45?"#40a0ff":"#ff8020";
+      svg.append(E("line",{x1:x1,y1:y1,x2:x2,y2:y2,stroke:hue,"stroke-width":"3",opacity:Math.abs(a)<90?"0.4":"0.15"}));
+    }
+
+    // Needle (pointing to ~42%)
+    let needleAngle=(-180+42*1.8)*Math.PI/180;
+    svg.append(E("line",{x1:gx,y1:gy,x2:gx+(gr-35)*Math.cos(needleAngle),y2:gy+(gr-35)*Math.sin(needleAngle),stroke:"#d0e0e8","stroke-width":"2.5"}));
+    svg.append(E("circle",{cx:gx,cy:gy,r:5,fill:"#d0e0e8"}));
+
+    svg.append(E("text",{x:gx,y:gy+20,fill:"#40a0ff","font-size":"22","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"42%"));
+    svg.append(E("text",{x:gx,y:gy+40,fill:"#607888","font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"of peak HBM BW"));
+
+    // Diagnosis box
+    svg.append(E("rect",{x:430,y:200,width:350,height:120,rx:8,fill:"rgba(255,128,32,0.05)",stroke:"#ff8020","stroke-width":"1.5"}));
+    svg.append(E("text",{x:605,y:225,fill:"#ff8020","font-size":"12","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Diagnosis: Memory-Bound"));
+    svg.append(E("text",{x:605,y:250,fill:"#d0e0e8","font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"SM Utilization: 91% | Mem BW: 42%"));
+    svg.append(E("text",{x:605,y:275,fill:"#607888","font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Root cause: Matrix too small (128x128)"));
+    svg.append(E("text",{x:605,y:296,fill:"#00e5a0","font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Fix: Fuse with next op or increase tile size"));
+
+    // Key metrics below
+    svg.append(E("text",{x:400,y:360,fill:"#607888","font-size":"11","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Nsight Compute Metrics: sm__warps_active.avg.pct_of_peak = 91%  |  dram__throughput.avg.pct_of_peak = 42%"));
+  }
+},{
+  t:"瓶颈定位决策树",
+  l:"Is it memory-bound or compute-bound? → pick strategy",
+  d:"分析 GPU kernel 瓶颈的决策流程：1)检查 SM 利用率 vs 内存带宽利用率；2)Memory-bound → 减少数据移动（融合、layout优化、shared memory 缓存）；3)Compute-bound → 增加并发(更优的 tile 大小、tensor core 使用)；4)Launch overhead large → 考虑 kernel fusion。",
+  b:["Decision Tree","Diagnosis","Strategy"],
+  r:function(svg){
+    function E(t,a,tx){let e=document.createElementNS("http://www.w3.org/2000/svg",t);for(let k in a)e.setAttribute(k,a[k]);if(tx)e.textContent=tx;return e;}
+    svg.setAttribute("viewBox","0 0 800 420");svg.style.background="#06080c";
+
+    svg.append(E("text",{x:400,y:18,fill:"#d0e0e8","font-size":"14","font-weight":"700","text-anchor":"middle"},"Kernel Bottleneck Diagnosis Flow"));
+
+    // Decision tree
+    function box(x,y,w,h,label,color){
+      svg.append(E("rect",{x:x-w/2,y:y,width:w,height:h,rx:8,fill:"rgba(0,229,160,0.05)",stroke:color,"stroke-width":"1.5"}));
+      svg.append(E("text",{x:x,y:y+h/2+4,fill:color,"font-size":"10","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},label));
+      return {x:x,y:y+h,w:w};
+    }
+    function conn(x1,y1,x2,y2,label,color){
+      svg.append(E("line",{x1:x1,y1:y1,x2:x2,y2:y2,stroke:color||"#607888","stroke-width":"1.5","marker-end":"url(#ar)"}));
+      if(label){
+        let mx=(x1+x2)/2,my=(y1+y2)/2-5;
+        svg.append(E("text",{x:mx,y:my,fill:color||"#607888","font-size":"9","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},label));
+      }
+    }
+
+    let defs=E("defs");let ar=E("marker",{id:"ar",viewBox:"0 0 10 10",refX:"9",refY:"5",markerWidth:"4",markerHeight:"4",orient:"auto"});ar.append(E("path",{d:"M0,0 L10,5 L0,10 Z",fill:"#607888"}));defs.append(ar);svg.append(defs);
+
+    let root=box(400,35,260,36,"Kernel > 10% step time?","#d0e0e8");
+    box(220,100,180,36,"SM Util > 80%?","#40a0ff");
+    box(580,100,180,36,"Launch overhead?","#b050ff");
+
+    conn(400,71,220,100,"Yes","#00e5a0");
+    conn(400,71,580,100,"No","#ff8020");
+
+    box(120,170,150,36,"Mem BW > 80%?","#40a0ff");
+    box(320,170,150,36,"Mem-bound\n(opt layout)","#ff8020");
+
+    conn(220,136,120,170,"Yes","#00e5a0");
+    conn(220,136,320,170,"No","#ff8020");
+
+    box(120,240,150,30,"Compute-bound\n(tile size)","#00e5a0");
+    box(320,240,150,30,"Mem-bound\n(fuse/smem)","#40a0ff");
+
+    conn(120,206,120,240,"Yes","#00e5a0");
+    conn(120,206,320,240,"No","#ff8020");
+
+    box(580,170,150,30,"Fuse kernels\nreduce launch overhead","#b050ff");
+    conn(580,136,580,170,"Yes","#ff8020");
+
+    // Bottom strategies
+    svg.append(E("text",{x:400,y:310,fill:"#00e5a0","font-size":"12","font-weight":"700","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},"Common Optimization Strategies"));
+
+    let strats2=[
+      {l:"Memory-bound → Fuse ops, use Shared Mem, reduce data movement",c:"#ff8020"},
+      {l:"Compute-bound → Larger tile, Tensor Cores, FP8 quantization",c:"#00e5a0"},
+      {l:"Launch overhead → Kernel fusion, CUDA Graph replay",c:"#b050ff"},
+      {l:"Occupancy low → Reduce register usage, adjust block size",c:"#40a0ff"},
+    ];
+
+    strats2.forEach((s,i)=>{
+      svg.append(E("text",{x:400,y:335+i*22,fill:s.c,"font-size":"10","text-anchor":"middle","font-family":"JetBrains Mono,monospace"},s.l));
+    });
+  }
+}];
+
+let step=0;
+function render(i){
+  step=((i%S.length)+S.length)%S.length;
+  let s=S[step];
+  document.getElementById("explain").innerHTML=`
+    <div class="step-title">${s.t}</div>
+    <div class="badge-row">${s.b.map(b=>'<span class="badge badge--tip">'+b+'</span>').join("")}</div>
+    <div class="code-line">${s.l}</div>
+    <div class="step-desc">${s.d}</div>`;
+  let svg=document.getElementById("stage").querySelector("svg");
+  if(!svg){svg=document.createElementNS("http://www.w3.org/2000/svg","svg");document.getElementById("stage").appendChild(svg);svg.setAttribute("width","100%");svg.setAttribute("height","100%");svg.style.minHeight="420px";}
+  while(svg.firstChild)svg.removeChild(svg.firstChild);
+  s.r(svg);
+  document.getElementById("dots").innerHTML=S.map((_,j)=>'<div class="step-dot'+(j===step?' active':j<step?' done':'')+'></div>').join("");
+  document.getElementById("btn-prev").disabled=step===0;
+  document.getElementById("btn-next").disabled=step===S.length-1;
+}
+render(0);
+document.getElementById("btn-prev").onclick=()=>render(step-1);
+document.getElementById("btn-next").onclick=()=>render(step+1);
+document.addEventListener("keydown",e=>{if(e.key==="ArrowLeft")render(step-1);if(e.key==="ArrowRight")render(step+1);});
+</script>
+</body>
+</html>

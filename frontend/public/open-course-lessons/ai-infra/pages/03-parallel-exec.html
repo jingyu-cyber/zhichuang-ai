@@ -1,0 +1,77 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>并行执行模型 - AI基础设施</title>
+<style>:root{--bg:#0a0c14;--bg-soft:#141824;--bg-code:#080a10;--fg:#e0e8f0;--fg-dim:#8899aa;--line:#283040;--accent:#40a0ff;--accent2:#60d0ff;--success:#40d880;--danger:#f05060;--purple:#9080ff}*{box-sizing:border-box}html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;height:100%;overflow:hidden}.shell{display:flex;flex-direction:column;height:100vh}.bar{display:flex;align-items:center;gap:16px;padding:10px 22px;background:linear-gradient(90deg,#101520,#1a2030);border-bottom:1px solid var(--line)}.bar h1{font-size:17px;margin:0}.bar h1 span{color:var(--fg-dim);font-weight:400;margin-left:8px;font-size:13px}.bar a{color:var(--fg);text-decoration:none;padding:5px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg-soft);font-size:12px}.bar a:hover{border-color:var(--accent);color:var(--accent)}.spacer{flex:1}.badge-num{padding:5px 12px;background:var(--bg-code);border:1px solid var(--line);border-radius:6px;color:var(--accent);font-size:13px}.main{flex:1;display:flex;min-height:0}.left{width:420px;min-width:420px;padding:20px;overflow-y:auto;background:var(--bg-soft);border-right:1px solid var(--line)}.right{flex:1;position:relative;background:var(--bg);overflow:hidden}.tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;background:rgba(64,160,255,.12);color:var(--accent);border:1px solid rgba(64,160,255,.35);margin-bottom:10px}h2.step{font-size:18px;margin:0 0 8px;line-height:1.3;color:var(--fg)}.desc{font-size:13px;line-height:1.85;color:var(--fg)}.desc p{margin:6px 0}.desc code{background:var(--bg-code);padding:1px 5px;border-radius:3px;color:var(--accent);font-size:12px}.badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:3px;margin-right:4px;font-weight:600}.bd{background:rgba(144,128,255,.18);color:var(--purple);border:1px solid rgba(144,128,255,.4)}.bt{background:rgba(64,216,128,.15);color:var(--success);border:1px solid rgba(64,216,128,.4)}.bw{background:rgba(240,80,96,.15);color:var(--danger);border:1px solid rgba(240,80,96,.4)}.tip{border-left:3px solid var(--accent);padding:6px 10px;margin:8px 0;background:rgba(64,160,255,.06);border-radius:4px;font-size:12px;line-height:1.6}.stage-label{position:absolute;top:12px;left:20px;font-size:12px;color:var(--fg-dim);display:flex;align-items:center;gap:6px}.stage-label b{display:inline-block;padding:2px 6px;border-radius:3px;background:var(--accent);color:var(--bg);font-weight:800;font-size:10px}.ctrl{display:flex;align-items:center;gap:8px;padding:8px 20px;background:var(--bg-soft);border-top:1px solid var(--line)}.ctrl button{padding:5px 12px;font-size:12px;font-weight:600;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg-dim);cursor:pointer;transition:all .2s;font-family:inherit}.ctrl button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}.ctrl button:disabled{opacity:.3;cursor:default}.ctrl button.go{background:var(--accent);color:var(--bg);border-color:var(--accent)}.dots{display:flex;gap:4px;flex:1;justify-content:center}.dot{width:8px;height:8px;border-radius:50%;background:var(--line);transition:all .3s;cursor:pointer}.dot.on{background:var(--accent);box-shadow:0 0 8px var(--accent);transform:scale(1.3)}.dot.ok{background:var(--success)}@media(max-width:940px){.main{flex-direction:column}.left{width:100%;min-width:0;max-height:35vh}}</style></head><body>
+<div class="shell"><div class="bar"><a href="../index.html">← Back</a><h1>Parallel Execution Model<span>· Thread Block · Warp · Thread</span></h1><span class="spacer"></span><span class="badge-num" id="sn">1/6</span></div>
+<div class="main"><div class="left" id="panel"></div><div class="right"><div class="stage-label"><b>GPU</b> SIMT Execution Hierarchy</div><svg id="s" viewBox="0 0 720 480" preserveAspectRatio="xMidYMid meet" style="max-width:100%;max-height:100%"></svg></div></div>
+<div class="ctrl"><button id="br">↺ R</button><button id="bp">◀</button><button class="go" id="bn">▶</button><button id="ba">Auto</button><div class="dots" id="dots"></div></div></div>
+<script>
+var NS="http://www.w3.org/2000/svg",sv;
+function R(x,y,w,h,f,s,rx,sw){var e=document.createElementNS(NS,"rect");e.setAttribute("x",x);e.setAttribute("y",y);e.setAttribute("width",w);e.setAttribute("height",h);e.setAttribute("fill",f);e.setAttribute("rx",rx||4);if(s){e.setAttribute("stroke",s);e.setAttribute("stroke-width",sw||1.5)}sv.appendChild(e)}
+function TC(x,y,w,t,sz,c,pad){pad=pad||15;var mw=w-2*pad,ew=t.length*(sz||13)*0.85;if(ew>mw)sz=(sz||13)*mw/ew;if(sz<8)sz=8;var e=document.createElementNS(NS,"text");e.setAttribute("x",x+w/2);e.setAttribute("y",y);e.setAttribute("fill",c||"#e0e8f0");e.setAttribute("font-size",sz);e.setAttribute("text-anchor","middle");e.setAttribute("font-weight","bold");e.textContent=t;sv.appendChild(e)}
+function TL(x,y,w,t,sz,c,pad){pad=pad||15;var mw=w-2*pad,ew=t.length*(sz||12)*0.85;if(ew>mw){var mc=Math.floor(mw/((sz||12)*0.85))-2;if(mc<3)mc=3;t=t.substring(0,mc)+".."}var e=document.createElementNS(NS,"text");e.setAttribute("x",x+pad);e.setAttribute("y",y);e.setAttribute("fill",c||"#e0e8f0");e.setAttribute("font-size",sz);e.setAttribute("text-anchor","start");e.textContent=t;sv.appendChild(e)}
+
+var S=[{t:"SIMT: Single Instruction, Multiple Threads",p:"Foundation",
+b:'<p>GPUs use the <b>SIMT (Single Instruction, Multiple Threads)</b> execution model. Unlike CPU SIMD (which operates on fixed-width vectors), SIMT allows thousands of threads to execute the same instruction on different data — with <b>independent control flow</b> per thread.</p><p><span class="badge bd">Key difference from SIMD</span>: Threads in a warp can diverge (take different branches), but this causes <b>warp divergence</b> — serialized execution of each branch path, reducing throughput.</p><p>The GPU scheduler manages thousands of concurrent threads, hiding memory latency by switching between warps while others wait for data.</p>',
+d:function(){var W=720,H=480,P=15;R(P,P,W-2*P,H-2*P,"#080a10","#40a0ff",8,2);
+TC(P,30,W-2*P,"SIMT: Thousands of Threads, One Instruction, Independent Data",14,"#40a0ff",P);
+TC(P,75,W-2*P,"GPU = SIMT (flexible) vs CPU SIMD = fixed-width vectors (rigid)",12,"#8899aa",P);
+var rows=["CPU (SIMD): 8/16/32 lanes, all must execute same instruction together","GPU (SIMT): 1000s of threads, each can branch independently (with perf cost)","Warp = 32 threads that execute in lockstep on one SM sub-partition"];
+var bx=60,by=120,bw=600;
+for(var i=0;i<3;i++){R(bx,by+i*50,bw,40,"rgba(64,160,255,.06)","#40a0ff",4,1);TL(bx,by+i*50+28,bw,rows[i],12,"#e0e8f0",15)}
+TC(P,320,W-2*P,"Warp divergence: if (threadId < 16) path A else path B",12,"#f05060",P);
+TC(P,360,W-2*P,"Both paths executed sequentially -> 50% throughput loss",12,"#f05060",P);
+TC(P,410,W-2*P,"Minimize divergence: keep warp-level control flow uniform",12,"#40d880",P);}},
+
+{t:"GPU Thread Hierarchy: Grid -> Block -> Warp -> Thread",p:"Architecture",
+b:'<p>The GPU execution hierarchy has 4 levels:</p><p><b>Grid</b>: All thread blocks launched by one kernel. Can be 1D/2D/3D.</p><p><b>Thread Block</b>: Group of threads (max 1024 on A100) that execute on <b>one SM</b>. Share shared memory and can synchronize via <code>__syncthreads()</code>.</p><p><b>Warp</b>: 32 threads executing in lockstep. The fundamental scheduling unit.</p><p><b>Thread</b>: Individual execution unit. Each thread has its own registers and program counter.</p><p><span class="badge bt">Occupancy</span> = active_warps / max_warps_per_SM. Higher occupancy = better latency hiding.</p>',
+d:function(){var W=720,H=480,P=15;R(P,P,W-2*P,H-2*P,"#080a10","#9080ff",8,2);
+TC(P,30,W-2*P,"CUDA Thread Hierarchy: Grid -> Block -> Warp -> Thread",14,"#9080ff",P);
+var levels=[{n:"Grid",s:"All blocks in kernel launch (1D/2D/3D)",c:"#40a0ff",w:640,y:65},{n:"Thread Block",s:"Up to 1024 threads, 1 SM, shares SRAM + sync",c:"#9080ff",w:560,y:125},{n:"Warp",s:"32 threads in lockstep, fundamental scheduling unit",c:"#60d0ff",w:480,y:185},{n:"Thread",s:"Individual execution, own registers & program counter",c:"#40d880",w:400,y:245}];
+levels.forEach(function(l){R(40,l.y,l.w,50,l.c+"10",l.c,6,1.5);TL(60,l.y+32,l.w-20,l.n,14,l.c,10);TL(160,l.y+32,l.w-180,l.s,11,"#e0e8f0",10)})
+TC(P,330,W-2*P,"Occupancy = (active_warps / max_warps_per_SM) x 100%",13,"#60d0ff",P);
+TC(P,370,W-2*P,"Higher occupancy = more warps to hide memory latency = better utilization",12,"#40d880",P);}},
+
+{t:"SM Architecture: Streaming Multiprocessor Internals",p:"Architecture",
+b:'<p>Each A100 GPU has <b>108 SMs</b>. Each SM contains:</p><p><b>4 Warp Schedulers</b> — each can dispatch 1 instruction per cycle to 1 warp. 4 warps can execute concurrently per SM.</p><p><b>64 FP32 CUDA Cores per SM</b> — total 6912 FP32 cores across 108 SMs.</p><p><b>164 KB Shared Memory / L1 Cache</b> — configurable split between SRAM and L1. Key to tiling performance.</p><p><b>65536 Registers per SM</b> — 255 registers per thread max. Register pressure limits occupancy.</p><p><span class="badge bw">Bottleneck</span> Register count often limits occupancy before shared memory does. Use Nsight Compute to check.</p>',
+d:function(){var W=720,H=480,P=15;R(P,P,W-2*P,H-2*P,"#080a10","#40a0ff",8,2);
+TC(P,30,W-2*P,"SM Architecture: A100 Streaming Multiprocessor",14,"#40a0ff",P);
+var comps=[{n:"4 Warp Schedulers",d:"4 warps execute concurrently per SM",c:"#40a0ff"},{n:"64 FP32 CUDA Cores",d:"6912 total FP32 cores (108 SMs x 64)",c:"#9080ff"},{n:"164 KB Shared Mem/L1",d:"Configurable split, key to tiling",c:"#60d0ff"},{n:"65536 Registers",d:"255/thread max, register pressure limits occupancy",c:"#f05060"}];
+comps.forEach(function(c,i){var y=70+i*55;R(60,y,600,48,c.c+"10",c.c,6,1.5);TL(80,y+32,600,c.n,14,c.c,15);TL(260,y+32,400,c.d,12,"#e0e8e0",10)})
+TC(P,320,W-2*P,"Nsight Compute: profile register usage, shared memory, and occupancy in one view",12,"#60d0ff",P);}},
+
+{t:"Warp Divergence: The Performance Killer",p:"Optimization",
+b:'<p>When threads within a warp take different execution paths (due to if-else, loops with different trip counts), the GPU <b>serializes</b> both paths. All threads execute path A (with inactive threads masked), then all execute path B.</p><p>Worst case: each thread takes a unique path -> 32x slowdown.</p><p><span class="badge bt">Common causes</span>: data-dependent branching (if x[i] > threshold), loop bounds varying per thread, switch-case on thread-dependent values.</p><p><b>Mitigation</b>: Restructure code so that warp-level control flow is uniform. Use predicated execution (<code>where</code> in Triton) instead of explicit branches.</p>',
+d:function(){var W=720,H=480,P=15;R(P,P,W-2*P,H-2*P,"#080a10","#f05060",8,2);
+TC(P,30,W-2*P,"Warp Divergence: Serialized Branch Execution",14,"#f05060",P);
+R(60,70,300,140,"rgba(240,80,96,.1)","#f05060",6,1.5);
+TC(210,100,300,"WITH Divergence",13,"#f05060",10);
+TL(80,130,260,"if threadId < 16: do A",11,"#f05060",10);
+TL(80,155,260,"else: do B",11,"#f05060",10);
+TL(80,180,260,"-> A & B sequential: 2x slower",11,"#f05060",10);
+R(400,70,280,140,"rgba(64,216,128,.1)","#40d880",6,1.5);
+TC(540,100,280,"WITHOUT Divergence",13,"#40d880",10);
+TL(420,130,240,"Use predication: result = mask*A + (!mask)*B",10,"#40d880",10);
+TL(420,160,240,"All threads execute same instruction",10,"#40d880",10);
+TL(420,190,240,"-> No divergence, full throughput",10,"#40d880",10);
+TC(P,270,W-2*P,"Divergence costs increase with: more branches, more threads per warp diverging",12,"#f05060",P);
+TC(P,320,W-2*P,"Triton: tl.where(mask, val_a, val_b) = predicated, no divergence",11,"#40d880",P);}},
+
+{t:"Occupancy Optimization: Maximizing SM Utilization",p:"Practice",
+b:'<p><b>Occupancy</b> = percentage of maximum warps that can be active on an SM. Limited by: registers per thread, shared memory per block, and block size.</p><p>A100: max 64 warps (2048 threads) per SM. If each block uses 256 threads (8 warps) and 40 registers per thread, max blocks = min(2048/256, 65536/(256*40), 164KB/shared_mem_per_block) = min(8, 6.4, ...) = 6 blocks = 48 warps = 75% occupancy.</p><p><span class="badge bt">Nsight Compute</span>: shows occupancy breakdown — registers vs shared memory vs block size limits. Identify the limiter and adjust your kernel.</p>',
+d:function(){var W=720,H=480,P=15;R(P,P,W-2*P,H-2*P,"#080a10","#40d880",8,2);
+TC(P,30,W-2*P,"Occupancy = Active Warps / Max Warps per SM",14,"#40d880",P);
+TC(P,75,W-2*P,"Formula: Occupancy = min(Warps_by_threads, Warps_by_registers, Warps_by_smem)",12,"#8899aa",P);
+var factors=["Threads: 256 threads/block -> 8 warps/block -> max 64/8=8 blocks -> 64 warps","Registers: 40 regs/thread x 256 = 10240 regs/block. 65536/10240=6.4 -> 6 blocks -> 48 warps","SharedMem: 20KB/block. 164KB/20KB=8.2 -> 8 blocks -> 64 warps"];
+var bx=60,by=120,bw=600;
+factors.forEach(function(f,i){R(bx,by+i*48,bw,40,"rgba(64,216,128,.05)","#40d880",4,1);TL(bx,by+i*48+28,bw,f,11,"#e0e8f0",15)})
+TC(P,310,W-2*P,"Limiting factor: Registers -> 48/64 = 75% occupancy",13,"#f05060",P);
+TC(P,350,W-2*P,"Fix: reduce register usage (--maxrregcount) or restructure kernel to use fewer variables",11,"#60d0ff",P);
+TC(P,400,W-2*P,"75%+ occupancy is good. Below 50%: fix the limiting resource.",11,"#40d880",P);}}];
+
+var cs=0,at=null,ia=false,N=S.length;
+function init(){sv=document.getElementById("s");for(var i=0;i<N;i++){var d=document.createElement("div");d.className="dot";d.onclick=(function(j){return function(){go(j)}})(i);document.getElementById("dots").appendChild(d)}render()}
+function go(i){if(i<0||i>=N)return;cs=i;render()}
+function render(){while(sv.firstChild)sv.removeChild(sv.firstChild);var s=S[cs];document.getElementById("sn").textContent=(cs+1)+"/"+N;document.getElementById("panel").innerHTML='<div class="tag">'+s.p+'</div><h2 class="step">'+s.t+'</h2><div class="desc">'+s.b+'</div>';s.d();var dots=document.querySelectorAll(".dot");for(var i=0;i<dots.length;i++)dots[i].className="dot"+(i===cs?" on":i<cs?" ok":"");document.getElementById("bp").disabled=cs===0;document.getElementById("bn").disabled=cs===N-1}
+function next(){if(cs<N-1){cs++;render()}else sa()}function prev(){if(cs>0){cs--;render()}}function rst(){sa();cs=0;render()}function ta(){ia?sa():startA()}function startA(){ia=true;document.getElementById("ba").textContent="||";at=setInterval(next,2500)}function sa(){ia=false;if(at){clearInterval(at);at=null}document.getElementById("ba").textContent="Auto"}
+document.addEventListener("keydown",function(e){if(e.key==="ArrowRight"){e.preventDefault();next()}else if(e.key==="ArrowLeft"){e.preventDefault();prev()}else if(e.key===" "){e.preventDefault();ta()}else if(e.key==="r"||e.key==="R"){e.preventDefault();rst()}});
+document.getElementById("bp").onclick=prev;document.getElementById("bn").onclick=next;document.getElementById("br").onclick=rst;document.getElementById("ba").onclick=ta;window.onload=init;
+</script></body></html>

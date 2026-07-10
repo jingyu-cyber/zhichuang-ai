@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>虚拟地址空间布局 — 操作系统内核构建</title>
+<style>:root{--bg:#0d1117;--bg-soft:#161b22;--bg-code:#0a0c10;--fg:#e6edf3;--fg-dim:#8b949e;--line:#30363d;--accent:#58a6ff;--accent-2:#3fb950;--grad:#d29922;--success:#3fb950;--danger:#f85149}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(88,166,255,.18);color:var(--accent)}.badge--tip{background:rgba(63,185,80,.18);color:var(--success)}.badge--warn{background:rgba(210,153,34,.18);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.code-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>第 7 节 &middot; 虚拟地址空间布局</h1>
+<span class="breadcrumb"><a href="../index.html">课程首页</a> / 内存管理</span>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="explain"></div>
+<div class="panel-stage" id="stage"></div>
+</div>
+<div class="demo-controls">
+<button id="prevBtn">&larr; 上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="nextBtn">下一步 &rarr;</button>
+<button id="autoBtn">&#9654; 自动播放</button>
+</div>
+</div>
+<script>
+const S=[
+  {
+    t:"32 位进程虚拟地址空间总览",
+    l:"#define USERTOP  0x80000000  // 2GB user / 2GB kernel split",
+    d:"32 位系统虚拟地址空间 0~4GB：<br>低 2GB (0x0 ~ 0x7FFFFFFF) 为用户空间，高 2GB 为内核空间。<br>用户空间包含 text, data, heap, stack, mmap 等段。<br>内核空间对所有进程映射相同，包含内核代码和数据结构。",
+    b:[{t:"4GB",c:"badge--def"},{t:"User/Kernel",c:"badge--tip"},{t:"分段",c:"badge--warn"}],
+    r(svg){
+      svg.innerHTML='';svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      // Full 4GB bar
+      g.innerHTML+=`<text x="400" y="25" text-anchor="middle" fill="var(--fg)" font-size="15" font-weight="700">32-bit Virtual Address Space</text>`;
+      const barX=120,barW=200,totalH=380,barY=55;
+      g.innerHTML+=`<rect x="${barX}" y="${barY}" width="${barW}" height="${totalH}" rx="6" fill="none" stroke="var(--line)" stroke-width="1.5"/>`;
+      // Kernel (top half)
+      const midY=barY+totalH/2;
+      g.innerHTML+=`<rect x="${barX}" y="${barY}" width="${barW}" height="${totalH/2}" rx="6" fill="rgba(88,166,255,.10)" stroke="var(--accent)" stroke-width="1"/>
+      <text x="${barX+barW/2}" y="${barY+25}" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="600">Kernel Space</text>
+      <text x="${barX+barW/2}" y="${barY+45}" text-anchor="middle" fill="var(--fg-dim)" font-size="11">2GB (shared)</text>
+      <!-- Kernel sub-zones -->
+      <rect x="${barX+5}" y="130" width="${barW-10}" height="25" rx="3" fill="rgba(88,166,255,.15)"/><text x="220" y="147" text-anchor="middle" fill="var(--fg-dim)" font-size="9">Kernel Stack</text>
+      <rect x="${barX+5}" y="160" width="${barW-10}" height="25" rx="3" fill="rgba(88,166,255,.12)"/><text x="220" y="177" text-anchor="middle" fill="var(--fg-dim)" font-size="9">Kernel Code/Data</text>
+      <!-- User (bottom half) -->
+      g.innerHTML+=`<rect x="${barX}" y="${midY+1}" width="${barW}" height="${totalH/2}" rx="6" fill="rgba(63,185,80,.08)" stroke="var(--accent-2)" stroke-width="1"/>
+      <text x="${barX+barW/2}" y="${midY+25}" text-anchor="middle" fill="var(--accent-2)" font-size="13" font-weight="600">User Space</text>
+      <text x="${barX+barW/2}" y="${midY+45}" text-anchor="middle" fill="var(--fg-dim)" font-size="11">2GB (per-process)</text>`;
+      // User sub-zones
+      g.innerHTML+=`<rect x="${barX+5}" y="290" width="${barW-10}" height="25" rx="3" fill="rgba(63,185,80,.18)"/><text x="220" y="307" text-anchor="middle" fill="var(--accent-2)" font-size="9">Stack ↓</text>
+      <rect x="${barX+5}" y="320" width="${barW-10}" height="25" rx="3" fill="rgba(63,185,80,.10)"/><text x="220" y="337" text-anchor="middle" fill="var(--fg-dim)" font-size="9">mmap</text>
+      <rect x="${barX+5}" y="350" width="${barW-10}" height="25" rx="3" fill="rgba(63,185,80,.10)"/><text x="220" y="367" text-anchor="middle" fill="var(--fg-dim)" font-size="9">Heap ↑</text>
+      <rect x="${barX+5}" y="380" width="${barW-10}" height="25" rx="3" fill="rgba(63,185,80,.10)"/><text x="220" y="397" text-anchor="middle" fill="var(--fg-dim)" font-size="9">BSS / Data</text>
+      <rect x="${barX+5}" y="410" width="${barW-10}" height="22" rx="3" fill="rgba(63,185,80,.10)"/><text x="220" y="425" text-anchor="middle" fill="var(--fg-dim)" font-size="9">Text / Code</text>`;
+      // Address labels
+      g.innerHTML+=`<text x="90" y="60" text-anchor="end" fill="var(--fg-dim)" font-family="monospace" font-size="11">0xFFFFFFFF</text>
+      <text x="90" y="${midY+5}" text-anchor="end" fill="var(--grad)" font-family="monospace" font-size="11">0x80000000</text>
+      <text x="90" y="${barY+totalH+5}" text-anchor="end" fill="var(--fg-dim)" font-family="monospace" font-size="11">0x00000000</text>`;
+      // Right side: details
+      g.innerHTML+=`<rect x="360" y="55" width="420" height="410" rx="8" fill="var(--bg)"/>
+      <text x="380" y="80" fill="var(--accent)" font-family="monospace" font-size="12" font-weight="600">User Segment Details</text>
+      <text x="380" y="105" fill="var(--fg-dim)" font-family="monospace" font-size="11">Text:  0x00000000 - 0x08048000  r-x  (code)</text>
+      <text x="380" y="130" fill="var(--fg-dim)" font-family="monospace" font-size="11">Data:  0x08048000 - 0x0804a000  rw-  (global vars)</text>
+      <text x="380" y="155" fill="var(--fg-dim)" font-family="monospace" font-size="11">BSS:   0x0804a000 - 0x0804c000  rw-  (zero-init)</text>
+      <text x="380" y="180" fill="var(--accent-2)" font-family="monospace" font-size="11">Heap:  0x0804c000 → grows up   rw-  (brk/sbrk)</text>
+      <text x="380" y="205" fill="var(--fg-dim)" font-family="monospace" font-size="11">Mmap:  0x20000000 → grows down rw-  (libs, files)</text>
+      <text x="380" y="232" fill="var(--grad)" font-family="monospace" font-size="11">Stack: 0x7FFFE000 → grows down rw-  (auto var)</text>
+      <line x1="380" y1="245" x2="760" y2="245" stroke="var(--line)"/>
+      <text x="380" y="270" fill="var(--accent)" font-family="monospace" font-size="11" font-weight="600">Key Properties:</text>
+      <text x="380" y="295" fill="var(--fg-dim)" font-family="monospace" font-size="11">• Text: read-only, executable (r-x)</text>
+      <text x="380" y="318" fill="var(--fg-dim)" font-family="monospace" font-size="11">• Data/BSS: read-write, NOT executable (rw-)</text>
+      <text x="380" y="341" fill="var(--fg-dim)" font-family="monospace" font-size="11">• No-execute (NX) bit prevents code injection</text>
+      <text x="380" y="364" fill="var(--fg-dim)" font-family="monospace" font-size="11">• ASLR randomizes: stack, mmap, heap, PIE base</text>
+      <text x="380" y="387" fill="var(--fg-dim)" font-family="monospace" font-size="11">• Stack grows downward (towards lower addr)</text>
+      <text x="380" y="410" fill="var(--fg-dim)" font-family="monospace" font-size="11">• Heap grows upward (towards higher addr)</text>
+      <text x="380" y="440" fill="var(--danger)" font-family="monospace" font-size="11">• Stack ⇄ Heap collision = OOM / segfault</text>`;
+      svg.appendChild(g);
+    }
+  },
+  {
+    t:"页表与权限控制",
+    l:"PTE: [31..12]=PPN [11..0]=Flags(RW/US/PWT/PCD/A/D/PS/G/XD)",
+    d:"每个页面（4KB）的权限由 PTE 中的标志位控制：<br><b>P (Present)</b> — 页面是否在物理内存中<br><b>R/W</b> — 读写权限<br><b>U/S</b> — 用户/特权级访问控制<br><b>NX (No Execute)</b> — 禁止执行（防止代码注入攻击）",
+    b:[{t:"PTE",c:"badge--def"},{t:"权限",c:"badge--warn"},{t:"NX",c:"badge--tip"}],
+    r(svg){
+      svg.innerHTML='';svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <text x="400" y="25" text-anchor="middle" fill="var(--fg)" font-size="15" font-weight="700">PTE (Page Table Entry) 权限位</text>
+        <!-- PTE bit layout -->
+        <rect x="30" y="50" width="740" height="50" rx="6" fill="var(--bg)" stroke="var(--line)"/>
+        <text x="50" y="80" fill="var(--fg-dim)" font-family="monospace" font-size="12">31</text><text x="685" y="80" fill="var(--fg-dim)" font-family="monospace" font-size="12">12 11</text><text x="755" y="80" fill="var(--fg-dim)" font-family="monospace" font-size="12">0</text>
+        <rect x="60" y="58" width="620" height="32" rx="3" fill="rgba(88,166,255,.15)"/>
+        <text x="370" y="79" text-anchor="middle" fill="var(--accent)" font-family="monospace" font-size="12">Physical Page Number (PPN) — 20 bits</text>
+        <rect x="685" y="58" width="75" height="32" rx="3" fill="rgba(210,153,34,.15)"/>
+        <text x="722" y="79" text-anchor="middle" fill="var(--grad)" font-family="monospace" font-size="11">Flags[11:0]</text>
+        <!-- Flag details -->
+        <rect x="30" y="120" width="740" height="200" rx="8" fill="var(--bg)"/>
+        <text x="50" y="148" fill="var(--accent)" font-family="monospace" font-size="13" font-weight="600">Flag Bit Descriptions</text>
+        <rect x="50" y="160" width="350" height="28" rx="3" fill="rgba(63,185,80,.08)"/>
+        <text x="60" y="179" fill="var(--accent-2)" font-family="monospace" font-size="11">bit 0: P   (Present)    </text><text x="300" y="179" fill="var(--fg-dim)" font-family="monospace" font-size="10">1=in memory, 0=page fault</text>
+        <rect x="50" y="193" width="350" height="28" rx="3" fill="rgba(88,166,255,.08)"/>
+        <text x="60" y="212" fill="var(--accent)" font-family="monospace" font-size="11">bit 1: R/W (Read/Write) </text><text x="300" y="212" fill="var(--fg-dim)" font-family="monospace" font-size="10">0=RO, 1=RW</text>
+        <rect x="50" y="226" width="350" height="28" rx="3" fill="rgba(210,153,34,.08)"/>
+        <text x="60" y="245" fill="var(--grad)" font-family="monospace" font-size="11">bit 2: U/S (User/Super) </text><text x="300" y="245" fill="var(--fg-dim)" font-family="monospace" font-size="10">0=kernel only, 1=user ok</text>
+        <rect x="410" y="160" width="350" height="28" rx="3" fill="rgba(248,81,73,.08)"/>
+        <text x="420" y="179" fill="var(--danger)" font-family="monospace" font-size="11">bit 63: NX (No Execute)  </text><text x="630" y="179" fill="var(--fg-dim)" font-family="monospace" font-size="10">1=no exec (x86-64)</text>
+        <rect x="410" y="193" width="350" height="28" rx="3" fill="var(--fg-dim)" opacity="0.2"/>
+        <text x="420" y="212" fill="var(--fg-dim)" font-family="monospace" font-size="11">bit 5: A   (Accessed)    </text><text x="630" y="212" fill="var(--fg-dim)" font-family="monospace" font-size="10">set by MMU on access</text>
+        <rect x="410" y="226" width="350" height="28" rx="3" fill="var(--fg-dim)" opacity="0.2"/>
+        <text x="420" y="245" fill="var(--fg-dim)" font-family="monospace" font-size="11">bit 6: D   (Dirty)       </text><text x="630" y="245" fill="var(--fg-dim)" font-family="monospace" font-size="10">set by MMU on write</text>
+        <text x="50" y="285" fill="var(--fg-dim)" font-size="11">U/S=0 的页面只能在内核态访问 — 如果用户态尝试访问，触发 page fault (protection violation)</text>
+        <text x="50" y="305" fill="var(--fg-dim)" font-size="11">NX=1 防止在数据页上执行代码 — 是 W^X (Write XOR Execute) 策略的实现基础</text>
+        <!-- Permissions table -->
+        <text x="400" y="355" text-anchor="middle" fill="var(--fg)" font-size="14" font-weight="700">典型进程段权限</text>
+        <rect x="80" y="375" width="640" height="90" rx="8" fill="var(--bg)" stroke="var(--line)"/>
+        <text x="100" y="400" fill="var(--fg)" font-family="monospace" font-size="11">Segment</text><text x="260" y="400" text-anchor="middle" fill="var(--fg)" font-family="monospace" font-size="11">R W X</text><text x="380" y="400" text-anchor="middle" fill="var(--fg)" font-family="monospace" font-size="11">U/S</text><text x="500" y="400" text-anchor="middle" fill="var(--fg)" font-family="monospace" font-size="11">NX</text><text x="620" y="400" text-anchor="middle" fill="var(--fg)" font-family="monospace" font-size="11">PTE flags</text>
+        <text x="100" y="425" fill="var(--accent-2)" font-family="monospace" font-size="11">.text  </text><text x="260" y="425" text-anchor="middle" fill="var(--accent-2)" font-family="monospace" font-size="11">R - X</text><text x="380" y="425" text-anchor="middle" fill="var(--accent-2)" font-family="monospace" font-size="11">U=1</text><text x="500" y="425" text-anchor="middle" fill="var(--accent-2)" font-family="monospace" font-size="11">0</text><text x="620" y="425" text-anchor="middle" fill="var(--fg-dim)" font-family="monospace" font-size="10">P=1 R/W=0 U/S=1 NX=0</text>
+        <text x="100" y="448" fill="var(--accent-2)" font-family="monospace" font-size="11">.data  </text><text x="260" y="448" text-anchor="middle" fill="var(--accent-2)" font-family="monospace" font-size="11">R W -</text><text x="380" y="448" text-anchor="middle" fill="var(--accent-2)" font-family="monospace" font-size="11">U=1</text><text x="500" y="448" text-anchor="middle" fill="var(--accent-2)" font-family="monospace" font-size="11">1</text><text x="620" y="448" text-anchor="middle" fill="var(--fg-dim)" font-family="monospace" font-size="10">P=1 R/W=1 U/S=1 NX=1</text>`;
+      svg.appendChild(g);
+    }
+  },
+  {
+    t:"内核地址空间布局",
+    l:"KERNBASE = 0x80000000; PHYSTOP = 0x0E000000 (224MB)",
+    d:"内核空间（高 2GB）在所有进程中映射相同：<br>1) 内核代码和数据<br>2) 直接映射区：虚拟地址 = 物理地址 + KERNBASE<br>3) 内核堆 (kmalloc/slab)<br>4) 内核栈 (每个进程一个，2 页)<br>5) 设备 MMIO 映射",
+    b:[{t:"KERNBASE",c:"badge--def"},{t:"直接映射",c:"badge--tip"},{t:"kstack",c:"badge--warn"}],
+    r(svg){
+      svg.innerHTML='';svg.setAttribute('viewBox','0 0 800 480');
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.innerHTML=`
+        <text x="400" y="25" text-anchor="middle" fill="var(--fg)" font-size="15" font-weight="700">Kernel Address Space Layout (xv6-style)</text>
+        <rect x="80" y="50" width="280" height="400" rx="8" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+        <!-- Kernel sections from top to bottom -->
+        <rect x="85" y="55" width="270" height="55" rx="4" fill="rgba(248,81,73,.08)"/><text x="220" y="78" text-anchor="middle" fill="var(--danger)" font-size="11">Device MMIO</text><text x="220" y="96" text-anchor="middle" fill="var(--fg-dim)" font-size="9">0xFE000000</text>
+        <rect x="85" y="115" width="270" height="40" rx="4" fill="rgba(210,153,34,.08)"/><text x="220" y="138" text-anchor="middle" fill="var(--grad)" font-size="11">Kernel Stacks (per-proc)</text><text x="220" y="152" text-anchor="middle" fill="var(--fg-dim)" font-size="9">0x80000000 + PHYSTOP + ...</text>
+        <rect x="85" y="160" width="270" height="40" rx="4" fill="rgba(63,185,80,.08)"/><text x="220" y="183" text-anchor="middle" fill="var(--accent-2)" font-size="11">Kernel Heap (kmalloc)</text>
+        <rect x="85" y="205" width="270" height="50" rx="4" fill="rgba(88,166,255,.12)"/><text x="220" y="225" text-anchor="middle" fill="var(--accent)" font-size="11">Direct Map (PHYSTOP)</text><text x="220" y="243" text-anchor="middle" fill="var(--fg-dim)" font-size="9">va = pa + KERNBASE</text>
+        <rect x="85" y="260" width="270" height="40" rx="4" fill="rgba(88,166,255,.10)"/><text x="220" y="283" text-anchor="middle" fill="var(--accent)" font-size="11">Kernel Data / BSS</text>
+        <rect x="85" y="305" width="270" height="50" rx="4" fill="rgba(88,166,255,.08)"/><text x="220" y="325" text-anchor="middle" fill="var(--accent)" font-size="11">Kernel Text / Code</text><text x="220" y="343" text-anchor="middle" fill="var(--fg-dim)" font-size="9">0x80100000</text>
+        <rect x="85" y="360" width="270" height="85" rx="4" fill="rgba(63,185,80,.08)"/><text x="220" y="385" text-anchor="middle" fill="var(--accent-2)" font-size="11">User Space</text><text x="220" y="405" text-anchor="middle" fill="var(--fg-dim)" font-size="9">0x0 - 0x7FFFFFFF</text>
+        <!-- Address labels right -->
+        <text x="375" y="65" fill="var(--fg-dim)" font-family="monospace" font-size="10">0xFFFFFFFF</text>
+        <text x="375" y="370" fill="var(--grad)" font-family="monospace" font-size="10">0x80000000</text>
+        <text x="375" y="450" fill="var(--fg-dim)" font-family="monospace" font-size="10">0x00000000</text>
+        <!-- Right: Explanation -->
+        <rect x="400" y="55" width="380" height="390" rx="8" fill="var(--bg)"/>
+        <text x="420" y="80" fill="var(--accent)" font-family="monospace" font-size="12" font-weight="600">Direct Mapping Explained</text>
+        <text x="420" y="108" fill="var(--fg-dim)" font-size="12">Kernel uses identity-like mapping:</text>
+        <text x="420" y="132" fill="var(--accent-2)" font-family="monospace" font-size="11">Virtual_Addr = Physical_Addr + KERNBASE</text>
+        <text x="420" y="160" fill="var(--fg-dim)" font-size="12">This means kernel can access any</text>
+        <text x="420" y="182" fill="var(--fg-dim)" font-size="12">physical address directly via:</text>
+        <text x="420" y="208" fill="var(--accent)" font-family="monospace" font-size="11">P2V(pa) → pa + KERNBASE</text>
+        <text x="420" y="230" fill="var(--accent)" font-family="monospace" font-size="11">V2P(va) → va - KERNBASE</text>
+        <line x1="420" y1="245" x2="760" y2="245" stroke="var(--line)"/>
+        <text x="420" y="272" fill="var(--grad)" font-family="monospace" font-size="11" font-weight="600">Why Direct Map?</text>
+        <text x="420" y="298" fill="var(--fg-dim)" font-size="11">• 内核需要访问任意物理页</text>
+        <text x="420" y="320" fill="var(--fg-dim)" font-size="11">  (页表、进程 PCB、Page Cache)</text>
+        <text x="420" y="346" fill="var(--fg-dim)" font-size="11">• 直接映射让 va=pa+KERNBASE 转换</text>
+        <text x="420" y="368" fill="var(--fg-dim)" font-size="11">  仅需一次加法，无需查页表</text>
+        <text x="420" y="394" fill="var(--fg-dim)" font-size="11">• PHYSTOP=224MB 限制了物理内存上限</text>
+        <text x="420" y="420" fill="var(--fg-dim)" font-size="11">  (教学内核的简化设计)</text>`;
+      svg.appendChild(g);
+    }
+  }
+];
+
+let step=0,autoTimer=null,autoOn=false;
+const explain=document.getElementById('explain'),stage=document.getElementById('stage'),dots=document.getElementById('dots');
+const prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn'),autoBtn=document.getElementById('autoBtn');
+function render(){
+  const s=S[step];
+  explain.innerHTML=`<div class="step-title">${s.t}</div>${s.l?`<div class="code-line">${s.l}</div>`:''}<div class="badge-row">${s.b.map(b=>`<span class="badge ${b.c||'badge--def'}">${b.t}</span>`).join('')}</div><div class="step-desc">${s.d}</div>`;
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('viewBox','0 0 800 480');svg.style.width='100%';svg.style.height='100%';
+  stage.innerHTML='';stage.appendChild(svg);s.r(svg);
+  dots.innerHTML=S.map((_,i)=>{let cls=i===step?'active':i<step?'done':'';return `<span class="step-dot ${cls}"></span>`;}).join('');
+  prevBtn.disabled=step===0;nextBtn.disabled=step===S.length-1;
+}
+function next(){if(step<S.length-1){step++;render();}}
+function prev(){if(step>0){step--;render();}}
+function restart(){step=0;render();}
+function toggleAuto(){
+  if(autoTimer){clearInterval(autoTimer);autoTimer=null;autoOn=false;autoBtn.innerHTML='&#9654; 自动播放';}
+  else{autoOn=true;autoBtn.innerHTML='&#9646;&#9646; 停止';autoTimer=setInterval(()=>{if(step<S.length-1){step++;render();}else{clearInterval(autoTimer);autoTimer=null;autoOn=false;autoBtn.innerHTML='&#9654; 自动播放';}},3000);}
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();next();}
+  else if(e.key==='ArrowLeft'){e.preventDefault();prev();}
+  else if(e.key==='r'||e.key==='R'){e.preventDefault();restart();}
+  else if(e.key==='a'||e.key==='A'){e.preventDefault();toggleAuto();}
+});
+prevBtn.onclick=prev;nextBtn.onclick=next;autoBtn.onclick=toggleAuto;render();
+</script>
+</body>
+</html>

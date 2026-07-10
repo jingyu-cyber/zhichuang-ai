@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>05 模块边界划分 - 软件工程互动课程</title>
+<style>
+:root{--bg:#1c2128;--bg-soft:#252c35;--bg-code:#141820;--fg:#e6edf3;--fg-dim:#8b949e;--line:#30363d;--accent:#539bf5;--accent-2:#57ab5a;--grad:#c69026;--success:#57ab5a;--danger:#e5534b;--purple:#986ee2}*{box-sizing:border-box;margin:0;padding:0}html,body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;line-height:1.6}.demo-shell{max-width:1280px;margin:0 auto;padding:20px 20px 40px}.demo-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}.demo-header h1{font-size:20px}.demo-header .breadcrumb{color:var(--fg-dim);font-size:13px}.demo-header a{color:var(--accent);text-decoration:none}.demo-main{display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:520px}.panel-explain{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}.panel-explain .step-title{font-size:18px;font-weight:700;color:var(--accent)}.panel-explain .step-desc{font-size:14px;color:var(--fg-dim);line-height:1.75}.badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}.badge--def{background:rgba(83,155,245,.18);color:var(--accent)}.badge--tip{background:rgba(87,171,90,.18);color:var(--success)}.badge--warn{background:rgba(198,144,38,.18);color:var(--grad)}.badge-row{display:flex;gap:8px;flex-wrap:wrap}.info-line{font-family:"JetBrains Mono",monospace;font-size:14px;color:var(--accent-2);text-align:center;padding:10px;background:var(--bg-code);border-radius:8px}.panel-stage{background:var(--bg-code);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center}.panel-stage svg{max-width:100%;max-height:100%}.demo-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;padding:12px 0}.demo-controls button{background:var(--bg-soft);border:1px solid var(--line);color:var(--fg);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px}.demo-controls button:hover{border-color:var(--accent);color:var(--accent)}.demo-controls button:disabled{opacity:.35;cursor:default}.step-dots{display:flex;gap:8px}.step-dot{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.2s}.step-dot.active{background:var(--accent);box-shadow:0 0 10px var(--accent)}.step-dot.done{background:var(--success)}@media(max-width:860px){.demo-main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="demo-shell">
+<div class="demo-header">
+<h1>模块边界划分</h1>
+<div class="breadcrumb"><a href="../index.html">软件工程</a> / 软件设计 / <span id="step-indicator">Step 1/4</span></div>
+</div>
+<div class="demo-main">
+<div class="panel-explain" id="panel-explain">
+<div class="step-title" id="step-title"></div>
+<div class="step-desc" id="step-desc"></div>
+<div class="badge-row" id="badge-row"></div>
+<div class="info-line" id="info-line"></div>
+</div>
+<div class="panel-stage"><svg id="stage" viewBox="0 0 800 500" style="width:100%;height:100%"></svg></div>
+</div>
+<div class="demo-controls">
+<button id="btn-prev" onclick="prev()">上一步</button>
+<div class="step-dots" id="dots"></div>
+<button id="btn-next" onclick="next()">下一步</button>
+<button id="btn-auto" onclick="toggleAuto()" style="min-width:80px">自动播放</button>
+</div>
+</div>
+<script>
+const svgNS="http://www.w3.org/2000/svg";
+function T(t, a) { const e = document.createElementNS(svgNS, t); for (const [k, v] of Object.entries(a || {})) e.setAttribute(k, v); return e; }
+function tx(x, y, t, c, fs, a) { const e = T("text", { x, y, fill: c || "var(--fg)", "font-size": fs || "13", "text-anchor": a || "middle", "font-family": "-apple-system,'PingFang SC','Microsoft YaHei',sans-serif" }); e.textContent = t; return e; }
+function rct(x, y, w, h, f, s, rx) { return T("rect", { x, y, width: w, height: h, fill: f || "var(--bg-soft)", stroke: s || "var(--line)", "stroke-width": "1.5", rx: rx || 8 }); }
+function layerBox(svg, x, y, w, h, title, color, items) {
+  const g = T("g",{});
+  g.append(rct(x, y, w, h, `rgba(${hexRgb(color)},0.06)`, color, 10));
+  g.append(tx(x+w/2, y+22, title, color, "15"));
+  items.forEach((item, i) => {
+    g.append(rct(x+10, y+40+i*32, w-20, 26, "var(--bg)", "var(--line)", 4));
+    g.append(tx(x+w/2, y+58+i*32, item, "var(--fg)"));
+  });
+  svg.append(g);
+}
+function hexRgb(hex) { const m = hex.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i); return m ? `${parseInt(m[1],16)},${parseInt(m[2],16)},${parseInt(m[3],16)}` : "83,155,245"; }
+
+function depArrow(svg, x1, y1, x2, y2, color, label) {
+  svg.append(T("line", { x1, y1, x2, y2, stroke: color, "stroke-width": 1.5, "stroke-dasharray": "4,3" }));
+  if (label) tx((x1+x2)/2, (y1+y2)/2-6, label, color, "10");
+}
+
+function r0(svg) {
+  // Step 1: Feature grouping
+  svg.append(tx(400,25,"功能清单 → 按层次分组","var(--accent)","14"));
+  const features = ["课程浏览","视频播放","用户注册","在线支付","教师后台","数据分析","AI推荐","审核管理"];
+  features.forEach((f,i)=>{
+    const col = i%4, row = Math.floor(i/4);
+    svg.append(rct(60+col*180,50+row*42,160,32,"var(--bg-soft)","var(--line)"));
+    svg.append(tx(60+col*180+80,50+row*42+21,f,"var(--fg)"));
+  });
+  svg.append(tx(400,145,"每个功能需要归属到一个架构层次","var(--fg-dim)"));
+}
+
+function r1(svg) {
+  // Step 2: Layer allocation
+  layerBox(svg, 20, 20, 360, 200, "前端层 Frontend", "var(--accent)",
+    ["React 页面组件","状态管理 (Zustand)","路由配置","API 请求封装","WebSocket 客户端"]);
+  layerBox(svg, 420, 20, 360, 200, "后端层 Backend", "var(--success)",
+    ["REST API 控制器","业务逻辑服务","认证 & 授权","文件上传处理","WebSocket 服务"]);
+  layerBox(svg, 20, 240, 360, 200, "数据层 Data", "var(--purple)",
+    ["PostgreSQL 主库","Redis 缓存","Elasticsearch 搜索","S3 文件存储","数据迁移脚本"]);
+  layerBox(svg, 420, 240, 360, 200, "AI 服务层 AI", "var(--grad)",
+    ["推荐算法引擎","内容审核模型","学习路径规划","LLM 问答接口","数据分析管道"]);
+  svg.append(tx(400,465,"四层架构：每层职责明确，接口标准化","var(--fg-dim)"));
+}
+
+function r2(svg) {
+  // Step 3: Interface dependencies
+  layerBox(svg, 20, 20, 360, 170, "前端层", "var(--accent)",
+    ["React 页面","API Client","WebSocket Client"]);
+  layerBox(svg, 420, 20, 360, 170, "后端层", "var(--success)",
+    ["REST Controller","Auth Service","Business Logic"]);
+  layerBox(svg, 20, 220, 360, 170, "数据层", "var(--purple)",
+    ["PostgreSQL","Redis Cache","S3 Storage"]);
+  layerBox(svg, 420, 220, 360, 170, "AI 服务层", "var(--grad)",
+    ["推荐引擎","内容审核","LLM 接口"]);
+
+  // Dependency arrows
+  const arrows = [
+    [200,190,200,220,"var(--accent)","HTTP/REST"],
+    [600,190,600,220,"var(--success)","RPC/gRPC"],
+    [200,390,600,220,"var(--purple)","SQL/ORM"],
+    [600,390,600,220,"var(--grad)","REST API"],
+    [380,100,420,100,"var(--accent)","fetch()"],
+    [200,280,200,310,"var(--purple)","查询"],
+  ];
+  arrows.forEach(([x1,y1,x2,y2,c,l]) => depArrow(svg,x1,y1,x2,y2,c,l));
+
+  // Interface docs
+  svg.append(rct(20,410,760,30,"var(--bg-soft)","var(--line)"));
+  svg.append(tx(400,430,"接口定义: GET /api/courses → JSON → courses表; POST /api/ai/recommend → JSON → 推荐引擎","var(--fg-dim)","10"));
+}
+
+function r3(svg) {
+  // Step 4: Complete boundary map
+  layerBox(svg, 20, 15, 360, 130, "前端层 Frontend", "var(--accent)",
+    ["页面组件 · 状态管理 · 路由 · API客户端"]);
+  layerBox(svg, 420, 15, 360, 130, "后端层 Backend", "var(--success)",
+    ["REST API · 鉴权 · 业务逻辑 · WebSocket"]);
+  layerBox(svg, 20, 170, 360, 130, "数据层 Data", "var(--purple)",
+    ["PostgreSQL · Redis · ES · S3 · Migration"]);
+  layerBox(svg, 420, 170, 360, 130, "AI 服务层 AI", "var(--grad)",
+    ["推荐 · 审核 · 路径规划 · LLM · 分析"]);
+
+  // Arrows with labels
+  svg.append(T("line",{x1:200,y1:145,x2:200,y2:170,stroke:"var(--accent)","stroke-width":2,"marker-end":"url(#araccent)"}));
+  svg.append(tx(210,155,"REST/JSON","var(--accent)","10","start"));
+  svg.append(T("line",{x1:600,y1:145,x2:600,y2:170,stroke:"var(--success)","stroke-width":2}));
+  svg.append(tx(610,155,"gRPC","var(--success)","10","start"));
+  svg.append(T("line",{x1:200,y1:300,x2:420,y2:170,stroke:"var(--purple)","stroke-width":1.5,"stroke-dasharray":"4,3"}));
+  svg.append(tx(300,230,"SQL查询","var(--purple)","10"));
+  svg.append(T("line",{x1:2,}));
+
+  // Rules
+  svg.append(rct(20,330,760,150,"var(--bg-soft)","var(--line)"));
+  svg.append(tx(400,356,"模块边界设计原则","var(--fg)","14"));
+  const rules = [
+    "✓ 每层只依赖下一层，不跨层调用","✓ 层间接口通过 API/协议定义，不直接访问数据库",
+    "✓ 数据层不包含业务逻辑","✓ AI 服务层可被后端层调用，不直接暴露给前端",
+    "✗ 前端不直接查询数据库","✗ 同一层内模块不循环依赖"
+  ];
+  rules.forEach((r,i) => {
+    const c = r.startsWith("✓") ? "var(--success)" : "var(--danger)";
+    const el = tx(40,374+i*16,r,c,"11","start");
+    svg.append(el);
+  });
+}
+
+const S = [
+  {t:"功能清单分组",l:"分组",d:"将项目中所有功能点列出，按\"属于哪个层次\"进行初步分组。这是模块划分的第一步——明确每项功能的技术归属。",b:["Features","Grouping"],r:r0},
+  {t:"四层架构分配",l:"分层",d:"将功能分配到四层架构中：前端层(UI+交互)、后端层(API+业务逻辑)、数据层(存储+缓存)、AI服务层(算法+模型)。每层职责单一。",b:["Layers","Architecture"],r:r1},
+  {t:"接口依赖标注",l:"依赖",d:"标注层与层之间的接口依赖关系。前端通过REST调用后端，后端通过ORM访问数据层，AI层通过RPC被后端调用。方向必须单向。",b:["Dependencies","API"],r:r2},
+  {t:"边界守则",l:"原则",d:"总结模块边界的设计原则：单向依赖、接口隔离、不跨层、不循环。这些原则确保架构的可维护性和可扩展性。",b:["Principles","Output"],r:r3}
+];
+
+let cur = 0, autoTimer = null, autoOn = false;
+
+function setStep(i) {
+  cur = Math.max(0, Math.min(S.length - 1, i));
+  const s = S[cur];
+  document.getElementById("step-title").textContent = s.t;
+  document.getElementById("step-desc").textContent = s.d;
+  document.getElementById("step-indicator").textContent = `Step ${cur+1}/${S.length}`;
+  const br = document.getElementById("badge-row"); br.innerHTML = "";
+  s.b.forEach(b => { const sp = document.createElement("span"); sp.className = "badge badge--def"; sp.textContent = b; br.append(sp); });
+  document.getElementById("info-line").textContent = s.l;
+  const svg = document.getElementById("stage"); svg.innerHTML = ""; s.r(svg);
+  document.querySelectorAll(".step-dot").forEach((d,j) => d.className = "step-dot" + (j === cur ? " active" : j < cur ? " done" : ""));
+  document.getElementById("btn-prev").disabled = cur === 0;
+  document.getElementById("btn-next").disabled = cur === S.length - 1;
+}
+
+function next() { setStep(cur + 1); }
+function prev() { setStep(cur - 1); }
+function toggleAuto() {
+  if (autoOn) { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; return; }
+  autoOn = true; document.getElementById("btn-auto").textContent = "暂停";
+  autoTimer = setInterval(() => { if (cur < S.length - 1) next(); else { clearInterval(autoTimer); autoOn = false; document.getElementById("btn-auto").textContent = "自动播放"; } }, 2500); }
+
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight") next();
+  else if (e.key === "ArrowLeft") prev();
+  else if (e.key === " ") { e.preventDefault(); toggleAuto(); }
+  else if (e.key >= "1" && e.key <= String(S.length)) setStep(parseInt(e.key) - 1);
+});
+
+const dotsEl = document.getElementById("dots");
+S.forEach((s,i) => { const d = document.createElement("span"); d.className = "step-dot"; d.title = s.l; d.onclick = () => setStep(i); dotsEl.append(d); });
+setStep(0);
+</script>
+</body>
+</html>
