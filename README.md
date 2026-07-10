@@ -8,7 +8,6 @@
 
 [![在线演示](https://img.shields.io/badge/在线演示-zcai.selab.top-2383E2?style=flat-square&logo=cloudflare&logoColor=white)](https://zcai.selab.top)
 [![GitLink](https://img.shields.io/badge/GitLink-开源创新大赛-37352F?style=flat-square&logo=git&logoColor=white)](https://www.gitlink.org.cn)
-[![XjuSelab](https://img.shields.io/badge/XjuSelab-新疆大学软件开发实验室-0F7B6C?style=flat-square&logo=github&logoColor=white)](https://github.com/XjuSelab)
 
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
@@ -34,7 +33,7 @@
 
 ## 演示账号
 
-在线演示：**<https://zcai.selab.top>**
+在线演示：**<https://zcai.selab.top>** —— 打开后在登录框切换到「**学校账号进入**」标签，点选下方任一账号卡片，再点「进入系统」即可（无需密码）。
 
 | 账号 | 角色 | 核心模块 |
 |------|:--:|------|
@@ -69,4 +68,4 @@ docker compose up --build -d       # Docker 部署
 
 ---
 
-<div align="center"><sub>XjuSelab · Built for CS Education · GitLink 开源创新大赛</sub></div>
+<div align="center"><sub>Built for CS Education · GitLink 开源创新大赛</sub></div>
