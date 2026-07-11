@@ -1,24 +1,24 @@
 :root {
   font-family: "IBM Plex Sans", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
-  color: #0d1117;
+  color: #172033;
   background: #eef2f6;
-  --ink: #0d1117;
-  --muted: #4a5568;
+  --ink: #172033;
+  --muted: #657184;
   --line: #d8e0ea;
   --paper: #ffffff;
   --panel: #f9fbfd;
-  --blue: #1557b0;
+  --blue: #174ea6;
   --green: #1c7c54;
   --amber: #b56a10;
   --red: #b42318;
   --shadow: 0 18px 45px rgba(30, 42, 62, 0.08);
-  --sidebar-bg: #ffffff;
-  --sidebar-text: #0d1117;
-  --sidebar-muted: #4a5568;
-  --sidebar-hover: rgba(0,0,0,0.05);
-  --sidebar-accent: #1c7c54;
-  --sidebar-accent-text: #ffffff;
-  --sidebar-border: #d8e0ea;
+  --sidebar-bg: #162033;
+  --sidebar-text: #f8fbff;
+  --sidebar-muted: #aeb9c9;
+  --sidebar-hover: rgba(255,255,255,0.1);
+  --sidebar-accent: #d7ff64;
+  --sidebar-accent-text: #162033;
+  --sidebar-border: rgba(255,255,255,0.08);
   --page-bg: #eef2f6;
   --teacher-command-bg: #172033;
   --teacher-command-text: #f8fbff;
@@ -100,9 +100,9 @@ textarea {
   min-height: 100vh;
   height: 100vh;
   padding: 24px;
-  color: var(--sidebar-text);
-  background: var(--sidebar-bg);
-  border-right: 1px solid var(--sidebar-border);
+  color: #f8fbff;
+  background: #162033;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
   position: sticky;
   top: 0;
   overflow-y: auto;
@@ -120,20 +120,20 @@ textarea {
   height: 40px;
   display: grid;
   place-items: center;
-  color: var(--sidebar-accent-text);
-  background: var(--sidebar-accent);
+  color: #162033;
+  background: #d7ff64;
   font-weight: 900;
   border-radius: 6px;
 }
 
 .brand strong,
-.brand > div > span {
+.brand span {
   display: block;
 }
 
-.brand > div > span {
+.brand span {
   margin-top: 3px;
-  color: var(--sidebar-muted);
+  color: #aeb9c9;
   font-size: 12px;
 }
 
@@ -145,7 +145,7 @@ textarea {
 .sidebar-section-label {
   display: block;
   margin: 0 0 4px;
-  color: var(--sidebar-muted);
+  color: #8794a7;
   font-size: 12px;
   font-weight: 800;
 }
@@ -162,7 +162,7 @@ textarea {
 .nav-list button {
   width: 100%;
   padding: 12px 14px;
-  color: var(--sidebar-text);
+  color: #d8e0ea;
   text-align: left;
   background: transparent;
   border-radius: 6px;
@@ -170,8 +170,8 @@ textarea {
 
 .nav-list button.active,
 .nav-list button:hover {
-  color: var(--sidebar-accent-text);
-  background: var(--sidebar-accent);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .sidebar-context {
@@ -179,28 +179,28 @@ textarea {
   gap: 10px;
   margin-top: 22px;
   padding: 14px;
-  color: var(--sidebar-text);
-  background: var(--sidebar-hover);
-  border: 1px solid var(--sidebar-border);
-  border-left: 4px solid var(--sidebar-accent);
+  color: #d8e0ea;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 2px solid #d7ff64;
   border-radius: 8px;
 }
 
 .sidebar-context span,
 .sidebar-context small {
-  color: var(--sidebar-muted);
+  color: #aeb9c9;
   font-size: 12px;
   font-weight: 800;
 }
 
 .sidebar-context strong {
-  color: var(--sidebar-text);
+  color: #fff;
   font-size: 18px;
 }
 
 .sidebar-context p {
   margin: 0;
-  color: var(--sidebar-text);
+  color: #c6d0df;
   line-height: 1.55;
 }
 
@@ -208,13 +208,13 @@ textarea {
   display: grid;
   gap: 6px;
   padding-top: 10px;
-  border-top: 1px solid var(--sidebar-border);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .sidebar-mini-flow small {
   padding: 7px 8px;
-  color: var(--sidebar-text);
-  background: var(--sidebar-hover);
+  color: #f8fbff;
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 6px;
 }
 
@@ -223,28 +223,28 @@ textarea {
   gap: 7px;
   margin-top: 16px;
   padding: 14px;
-  color: var(--sidebar-text);
-  background: var(--sidebar-hover);
-  border: 1px solid var(--sidebar-border);
+  color: #d8e0ea;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
 }
 
 .sidebar-account-card span,
 .sidebar-account-card small {
-  color: var(--sidebar-muted);
+  color: #aeb9c9;
   font-size: 12px;
   font-weight: 800;
 }
 
 .sidebar-account-card strong {
-  color: var(--sidebar-text);
+  color: #fff;
 }
 
 .sidebar-account-card em {
   justify-self: start;
   padding: 5px 7px;
-  color: var(--green);
-  background: rgba(28, 124, 84, 0.15);
+  color: #d7ff64;
+  background: rgba(215, 255, 100, 0.12);
   border-radius: 999px;
   font-size: 11px;
   font-style: normal;
@@ -255,8 +255,8 @@ textarea {
   justify-self: start;
   min-height: 34px;
   padding: 0 10px;
-  color: var(--sidebar-accent-text);
-  background: var(--sidebar-accent);
+  color: #162033;
+  background: #d7ff64;
   border: 0;
   border-radius: 6px;
   cursor: pointer;
@@ -372,7 +372,7 @@ textarea {
   padding: 13px;
   background: var(--paper);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--green);
+  border-top: 2px solid var(--green);
   border-radius: 8px;
   box-shadow: var(--shadow);
 }
@@ -491,7 +491,7 @@ textarea {
   padding: 12px;
   background: rgba(23, 78, 166, 0.08);
   border: 1px solid rgba(23, 78, 166, 0.18);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 6px;
 }
 
@@ -563,7 +563,7 @@ textarea {
   text-align: left;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid transparent;
+  border-top: 2px solid transparent;
   border-radius: 6px;
   cursor: pointer;
   font: inherit;
@@ -735,7 +735,7 @@ textarea {
 }
 
 .profile-overview .section-label {
-  color: var(--green);
+  color: #d7ff64;
 }
 
 .profile-overview h2 {
@@ -746,7 +746,7 @@ textarea {
 .profile-overview p,
 .profile-overview small {
   margin: 0;
-  color: var(--muted);
+  color: #b8c3d4;
 }
 
 .profile-account-actions {
@@ -781,7 +781,7 @@ textarea {
   padding: 18px;
   background: var(--paper);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 8px;
   box-shadow: var(--shadow);
 }
@@ -860,7 +860,7 @@ textarea {
   padding: 13px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--amber);
+  border-top: 2px solid var(--amber);
   border-radius: 6px;
 }
 
@@ -920,7 +920,7 @@ textarea {
   padding: 12px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 6px;
 }
 
@@ -946,7 +946,7 @@ textarea {
   padding: 12px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--green);
+  border-top: 2px solid var(--green);
   border-radius: 6px;
 }
 
@@ -995,7 +995,7 @@ textarea {
 
 .profile-center-link {
   margin-bottom: 18px;
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
 }
 
 .profile-center-link button {
@@ -1085,7 +1085,7 @@ h1 {
   gap: 16px;
   margin-top: 28px;
   padding: 18px;
-  color: var(--ink);
+  color: #f8fbff;
   background: var(--ink);
   border-radius: 8px;
   box-shadow: var(--shadow);
@@ -1098,7 +1098,7 @@ h1 {
 }
 
 .teacher-command-main .section-label {
-  color: var(--green);
+  color: #d7ff64;
 }
 
 .teacher-command-main h2 {
@@ -1108,7 +1108,7 @@ h1 {
 
 .teacher-command-main p {
   margin: 0;
-  color: var(--muted);
+  color: #b8c3d4;
   line-height: 1.5;
 }
 
@@ -1135,7 +1135,7 @@ h1 {
   padding: 12px;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.11);
-  border-left: 4px solid #d7ff64;
+  border-top: 2px solid #d7ff64;
   border-radius: 6px;
 }
 
@@ -1153,7 +1153,7 @@ h1 {
 
 .teacher-command-metrics span,
 .teacher-command-metrics small {
-  color: var(--muted);
+  color: #b8c3d4;
   font-size: 12px;
   font-weight: 800;
   line-height: 1.4;
@@ -1303,7 +1303,7 @@ h1 {
   color: #475569;
   background: #f4f7fb;
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 6px;
   font-size: 13px;
   line-height: 1.55;
@@ -1334,7 +1334,7 @@ h1 {
   color: var(--ink);
   background: var(--paper);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 8px;
   box-shadow: 0 16px 38px rgba(23, 32, 51, 0.16);
   pointer-events: auto;
@@ -1504,7 +1504,7 @@ h1 {
   padding: 14px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 6px;
 }
 
@@ -1637,7 +1637,7 @@ h1 {
   padding: 14px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--amber);
+  border-top: 2px solid var(--amber);
   border-radius: 6px;
 }
 
@@ -1669,7 +1669,7 @@ h1 {
   padding: 14px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 6px;
 }
 
@@ -1780,7 +1780,7 @@ h1 {
   padding: 14px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--green);
+  border-top: 2px solid var(--green);
   border-radius: 8px;
 }
 
@@ -1866,7 +1866,7 @@ h1 {
   text-align: left;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid transparent;
+  border-top: 2px solid transparent;
   border-radius: 6px;
   cursor: pointer;
   font: inherit;
@@ -1896,7 +1896,7 @@ h1 {
 }
 
 .student-upload-panel {
-  border-left: 4px solid var(--green);
+  border-top: 2px solid var(--green);
 }
 
 .upload-stepper {
@@ -1931,7 +1931,7 @@ h1 {
   padding: 10px 12px;
   background: #f7faf7;
   border: 1px solid rgba(28, 124, 84, 0.18);
-  border-left: 4px solid var(--green);
+  border-top: 2px solid var(--green);
   border-radius: 6px;
 }
 
@@ -1983,7 +1983,7 @@ h1 {
   padding: 11px 12px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--amber);
+  border-top: 2px solid var(--amber);
   border-radius: 6px;
 }
 
@@ -2057,7 +2057,7 @@ h1 {
   text-align: left;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid transparent;
+  border-top: 2px solid transparent;
   border-radius: 6px;
   cursor: pointer;
   font: inherit;
@@ -2286,7 +2286,7 @@ h1 {
   padding: 9px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--green);
+  border-top: 2px solid var(--green);
   border-radius: 6px;
 }
 
@@ -2391,7 +2391,7 @@ h1 {
   padding: 14px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 6px;
 }
 
@@ -2464,7 +2464,7 @@ h1 {
   padding: 14px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--green);
+  border-top: 2px solid var(--green);
   border-radius: 6px;
 }
 
@@ -2690,7 +2690,7 @@ h1 {
   padding: 13px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 6px;
 }
 
@@ -2807,7 +2807,7 @@ h1 {
   padding: 13px;
   background: #fff8ec;
   border: 1px solid rgba(181, 106, 16, 0.2);
-  border-left: 4px solid var(--amber);
+  border-top: 2px solid var(--amber);
   border-radius: 6px;
 }
 
@@ -2829,7 +2829,7 @@ h1 {
   padding: 12px;
   background: rgba(28, 124, 84, 0.08);
   border: 1px solid rgba(28, 124, 84, 0.18);
-  border-left: 4px solid var(--green);
+  border-top: 2px solid var(--green);
   border-radius: 6px;
 }
 
@@ -2852,7 +2852,7 @@ h1 {
   padding: 12px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 6px;
 }
 
@@ -2896,7 +2896,7 @@ h1 {
   text-align: left;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid transparent;
+  border-top: 2px solid transparent;
   border-radius: 6px;
   cursor: pointer;
   font: inherit;
@@ -3135,7 +3135,7 @@ h1 {
   text-align: left;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid transparent;
+  border-top: 2px solid transparent;
   border-radius: 6px;
   cursor: pointer;
   font: inherit;
@@ -3180,7 +3180,7 @@ h1 {
   padding: 14px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 6px;
 }
 
@@ -3251,7 +3251,7 @@ h1 {
   padding: 13px;
   background: rgba(28, 124, 84, 0.08);
   border: 1px solid rgba(28, 124, 84, 0.18);
-  border-left: 4px solid var(--green);
+  border-top: 2px solid var(--green);
   border-radius: 6px;
 }
 
@@ -3296,7 +3296,7 @@ h1 {
   padding: 16px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--green);
+  border-top: 2px solid var(--green);
   border-radius: 6px;
 }
 
@@ -3341,7 +3341,7 @@ h1 {
   padding: 13px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 6px;
 }
 
@@ -3416,7 +3416,7 @@ h1 {
   color: var(--ink);
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 6px;
   font-weight: 800;
 }
@@ -3457,7 +3457,7 @@ h1 {
   padding: 14px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--green);
+  border-top: 2px solid var(--green);
   border-radius: 6px;
 }
 
@@ -3501,7 +3501,7 @@ h1 {
   padding: 16px;
   background: var(--paper);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 8px;
   box-shadow: var(--shadow);
 }
@@ -3537,7 +3537,7 @@ h1 {
   padding: 11px 12px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 6px;
 }
 
@@ -3628,7 +3628,7 @@ h1 {
   padding: 16px;
   background: var(--paper);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 8px;
   box-shadow: var(--shadow);
 }
@@ -3663,7 +3663,7 @@ h1 {
   padding: 12px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 6px;
 }
 
@@ -3705,7 +3705,7 @@ h1 {
   padding: 14px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 8px;
 }
 
@@ -3855,7 +3855,7 @@ h1 {
   padding: 14px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 6px;
 }
 
@@ -4004,7 +4004,7 @@ h1 {
   text-align: left;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid transparent;
+  border-top: 2px solid transparent;
   border-radius: 6px;
   cursor: pointer;
   font: inherit;
@@ -4064,7 +4064,7 @@ h1 {
   padding: 18px;
   background: var(--paper);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 8px;
   box-shadow: var(--shadow);
 }
@@ -4202,7 +4202,7 @@ h1 {
 }
 
 .risk-list div {
-  border-left: 4px solid var(--amber);
+  border-top: 2px solid var(--amber);
 }
 
 .block-label {
@@ -4231,7 +4231,7 @@ h1 {
   padding: 10px 12px;
   color: var(--ink);
   background: rgba(28, 124, 84, 0.08);
-  border-left: 4px solid var(--green);
+  border-top: 2px solid var(--green);
   border-radius: 6px;
 }
 
@@ -4259,7 +4259,7 @@ h1 {
   padding: 12px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 6px;
 }
 
@@ -4534,7 +4534,7 @@ h1 {
   padding: 14px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 6px;
 }
 
@@ -4643,7 +4643,7 @@ h1 {
 }
 
 .team-privacy {
-  border-left: 4px solid var(--green);
+  border-top: 2px solid var(--green);
 }
 
 .task-board {
@@ -4766,7 +4766,7 @@ h1 {
   padding: 14px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--amber);
+  border-top: 2px solid var(--amber);
   border-radius: 6px;
 }
 
@@ -5052,7 +5052,7 @@ h1 {
   padding: 14px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--green);
+  border-top: 2px solid var(--green);
   border-radius: 6px;
 }
 
@@ -5340,7 +5340,7 @@ h1 {
   padding: 12px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--green);
+  border-top: 2px solid var(--green);
   border-radius: 8px;
 }
 
@@ -5385,7 +5385,7 @@ h1 {
   padding: 12px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 8px;
 }
 
@@ -5396,7 +5396,7 @@ h1 {
   padding: 10px;
   background: var(--paper);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--amber);
+  border-top: 2px solid var(--amber);
   border-radius: 6px;
 }
 
@@ -5437,7 +5437,7 @@ h1 {
   text-align: left;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 6px;
   cursor: pointer;
   font: inherit;
@@ -5479,7 +5479,7 @@ h1 {
   padding: 12px 14px;
   background: var(--paper);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--green);
+  border-top: 2px solid var(--green);
   border-radius: 8px;
 }
 
@@ -5611,7 +5611,7 @@ h1 {
   padding: 16px;
   background: var(--paper);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 8px;
   box-shadow: var(--shadow);
 }
@@ -5648,7 +5648,7 @@ h1 {
   padding: 12px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--green);
+  border-top: 2px solid var(--green);
   border-radius: 6px;
 }
 
@@ -5737,7 +5737,7 @@ h1 {
   padding: 12px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--green);
+  border-top: 2px solid var(--green);
   border-radius: 6px;
 }
 
@@ -6005,7 +6005,7 @@ h1 {
   padding: 12px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
+  border-top: 2px solid var(--blue);
   border-radius: 6px;
 }
 
@@ -6244,7 +6244,7 @@ h1 {
     font-size: 15px;
   }
 
-  .brand > div > span {
+  .brand span {
     font-size: 11px;
   }
 
@@ -6361,7 +6361,7 @@ h1 {
 
 /* sidebar */
 [data-theme="dark"] .sidebar { color: var(--sidebar-text); background: var(--sidebar-bg); border-right-color: var(--sidebar-border); }
-[data-theme="dark"] .brand > div > span,
+[data-theme="dark"] .brand span,
 [data-theme="dark"] .sidebar-section-label,
 [data-theme="dark"] .sidebar-context span,
 [data-theme="dark"] .sidebar-context small,
@@ -6539,1549 +6539,238 @@ h1 {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }
-/* ============================================
-   开源课堂 (Open Course Studio) — 完整设计系统
-   ============================================ */
 
-/* 面包屑导航 */
-.open-course-breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 24px;
-  padding: 10px 16px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+/* ===== POLISH: Interaction States & Transitions ===== */
+
+/* Universal button hover/active feedback */
+button, .nav-list button, .primary-action, .ask-box button, .quick-questions button,
+.login-tabs button, .login-form button, .account-role-tabs button,
+.account-card-list > button, .project-section-nav button, .project-switcher-list button,
+.project-quick-actions button, .project-task-save-list button, .teacher-report-pagination button,
+.upload-form button, .source-mode-toggle button, .assignment-list button,
+.project-source-picker button, .notice-card button, .confirm-dialog button,
+.profile-account-actions button, .profile-center-link button, .basic-profile-editor > button,
+.export-panel button, .upload-draft-bar button, .project-navigator-head button,
+.assignment-manager .panel-header button, .teacher-report-toolbar button {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.open-course-breadcrumb button {
-  padding: 6px 14px;
-  color: var(--muted);
-  background: var(--panel);
-  border: 1px solid var(--line);
+
+button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.975);
+  filter: brightness(0.94);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+/* Heading polish */
+h1, h2, h3 {
+  text-wrap: balance;
+}
+
+/* Smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Card micro-interaction */
+.metric, .panel, .report-hero, .state-box {
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.metric:hover, .panel:hover {
+  box-shadow: 0 24px 56px rgba(30, 42, 62, 0.11);
+}
+
+/* Reduced motion respect */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ===== POLISH: Z-Index Scale ===== */
+:root {
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-sidebar: 300;
+  --z-modal-backdrop: 400;
+  --z-modal: 500;
+  --z-toast: 600;
+  --z-tooltip: 700;
+}
+
+/* Fix z-index usage */
+.notice-stack { z-index: var(--z-toast); }
+.confirm-dialog-backdrop { z-index: var(--z-modal-backdrop); }
+.confirm-dialog { z-index: var(--z-modal); }
+
+/* ===== POLISH: Skeleton Loading ===== */
+.skeleton {
+  background: linear-gradient(90deg,
+    var(--panel) 25%,
+    var(--line) 37%,
+    var(--panel) 63%
+  );
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
   border-radius: 6px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  transition: all 0.15s;
-}
-.open-course-breadcrumb button:hover {
-  color: var(--green);
-  background: rgba(28, 124, 84, 0.15);
-  border-color: var(--green);
-}
-.open-course-breadcrumb span {
-  color: var(--green);
-  font-size: 13px;
-  font-weight: 700;
-  padding: 6px 10px;
-  background: rgba(28, 124, 84, 0.1);
-  border-radius: 6px;
 }
 
-/* 主容器 */
-.open-course-studio {
-  animation: fadeSlideIn 0.35s ease;
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
 }
 
-/* ===== 课程目录视图 (Catalog) ===== */
-.catalog-hero {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 32px;
-  align-items: start;
-  margin-bottom: 32px;
-  padding: 32px;
-  background: linear-gradient(135deg, rgba(28,124,84,0.06), rgba(28,124,84,0.02));
-  border: 1px solid rgba(28, 124, 84, 0.12);
-  border-radius: 16px;
-}
-.catalog-hero h2 {
-  margin: 4px 0 10px;
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.catalog-hero p {
-  margin: 0;
-  max-width: 560px;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.7;
+.skeleton-text {
+  height: 14px;
+  margin-bottom: 8px;
 }
 
-/* 课程统计指标 */
-.open-course-hero-metrics {
-  display: flex;
-  gap: 24px;
-}
-.open-course-hero-metrics article {
-  min-width: 80px;
-  padding: 14px 20px;
-  text-align: center;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-}
-.open-course-hero-metrics strong {
-  display: block;
-  font-size: 28px;
-  font-weight: 800;
-  color: var(--green);
-}
-.open-course-hero-metrics span {
-  display: block;
-  margin-top: 4px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
+.skeleton-heading {
+  height: 24px;
+  width: 60%;
+  margin-bottom: 12px;
 }
 
-/* 课程卡片网格 */
-.course-catalog-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-}
-.course-catalog-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 24px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.2s ease;
-}
-.course-catalog-card:hover {
-  background: rgba(28, 124, 84, 0.08);
-  border-color: var(--green);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow);
-}
-.course-catalog-card > span {
-  display: inline-block;
-  align-self: flex-start;
-  padding: 4px 10px;
-  color: var(--green);
-  background: rgba(28, 124, 84, 0.15);
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 800;
-}
-.course-catalog-card strong {
-  display: block;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.course-catalog-card small {
-  display: block;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.5;
-}
-.course-catalog-card em {
-  display: block;
-  margin-top: auto;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-  font-style: normal;
+.skeleton-card {
+  min-height: 112px;
 }
 
-/* ===== 课程详情视图 (Course) ===== */
-.course-detail-head {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 20px;
-  align-items: start;
-  margin-bottom: 24px;
-  padding: 28px 32px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-}
-.course-detail-head > button {
-  padding: 8px 16px;
-  color: var(--muted);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  transition: all 0.15s;
-}
-.course-detail-head > button:hover {
-  color: var(--green);
-  border-color: var(--green);
-}
-.course-detail-head h2 {
-  margin: 4px 0 8px;
-  font-size: 26px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.course-detail-head p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.65;
-}
-.course-detail-stats {
-  display: flex;
-  gap: 12px;
-}
-.course-detail-stats span {
-  padding: 8px 16px;
-  color: var(--green);
-  background: rgba(28, 124, 84, 0.1);
-  border: 1px solid rgba(215, 255, 100, 0.15);
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-/* 交互语言面板 */
-.course-design-panel {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  align-items: start;
-  margin-bottom: 28px;
-  padding: 24px 28px;
-  background: rgba(123, 140, 255, 0.06);
-  border: 1px solid rgba(123, 140, 255, 0.12);
-  border-radius: 14px;
-}
-.course-design-panel h3 {
-  margin: 4px 0 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--ink);
-  line-height: 1.5;
-}
-.course-design-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-.course-design-chips span {
-  padding: 6px 14px;
-  color: var(--muted);
-  background: rgba(123, 140, 255, 0.12);
-  border: 1px solid rgba(123, 140, 255, 0.18);
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-/* 章节卡片网格 */
-.chapter-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
-}
-.chapter-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 22px 24px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.2s ease;
-}
-.chapter-card:hover {
-  background: rgba(28, 124, 84, 0.06);
-  border-color: var(--green);
-  transform: translateY(-1px);
-}
-.chapter-card > span {
-  display: inline-block;
-  align-self: flex-start;
-  padding: 3px 10px;
-  color: var(--blue);
-  background: rgba(23, 78, 166, 0.12);
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 800;
-}
-.chapter-card strong {
-  display: block;
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.chapter-card p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.55;
-}
-.chapter-card em {
-  margin-top: auto;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-  font-style: normal;
-}
-
-/* ===== 章节详情视图 (Chapter) ===== */
-.chapter-detail-head {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 20px;
-  align-items: start;
-  margin-bottom: 28px;
-  padding: 28px 32px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-}
-.chapter-detail-head > button {
-  padding: 8px 16px;
-  color: var(--muted);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  transition: all 0.15s;
-}
-.chapter-detail-head > button:hover {
-  color: var(--green);
-  border-color: var(--green);
-}
-.chapter-detail-head h2 {
-  margin: 4px 0 8px;
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.chapter-detail-head p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.65;
-}
-
-/* 课节条目网格 */
-.lesson-entry-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 12px;
-}
-.lesson-entry-card {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 14px;
-  align-items: center;
-  padding: 18px 20px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.2s ease;
-}
-.lesson-entry-card:hover {
-  background: rgba(28, 124, 84, 0.05);
-  border-color: var(--green);
-}
-.lesson-entry-card.has-dedicated-page:hover {
-  box-shadow: var(--shadow);
-}
-.lesson-entry-card > span {
+/* ===== POLISH: Empty State ===== */
+.empty-state {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
-  background: rgba(28, 124, 84, 0.15);
-  border-radius: 10px;
-  color: var(--green);
-  font-size: 16px;
-  font-weight: 800;
-  font-family: "JetBrains Mono", monospace;
-}
-.lesson-entry-card.is-planned > span {
-  background: var(--panel);
-  color: var(--muted);
-}
-.lesson-entry-card strong {
-  display: block;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.lesson-entry-card p {
-  margin: 3px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
-.lesson-entry-card em {
-  padding: 5px 12px;
-  background: rgba(28, 124, 84, 0.12);
-  border: 1px solid rgba(28, 124, 84, 0.2);
-  border-radius: 6px;
-  color: var(--green);
-  font-size: 12px;
-  font-weight: 700;
-  font-style: normal;
-  white-space: nowrap;
-}
-.lesson-entry-card.is-planned em {
-  background: var(--panel);
-  border-color: rgba(255, 255, 255, 0.08);
-  color: var(--muted);
-}
-
-/* ===== 课节视图 (Lesson) ===== */
-.lesson-screen-head {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
   gap: 16px;
-  align-items: center;
-  margin-bottom: 20px;
-  padding: 18px 24px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-}
-.lesson-screen-head > button {
-  padding: 8px 16px;
-  color: var(--muted);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  transition: all 0.15s;
-}
-.lesson-screen-head > button:hover {
-  color: var(--green);
-  border-color: var(--green);
-}
-.lesson-screen-head .lesson-meta {
-  font-size: 13px;
-  color: var(--muted);
-}
-.lesson-screen-head .lesson-meta strong {
-  color: var(--ink);
-}
-.lesson-screen-head a {
-  color: var(--blue);
-  text-decoration: none;
-  font-size: 13px;
-  font-weight: 600;
-  padding: 6px 14px;
-  border: 1px solid rgba(123, 140, 255, 0.25);
-  border-radius: 8px;
-  transition: all 0.15s;
-}
-.lesson-screen-head a:hover {
-  background: rgba(123, 140, 255, 0.1);
-  border-color: rgba(123, 140, 255, 0.4);
-}
-
-/* 课件描述卡片 */
-.lesson-dedicated-card {
-  display: grid;
-  gap: 12px;
-  margin-bottom: 20px;
-  padding: 20px 24px;
-  background: rgba(80, 216, 144, 0.06);
-  border: 1px solid rgba(80, 216, 144, 0.15);
-  border-radius: 14px;
-}
-.lesson-dedicated-card h3 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--green);
-}
-.lesson-dedicated-card p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.6;
-}
-.lesson-dedicated-card a {
-  justify-self: start;
-  padding: 10px 22px;
-  color: #162033;
-  background: #50d890;
-  border-radius: 8px;
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 700;
-  transition: all 0.15s;
-}
-.lesson-dedicated-card a:hover {
-  background: #6df0a8;
-  transform: translateY(-1px);
-}
-
-/* 课件 iframe 容器 */
-.lesson-iframe-shell {
-  position: relative;
-  width: 100%;
-  min-height: 520px;
-  background: #141010;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  overflow: hidden;
-}
-.lesson-iframe-shell iframe {
-  width: 100%;
-  min-height: 520px;
-  border: 0;
-}
-
-/* 课节导航 */
-.lesson-nav-strip {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  margin-top: 20px;
-  padding: 14px 20px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-}
-.lesson-nav-strip button {
-  padding: 8px 18px;
-  color: var(--muted);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  transition: all 0.15s;
-}
-.lesson-nav-strip button:hover:not(:disabled) {
-  color: var(--green);
-  border-color: var(--green);
-}
-.lesson-nav-strip button:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-.lesson-nav-strip span {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-/* 动画 */
-@keyframes fadeSlideIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* 响应式 */
-@media (max-width: 860px) {
-  .catalog-hero,
-  .course-detail-head,
-  .chapter-detail-head {
-    grid-template-columns: 1fr;
-  }
-  .course-catalog-grid,
-  .chapter-grid,
-  .lesson-entry-grid {
-    grid-template-columns: 1fr;
-  }
-  .course-design-panel {
-    grid-template-columns: 1fr;
-  }
-  .open-course-hero-metrics {
-    flex-wrap: wrap;
-  }
-}
-/* ============================================
-   开源课堂 (Open Course Studio) — 完整设计系统
-   ============================================ */
-
-/* 面包屑导航 */
-.open-course-breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 24px;
-  padding: 10px 16px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-}
-.open-course-breadcrumb button {
-  padding: 6px 14px;
-  color: var(--muted);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  transition: all 0.15s;
-}
-.open-course-breadcrumb button:hover {
-  color: var(--green);
-  background: rgba(28, 124, 84, 0.15);
-  border-color: var(--green);
-}
-.open-course-breadcrumb span {
-  color: var(--green);
-  font-size: 13px;
-  font-weight: 700;
-  padding: 6px 10px;
-  background: rgba(28, 124, 84, 0.1);
-  border-radius: 6px;
-}
-
-/* 主容器 */
-.open-course-studio {
-  animation: fadeSlideIn 0.35s ease;
-}
-
-/* ===== 课程目录视图 (Catalog) ===== */
-.catalog-hero {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 32px;
-  align-items: start;
-  margin-bottom: 32px;
-  padding: 32px;
-  background: linear-gradient(135deg, rgba(28,124,84,0.06), rgba(28,124,84,0.02));
-  border: 1px solid rgba(28, 124, 84, 0.12);
-  border-radius: 16px;
-}
-.catalog-hero h2 {
-  margin: 4px 0 10px;
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.catalog-hero p {
-  margin: 0;
-  max-width: 560px;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.7;
-}
-
-/* 课程统计指标 */
-.open-course-hero-metrics {
-  display: flex;
-  gap: 24px;
-}
-.open-course-hero-metrics article {
-  min-width: 80px;
-  padding: 14px 20px;
+  padding: 56px 24px;
   text-align: center;
+  color: var(--muted);
   background: var(--panel);
-  border: 1px solid var(--line);
+  border: 2px dashed var(--line);
   border-radius: 12px;
 }
-.open-course-hero-metrics strong {
-  display: block;
-  font-size: 28px;
-  font-weight: 800;
-  color: var(--green);
-}
-.open-course-hero-metrics span {
-  display: block;
-  margin-top: 4px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
-}
 
-/* 课程卡片网格 */
-.course-catalog-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-}
-.course-catalog-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 24px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.2s ease;
-}
-.course-catalog-card:hover {
-  background: rgba(28, 124, 84, 0.08);
-  border-color: var(--green);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow);
-}
-.course-catalog-card > span {
-  display: inline-block;
-  align-self: flex-start;
-  padding: 4px 10px;
-  color: var(--green);
-  background: rgba(28, 124, 84, 0.15);
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 800;
-}
-.course-catalog-card strong {
-  display: block;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.course-catalog-card small {
-  display: block;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.5;
-}
-.course-catalog-card em {
-  display: block;
-  margin-top: auto;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-  font-style: normal;
-}
-
-/* ===== 课程详情视图 (Course) ===== */
-.course-detail-head {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 20px;
-  align-items: start;
-  margin-bottom: 24px;
-  padding: 28px 32px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-}
-.course-detail-head > button {
-  padding: 8px 16px;
-  color: var(--muted);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  transition: all 0.15s;
-}
-.course-detail-head > button:hover {
-  color: var(--green);
-  border-color: var(--green);
-}
-.course-detail-head h2 {
-  margin: 4px 0 8px;
-  font-size: 26px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.course-detail-head p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.65;
-}
-.course-detail-stats {
-  display: flex;
-  gap: 12px;
-}
-.course-detail-stats span {
-  padding: 8px 16px;
-  color: var(--green);
-  background: rgba(28, 124, 84, 0.1);
-  border: 1px solid rgba(215, 255, 100, 0.15);
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-/* 交互语言面板 */
-.course-design-panel {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  align-items: start;
-  margin-bottom: 28px;
-  padding: 24px 28px;
-  background: rgba(123, 140, 255, 0.06);
-  border: 1px solid rgba(123, 140, 255, 0.12);
-  border-radius: 14px;
-}
-.course-design-panel h3 {
-  margin: 4px 0 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--ink);
-  line-height: 1.5;
-}
-.course-design-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-.course-design-chips span {
-  padding: 6px 14px;
-  color: var(--muted);
-  background: rgba(123, 140, 255, 0.12);
-  border: 1px solid rgba(123, 140, 255, 0.18);
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-/* 章节卡片网格 */
-.chapter-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
-}
-.chapter-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 22px 24px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.2s ease;
-}
-.chapter-card:hover {
-  background: rgba(28, 124, 84, 0.06);
-  border-color: var(--green);
-  transform: translateY(-1px);
-}
-.chapter-card > span {
-  display: inline-block;
-  align-self: flex-start;
-  padding: 3px 10px;
-  color: var(--blue);
-  background: rgba(23, 78, 166, 0.12);
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 800;
-}
-.chapter-card strong {
-  display: block;
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.chapter-card p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.55;
-}
-.chapter-card em {
-  margin-top: auto;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-  font-style: normal;
-}
-
-/* ===== 章节详情视图 (Chapter) ===== */
-.chapter-detail-head {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 20px;
-  align-items: start;
-  margin-bottom: 28px;
-  padding: 28px 32px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-}
-.chapter-detail-head > button {
-  padding: 8px 16px;
-  color: var(--muted);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  transition: all 0.15s;
-}
-.chapter-detail-head > button:hover {
-  color: var(--green);
-  border-color: var(--green);
-}
-.chapter-detail-head h2 {
-  margin: 4px 0 8px;
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.chapter-detail-head p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.65;
-}
-
-/* 课节条目网格 */
-.lesson-entry-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 12px;
-}
-.lesson-entry-card {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 14px;
-  align-items: center;
-  padding: 18px 20px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.2s ease;
-}
-.lesson-entry-card:hover {
-  background: rgba(28, 124, 84, 0.05);
-  border-color: var(--green);
-}
-.lesson-entry-card.has-dedicated-page:hover {
-  box-shadow: var(--shadow);
-}
-.lesson-entry-card > span {
+.empty-state-icon {
+  width: 64px;
+  height: 64px;
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
-  background: rgba(28, 124, 84, 0.15);
-  border-radius: 10px;
-  color: var(--green);
-  font-size: 16px;
-  font-weight: 800;
-  font-family: "JetBrains Mono", monospace;
-}
-.lesson-entry-card.is-planned > span {
-  background: var(--panel);
-  color: var(--muted);
-}
-.lesson-entry-card strong {
-  display: block;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.lesson-entry-card p {
-  margin: 3px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
-.lesson-entry-card em {
-  padding: 5px 12px;
-  background: rgba(28, 124, 84, 0.12);
-  border: 1px solid rgba(28, 124, 84, 0.2);
-  border-radius: 6px;
-  color: var(--green);
-  font-size: 12px;
-  font-weight: 700;
-  font-style: normal;
-  white-space: nowrap;
-}
-.lesson-entry-card.is-planned em {
-  background: var(--panel);
-  border-color: rgba(255, 255, 255, 0.08);
-  color: var(--muted);
+  font-size: 28px;
+  background: var(--paper);
+  border-radius: 50%;
+  box-shadow: var(--shadow);
 }
 
-/* ===== 课节视图 (Lesson) ===== */
-.lesson-screen-head {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 16px;
-  align-items: center;
-  margin-bottom: 20px;
-  padding: 18px 24px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-}
-.lesson-screen-head > button {
-  padding: 8px 16px;
-  color: var(--muted);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  transition: all 0.15s;
-}
-.lesson-screen-head > button:hover {
-  color: var(--green);
-  border-color: var(--green);
-}
-.lesson-screen-head .lesson-meta {
-  font-size: 13px;
-  color: var(--muted);
-}
-.lesson-screen-head .lesson-meta strong {
-  color: var(--ink);
-}
-.lesson-screen-head a {
-  color: var(--blue);
-  text-decoration: none;
-  font-size: 13px;
-  font-weight: 600;
-  padding: 6px 14px;
-  border: 1px solid rgba(123, 140, 255, 0.25);
-  border-radius: 8px;
-  transition: all 0.15s;
-}
-.lesson-screen-head a:hover {
-  background: rgba(123, 140, 255, 0.1);
-  border-color: rgba(123, 140, 255, 0.4);
-}
-
-/* 课件描述卡片 */
-.lesson-dedicated-card {
-  display: grid;
-  gap: 12px;
-  margin-bottom: 20px;
-  padding: 20px 24px;
-  background: rgba(80, 216, 144, 0.06);
-  border: 1px solid rgba(80, 216, 144, 0.15);
-  border-radius: 14px;
-}
-.lesson-dedicated-card h3 {
+.empty-state h3 {
   margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--green);
-}
-.lesson-dedicated-card p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.6;
-}
-.lesson-dedicated-card a {
-  justify-self: start;
-  padding: 10px 22px;
-  color: #162033;
-  background: #50d890;
-  border-radius: 8px;
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 700;
-  transition: all 0.15s;
-}
-.lesson-dedicated-card a:hover {
-  background: #6df0a8;
-  transform: translateY(-1px);
-}
-
-/* 课件 iframe 容器 */
-.lesson-iframe-shell {
-  position: relative;
-  width: 100%;
-  min-height: 520px;
-  background: #141010;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  overflow: hidden;
-}
-.lesson-iframe-shell iframe {
-  width: 100%;
-  min-height: 520px;
-  border: 0;
-}
-
-/* 课节导航 */
-.lesson-nav-strip {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  margin-top: 20px;
-  padding: 14px 20px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-}
-.lesson-nav-strip button {
-  padding: 8px 18px;
-  color: var(--muted);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  transition: all 0.15s;
-}
-.lesson-nav-strip button:hover:not(:disabled) {
-  color: var(--green);
-  border-color: var(--green);
-}
-.lesson-nav-strip button:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-.lesson-nav-strip span {
-  font-size: 14px;
-  font-weight: 700;
   color: var(--ink);
+  font-size: 20px;
 }
 
-/* 动画 */
-@keyframes fadeSlideIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* 响应式 */
-@media (max-width: 860px) {
-  .catalog-hero,
-  .course-detail-head,
-  .chapter-detail-head {
-    grid-template-columns: 1fr;
-  }
-  .course-catalog-grid,
-  .chapter-grid,
-  .lesson-entry-grid {
-    grid-template-columns: 1fr;
-  }
-  .course-design-panel {
-    grid-template-columns: 1fr;
-  }
-  .open-course-hero-metrics {
-    flex-wrap: wrap;
-  }
-}
-
-/* ===== 课节视图补充样式 ===== */
-.lesson-frame-shell {
-  display: grid;
-  gap: 20px;
-  margin-bottom: 20px;
-}
-.dedicated-lesson-panel {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 20px;
-  align-items: center;
-  padding: 20px 24px;
-  background: rgba(80, 216, 144, 0.06);
-  border: 1px solid rgba(80, 216, 144, 0.15);
-  border-radius: 14px;
-}
-.dedicated-lesson-panel h3 {
-  margin: 4px 0 6px;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--green);
-}
-.dedicated-lesson-panel p {
+.empty-state p {
+  max-width: 420px;
   margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.6;
-}
-.dedicated-lesson-panel a {
-  padding: 10px 22px;
-  color: #162033;
-  background: #50d890;
-  border-radius: 8px;
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 700;
-  white-space: nowrap;
-  transition: all 0.15s;
-}
-.dedicated-lesson-panel a:hover {
-  background: #6df0a8;
-  transform: translateY(-1px);
-}
-.dedicated-lesson-frame {
-  width: 100%;
-  min-height: 520px;
-  background: #141010;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-}
-.lesson-detail-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
-  margin-bottom: 24px;
-}
-.lesson-state-panel {
-  grid-column: 1 / -1;
-  padding: 28px 32px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-}
-.lesson-state-panel h3 {
-  margin: 4px 0 8px;
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.lesson-state-panel p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
   line-height: 1.65;
 }
-.lesson-brief-card {
-  padding: 20px 22px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
+
+/* ===== POLISH: Content Transitions ===== */
+.content-enter {
+  animation: fade-slide-up 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.lesson-brief-card > span {
-  display: inline-block;
-  margin-bottom: 8px;
-  padding: 3px 10px;
-  color: var(--blue);
-  background: rgba(123, 140, 255, 0.12);
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 800;
+
+@keyframes fade-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
-.lesson-brief-card p {
-  margin: 0;
+
+/* ===== POLISH: Surface Depth ===== */
+.surface-raised {
+  box-shadow: 0 4px 12px rgba(30, 42, 62, 0.06);
+}
+
+.surface-floating {
+  box-shadow: 0 12px 32px rgba(30, 42, 62, 0.12);
+}
+
+/* ===== POLISH: Inline Code & Code Blocks ===== */
+code {
+  padding: 2px 6px;
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: 0.88em;
   color: var(--ink);
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-/* ===== 课节视图补充样式 ===== */
-.lesson-frame-shell {
-  display: grid;
-  gap: 20px;
-  margin-bottom: 20px;
-}
-.dedicated-lesson-panel {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 20px;
-  align-items: center;
-  padding: 20px 24px;
-  background: rgba(80, 216, 144, 0.06);
-  border: 1px solid rgba(80, 216, 144, 0.15);
-  border-radius: 14px;
-}
-.dedicated-lesson-panel h3 {
-  margin: 4px 0 6px;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--green);
-}
-.dedicated-lesson-panel p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.6;
-}
-.dedicated-lesson-panel a {
-  padding: 10px 22px;
-  color: #162033;
-  background: #50d890;
-  border-radius: 8px;
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 700;
-  white-space: nowrap;
-  transition: all 0.15s;
-}
-.dedicated-lesson-panel a:hover {
-  background: #6df0a8;
-  transform: translateY(-1px);
-}
-.dedicated-lesson-frame {
-  width: 100%;
-  min-height: 520px;
-  background: #141010;
+  background: var(--code-bg);
   border: 1px solid var(--line);
-  border-radius: 14px;
-}
-.lesson-detail-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
-  margin-bottom: 24px;
-}
-.lesson-state-panel {
-  grid-column: 1 / -1;
-  padding: 28px 32px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-}
-.lesson-state-panel h3 {
-  margin: 4px 0 8px;
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.lesson-state-panel p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.65;
-}
-.lesson-brief-card {
-  padding: 20px 22px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-}
-.lesson-brief-card > span {
-  display: inline-block;
-  margin-bottom: 8px;
-  padding: 3px 10px;
-  color: var(--blue);
-  background: rgba(123, 140, 255, 0.12);
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 800;
-}
-.lesson-brief-card p {
-  margin: 0;
-  color: var(--ink);
-  font-size: 14px;
-  line-height: 1.6;
-}
-/* ============================================
-   全站间距与呼吸感优化
-   缓解页面紧凑感，保持现有设计系统不变
-   ============================================ */
-
-/* 面板内边距从22px提升到28px — 给内容更多呼吸空间 */
-.panel {
-  padding: 28px;
+  border-radius: 4px;
 }
 
-/* 面板网格间距加大 */
-.panel-grid {
-  gap: 20px;
-  margin-top: 20px;
-}
-
-/* 内容区底部留白增加 */
-.content {
-  padding-bottom: 64px;
-}
-
-/* 章节标题与内容之间增加间距 */
-.panel h2,
-.report-hero h2 {
-  margin: 6px 0 10px;
-  font-size: 22px;
-}
-
-.panel .section-label {
-  margin-bottom: 2px;
-}
-
-/* 评分列表、发现列表等增加间距 */
-.score-list,
-.finding-list,
-.evidence-list,
-.task-list {
-  gap: 18px;
-  margin-top: 22px;
-}
-
-/* ===== 项目管理页面 ===== */
-.code-structure-panel {
-  gap: 16px;
-  padding: 22px;
-}
-
-/* 项目身份卡片 */
-.project-identity-card {
-  padding: 20px;
-  gap: 12px;
-}
-
-/* ===== 成长规划页面 ===== */
-/* 维度卡片间距 */
-.profile-status-grid {
-  gap: 18px;
-}
-
-.profile-status-grid article {
-  padding: 22px;
-}
-
-.profile-readiness-grid {
-  gap: 16px;
-}
-
-.profile-readiness-grid article {
-  padding: 20px;
-}
-
-/* 画像维度列表 */
-.profile-dimension-mini-list {
-  gap: 14px;
-}
-
-.profile-dimension-mini-list > div {
-  padding: 14px;
-}
-
-/* ===== 知识库问答页面 ===== */
-/* 对话区间距 */
-.ask-box {
-  gap: 14px;
-  padding: 18px;
-}
-
-.quick-questions {
-  gap: 10px;
-  margin-top: 14px;
-}
-
-/* 历史对话列表 */
-.chat-history-list {
-  gap: 12px;
-  margin-top: 16px;
-}
-
-/* ===== 教师看板 ===== */
-/* dashboard统计卡片 */
-.teacher-command-main article {
-  padding: 20px;
-}
-
-/* ===== 通用卡片优化 ===== */
-/* 给所有article卡片更多内边距 */
-.panel article,
-.panel-grid article {
-  padding: 18px;
-}
-
-/* 提示框间距 */
-.ai-notice {
-  margin-top: 16px;
-  padding: 14px 16px;
-}
-
-/* ===== 个人中心 ===== */
-.profile-overview {
-  gap: 24px;
-  padding: 28px;
-}
-
-.profile-overview h2 {
-  margin: 6px 0 4px;
-}
-
-.profile-account-actions {
-  gap: 12px;
-}
-
-.profile-scope-list > div,
-.profile-usage-list > div {
-  padding: 14px;
-  gap: 8px;
-}
-
-/* ===== 学生报告 ===== */
-.report-hero {
-  gap: 18px;
-  padding: 24px;
-}
-
-/* ===== 通用间距增强 ===== */
-/* 相邻section之间增加间距 */
-.content section + section {
-  margin-top: 24px;
-}
-
-/* 按钮组间距 */
-.panel-header {
-  margin-bottom: 18px;
-}
-
-/* 标签行间距 */
-.badge-row {
-  gap: 8px;
-  margin: 8px 0;
-}
-
-/* 信息行/状态行 */
-.info-line,
-.status-line {
-  margin: 10px 0;
-}
-
-/* ===== 侧边栏优化 ===== */
-.sidebar-context {
-  gap: 12px;
+pre {
   padding: 16px;
+  overflow-x: auto;
+  color: var(--ink);
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
-.sidebar-mini-flow {
-  gap: 8px;
-  padding-top: 12px;
+/* ===== POLISH: Scrollbar ===== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-/* ===== 响应式微调 ===== */
-@media (max-width: 860px) {
-  .panel {
-    padding: 22px;
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+/* ===== POLISH: Selection ===== */
+::selection {
+  color: #fff;
+  background: var(--blue);
+}
+
+/* ===== POLISH: Print Styles ===== */
+@media print {
+  .sidebar, .notice-stack, .confirm-dialog-backdrop {
+    display: none !important;
   }
-  .panel-grid {
-    gap: 16px;
+  .workspace {
+    grid-template-columns: 1fr;
   }
-  .profile-overview {
-    padding: 20px;
+  .content {
+    padding: 0;
   }
 }
 
-/* ===== 过渡动画 ===== */
-.panel,
-.panel-grid,
-.profile-overview,
-.panel article,
-.panel-grid article {
-  transition: padding 0.2s ease, gap 0.2s ease;
+/* ===== POLISH: Focus Ring Refinement ===== */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+  border-color: var(--blue);
 }
-/* ============================================
-   全站视觉增强 — 深度、层次与交互感
-   卡片阴影 / 圆角 / 侧边栏 / 按钮动效 / 排版层次
-   ============================================ */
