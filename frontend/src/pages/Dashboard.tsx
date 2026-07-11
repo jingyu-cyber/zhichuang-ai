@@ -448,7 +448,11 @@ function readProjectUploadDraft(key: string): ProjectUploadDraft | null {
 }
 
 function writeProjectUploadDraft(key: string, draft: ProjectUploadDraft) {
-  window.localStorage.setItem(key, JSON.stringify(draft));
+  const sanitizedDraft: ProjectUploadDraft = {
+    ...draft,
+    targetStudentId: "",
+  };
+  window.localStorage.setItem(key, JSON.stringify(sanitizedDraft));
 }
 
 function removeProjectUploadDraft(key: string) {
