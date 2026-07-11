@@ -6928,3 +6928,56 @@ body::before {
 .candidate-tags small:hover {
   transform: scale(1.05);
 }
+
+
+/* ===== REFINED: Form Input Focus ===== */
+input:focus, textarea:focus, select:focus {
+  box-shadow: 0 0 0 3px rgba(23, 78, 166, 0.15);
+  border-color: var(--blue);
+}
+
+/* ===== REFINED: Data Table Row Striping ===== */
+.report-row:nth-child(even) {
+  background: color-mix(in srgb, var(--panel) 50%, transparent);
+}
+
+/* ===== REFINED: Badge & Status ===== */
+.upload-stepper span.complete {
+  background: color-mix(in srgb, var(--green) 12%, transparent);
+  border-color: color-mix(in srgb, var(--green) 30%, transparent);
+}
+
+/* ===== REFINED: Sidebar Active State ===== */
+.sidebar .nav-list button.active {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* ===== REFINED: Card Depth Layering ===== */
+.panel-grid > .panel:first-child {
+  z-index: 1;
+}
+
+/* ===== REFINED: Button Disabled State ===== */
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  filter: grayscale(0.3);
+}
+
+/* ===== REFINED: Image & Media ===== */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ===== REFINED: Link Underline ===== */
+a {
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.2s ease;
+}
+
+a:hover {
+  text-decoration-color: var(--blue);
+}
