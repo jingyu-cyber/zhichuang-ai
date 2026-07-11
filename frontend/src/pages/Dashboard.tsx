@@ -399,13 +399,13 @@ function writeStoredSession(
   expiresInSeconds = 8 * 60 * 60,
 ) {
   const savedAt = new Date();
-  const session: StoredSession = {
+  const session = {
     account,
-    token,
     mode,
     savedAt: savedAt.toISOString(),
     expiresAt: new Date(savedAt.getTime() + expiresInSeconds * 1000).toISOString(),
   };
+  void token;
   window.localStorage.setItem(sessionStorageKey, JSON.stringify(session));
 }
 
