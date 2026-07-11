@@ -20,13 +20,13 @@
   --sidebar-accent-text: #162033;
   --sidebar-border: rgba(255,255,255,0.08);
   --page-bg: #eef2f6;
-  --teacher-command-bg: #172033;
-  --teacher-command-text: #f8fbff;
-  --teacher-command-muted: #b8c3d4;
+  --teacher-command-bg: #f0f4f8;
+  --teacher-command-text: #172033;
+  --teacher-command-muted: #657184;
   --teacher-command-accent: #d7ff64;
-  --profile-overview-bg: #172033;
-  --profile-overview-text: #fff;
-  --profile-overview-muted: #b8c3d4;
+  --profile-overview-bg: #f0f4f8;
+  --profile-overview-text: #172033;
+  --profile-overview-muted: #657184;
   --tag-bg: #e8edf3;
   --tag-text: #172033;
   --code-bg: #eef3f8;
@@ -746,7 +746,7 @@ textarea {
 .profile-overview p,
 .profile-overview small {
   margin: 0;
-  color: #b8c3d4;
+  color: var(--teacher-command-muted);
 }
 
 .profile-account-actions {
@@ -1108,7 +1108,7 @@ h1 {
 
 .teacher-command-main p {
   margin: 0;
-  color: #b8c3d4;
+  color: var(--teacher-command-muted);
   line-height: 1.5;
 }
 
@@ -1153,7 +1153,7 @@ h1 {
 
 .teacher-command-metrics span,
 .teacher-command-metrics small {
-  color: #b8c3d4;
+  color: var(--teacher-command-muted);
   font-size: 12px;
   font-weight: 800;
   line-height: 1.4;
